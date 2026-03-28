@@ -47,7 +47,28 @@
     @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
     @keyframes cardPop { to { opacity: 1; transform: translateY(0) scale(1); } }
 
-    /* Шахматный Логотип XXII */
+    /* ========================================= */
+    /* WELCOME SCREEN (Приветственный экран)     */
+    /* ========================================= */
+    .welcome-bg {
+      background-color: white;
+      background-image: conic-gradient(#000 90deg, transparent 90deg, transparent 270deg, #000 270deg);
+      background-size: 80px 80px; /* Крупная шахматная клетка */
+    }
+    .welcome-logo {
+      font-family: 'Playfair Display', serif; 
+      color: var(--accent-red); 
+      font-size: 90px; 
+      font-weight: 900; 
+      letter-spacing: -4px; 
+      line-height: 0.8; 
+      display: inline-block;
+      transform: scaleY(1.4); 
+      text-shadow: 2px 2px 0px #000; 
+      margin-bottom: 20px;
+    }
+
+    /* Шахматный Логотип XXII в шапке */
     .logo-container {
       background-color: white;
       background-image: conic-gradient(#000 90deg, transparent 90deg, transparent 270deg, #000 270deg);
@@ -130,6 +151,29 @@
   </style>
 </head>
 <body class="antialiased h-screen flex flex-col">
+
+  <!-- ========================================= -->
+  <!-- ПРИВЕТСТВЕННЫЙ ЭКРАН (ONBOARDING)         -->
+  <!-- ========================================= -->
+  <div id="welcome-screen" class="fixed inset-0 z-[200] flex flex-col items-center justify-center welcome-bg transition-opacity duration-700">
+    <!-- Стеклянная подложка -->
+    <div class="bg-black/80 backdrop-blur-md border border-white/10 p-10 rounded-[3rem] text-center shadow-2xl max-w-[85%] relative overflow-hidden flex flex-col items-center">
+      <!-- Красное свечение на фоне -->
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-red-600/20 blur-[50px] rounded-full pointer-events-none"></div>
+      
+      <h1 class="welcome-logo relative z-10">XXII</h1>
+      <h2 class="text-3xl font-black text-white tracking-widest mb-6 relative z-10 uppercase">Raper</h2>
+      
+      <p class="text-gray-300 mb-8 text-[14px] leading-relaxed relative z-10">
+        Добро пожаловать, <span id="welcome-user-name" class="text-white font-bold"></span>!<br><br>
+        Эксклюзивные релизы и звук, которого нет на других платформах.
+      </p>
+      
+      <button onclick="closeWelcomeScreen()" class="btn-press w-full py-4 bg-red-600 text-white font-bold rounded-2xl shadow-[0_0_30px_rgba(220,38,38,0.4)] transition-all relative z-10 uppercase tracking-widest text-[14px]">
+        Войти
+      </button>
+    </div>
+  </div>
 
   <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-[#2c2c2e]/90 backdrop-blur-xl border border-white/10 text-white px-5 py-3 rounded-full text-[13px] font-medium shadow-2xl flex items-center gap-3 opacity-0 pointer-events-none transition-all duration-500">
     <span id="toast-msg"></span>
@@ -329,6 +373,22 @@
       user.role = 'Создатель';
     }
 
+    // --- ЛОГИКА WELCOME SCREEN ---
+    document.getElementById('welcome-user-name').innerText = user.username;
+    
+    if (localStorage.getItem('raper_welcomed_v1')) {
+        document.getElementById('welcome-screen').classList.add('hidden');
+    }
+
+    function closeWelcomeScreen() {
+        const ws = document.getElementById('welcome-screen');
+        ws.classList.add('opacity-0');
+        setTimeout(() => {
+            ws.classList.add('hidden');
+            localStorage.setItem('raper_welcomed_v1', 'true');
+        }, 700);
+    }
+
     document.getElementById('user-name').innerText = user.username;
     
     const headerRoleEl = document.getElementById('user-role');
@@ -336,9 +396,8 @@
     if (user.role === 'Создатель') {
         headerRoleEl.classList.remove('text-gray-500');
         headerRoleEl.classList.add('text-red-500', 'font-bold');
+        document.getElementById('btn-add-release').classList.remove('hidden');
     }
-
-    document.getElementById('btn-add-release').classList.remove('hidden');
 
     let releases = [], likedSet = new Set(), reviews = [], activeReleaseId = null, selectedRating = 10;
     let currentPendingLink = '';
@@ -505,7 +564,6 @@
         
         const newRel = { id: Date.now().toString(), name: parsedName, artist: parsedArtist, img: parsedCover, link };
         
-        // Отправка в БД
         await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
         
         releases.unshift(newRel);
@@ -688,7 +746,7 @@
     lucide.createIcons();
     selectRating(10);
     
-    // Запуск синхронизации с базой данных
+    // Запуск синхронизации с БД
     fetchDB();
   </script>
 </body>
