@@ -204,8 +204,8 @@
     const tg = window.Telegram.WebApp;
     tg.expand();
     
-    // БЭКЕНД URL (Укажите здесь URL вашего Python сервера)
-    const BACKEND_URL = "http://127.0.0.1:8000"; 
+    // БЭКЕНД URL (Твой живой сервер с Render)
+    const BACKEND_URL = "https://music-backend-qjvk.onrender.com"; 
 
     // Получаем данные пользователя из Telegram
     const tgUser = tg.initDataUnsafe?.user;
@@ -248,7 +248,7 @@
       document.querySelectorAll('main > div').forEach(el => el.classList.add('hidden'));
       document.getElementById('screen-' + tabId).classList.remove('hidden');
       
-      // Обновление иконок навигации
+      // Обновление иконок навигации с защитой от null (lucide заменяет <i> на <svg>)
       ['home', 'likes', 'settings'].forEach(id => {
         const btn = document.getElementById('tab-' + id);
         const icon = btn.querySelector('svg') || btn.querySelector('i');
@@ -361,7 +361,7 @@
       lucide.createIcons();
 
       try {
-        // Запрос к Python бэкенду
+        // Запрос к Python бэкенду на Render
         const res = await fetch(`${BACKEND_URL}/api/parse_link`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -392,7 +392,11 @@
         closeModal('modal-add');
         showToast('Релиз добавлен в медиатеку');
       } catch(e) {
-        showToast(e.message || 'Сбой ИИ распознавания');
+        if (e.message === 'Failed to fetch' || e.message.includes('NetworkError')) {
+          showToast(`Ошибка сети! Сервер недоступен.`);
+        } else {
+          showToast(e.message || 'Сбой ИИ распознавания');
+        }
       } finally {
         btn.disabled = false;
         icon.classList.remove('animate-spin');
