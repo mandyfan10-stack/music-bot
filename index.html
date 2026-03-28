@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Raper XXII - TG App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    :root {
+      --bg-color: #000000;
+    }
+    
+    body { 
+      background-color: var(--bg-color); 
+      color: #f3f4f6; 
+      font-family: 'Inter', sans-serif; 
+      overflow: hidden; 
+      -webkit-tap-highlight-color: transparent;
+      transition: background-color 0.7s ease;
+    }
+    
+    /* Скрытие скроллбара, но сохранение скроллинга */
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* Анимации iOS */
+    .slide-up-modal { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    .toast-anim { animation: toastSlide 0.4s cubic-bezier(0.17, 0.89, 0.32, 1.28) forwards; }
+    
+    @keyframes slideUp { 0% { transform: translateY(100%); } 100% { transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes toastSlide { 0% { transform: translate(-50%, -150%); opacity: 0; } 100% { transform: translate(-50%, 0); opacity: 1; } }
+
+    /* Стекло (Glassmorphism) */
+    .glass { background: rgba(28, 28, 30, 0.7); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    .glass-input { background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.1); }
+    .glass-input:focus { border-color: rgba(168, 85, 247, 0.5); background: rgba(168, 85, 247, 0.05); }
+    
+    /* Кнопки */
+    .btn-press:active { transform: scale(0.95); transition: transform 0.1s; }
+  </style>
+</head>
+<body class="antialiased h-screen flex flex-col">
+
+  <!-- Уведомления (Toast) -->
+  <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-[#2c2c2e]/90 backdrop-blur-xl border border-white/10 text-white px-5 py-3 rounded-full text-[13px] font-medium shadow-2xl flex items-center gap-3 opacity-0 pointer-events-none transition-all duration-300">
+    <span id="toast-msg"></span>
+  </div>
+
+  <!-- ШАПКА -->
+  <header class="pt-6 pb-4 px-6 flex items-center justify-between z-10 bg-transparent sticky top-0">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+        <i data-lucide="terminal" class="w-4 h-4 text-white"></i>
+      </div>
+      <span class="font-semibold tracking-tight text-lg">Raper XXII</span>
+    </div>
+    <div id="user-profile" class="flex items-center gap-2 bg-white/5 border border-white/5 rounded-full pl-1.5 pr-3 py-1 backdrop-blur-md">
+      <div class="w-7 h-7 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center border border-white/10">
+         <i data-lucide="user" class="w-3.5 h-3.5 text-gray-300"></i>
+      </div>
+      <div class="flex flex-col">
+        <span id="user-name" class="text-[12px] font-medium text-white leading-tight">Гость</span>
+        <span id="user-role" class="text-[9px] text-gray-500">Пользователь</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- КОНТЕНТ (Экраны) -->
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24 relative">
+    
+    <!-- Экран: ГЛАВНАЯ -->
+    <div id="screen-home" class="px-6 fade-in block">
+      <div class="flex justify-between items-end mb-6">
+        <h2 class="text-2xl font-semibold tracking-tight text-white">Слушать сейчас</h2>
+        <button id="btn-add-release" onclick="openAddModal()" class="hidden btn-press px-4 py-2 bg-white/10 border border-white/10 text-white text-[12px] font-semibold rounded-full flex items-center gap-2">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-purple-400"></i> Новый релиз
+        </button>
+      </div>
+      
+      <div id="releases-grid" class="flex flex-wrap gap-4">
+        <!-- Релизы будут добавляться сюда через JS -->
+      </div>
+      
+      <div id="empty-state" class="flex flex-col items-center justify-center py-20 opacity-50">
+        <i data-lucide="compass" class="w-12 h-12 text-gray-500 mb-4" stroke-width="1"></i>
+        <p class="text-gray-400 text-[14px]">Медиатека пока пуста.</p>
+      </div>
+    </div>
+
+    <!-- Экран: ЛАЙКИ -->
+    <div id="screen-likes" class="px-6 fade-in hidden">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="p-2.5 bg-pink-500/10 text-pink-500 rounded-2xl">
+          <i data-lucide="heart" class="w-6 h-6 fill-pink-500"></i>
+        </div>
+        <h2 class="text-2xl font-semibold tracking-tight text-white">Моя медиатека</h2>
+      </div>
+      <div id="likes-grid" class="flex flex-wrap gap-4"></div>
+      <div id="likes-empty" class="flex flex-col items-center justify-center py-20 opacity-50">
+        <p class="text-gray-400 text-[14px]">Здесь появятся ваши любимые релизы.</p>
+      </div>
+    </div>
+
+    <!-- Экран: НАСТРОЙКИ -->
+    <div id="screen-settings" class="px-6 fade-in hidden">
+      <div class="flex items-center gap-3 mb-8">
+        <div class="p-2.5 bg-gray-500/10 text-gray-400 rounded-2xl">
+          <i data-lucide="settings" class="w-6 h-6"></i>
+        </div>
+        <h2 class="text-2xl font-semibold tracking-tight text-white">Настройки</h2>
+      </div>
+      <div class="glass border border-white/5 p-6 rounded-[2rem]">
+        <h3 class="text-[14px] font-medium text-gray-200 mb-4">Оформление (Темы)</h3>
+        <div class="flex justify-between gap-2">
+          <button onclick="changeTheme('#000000', this)" class="theme-btn w-12 h-12 rounded-full bg-[#000000] border-2 border-white scale-110 shadow-inner transition-all"></button>
+          <button onclick="changeTheme('#0F0F14', this)" class="theme-btn w-12 h-12 rounded-full bg-[#0F0F14] border-2 border-white/10 hover:border-white/30 shadow-inner transition-all"></button>
+          <button onclick="changeTheme('#1A1110', this)" class="theme-btn w-12 h-12 rounded-full bg-[#1A1110] border-2 border-white/10 hover:border-white/30 shadow-inner transition-all"></button>
+          <button onclick="changeTheme('#0B162C', this)" class="theme-btn w-12 h-12 rounded-full bg-[#0B162C] border-2 border-white/10 hover:border-white/30 shadow-inner transition-all"></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ (Tab Bar) -->
+  <nav class="fixed bottom-0 w-full glass border-t border-white/5 pb-safe pt-2 px-6 flex justify-between items-center z-20" style="padding-bottom: max(env(safe-area-inset-bottom), 16px);">
+    <button onclick="switchTab('home')" id="tab-home" class="flex flex-col items-center gap-1 text-blue-400 btn-press">
+      <i data-lucide="home" class="w-6 h-6 stroke-[2.5px]"></i>
+      <span class="text-[10px] font-medium">Главная</span>
+    </button>
+    <button onclick="switchTab('likes')" id="tab-likes" class="flex flex-col items-center gap-1 text-gray-500 hover:text-pink-400 transition-colors btn-press">
+      <i data-lucide="heart" class="w-6 h-6 stroke-[2px]"></i>
+      <span class="text-[10px] font-medium">Лайки</span>
+    </button>
+    <button onclick="switchTab('settings')" id="tab-settings" class="flex flex-col items-center gap-1 text-gray-500 hover:text-gray-200 transition-colors btn-press">
+      <i data-lucide="settings" class="w-6 h-6 stroke-[2px]"></i>
+      <span class="text-[10px] font-medium">Настройки</span>
+    </button>
+  </nav>
+
+  <!-- МОДАЛЬНОЕ ОКНО: Загрузка релиза с ИИ -->
+  <div id="modal-add" class="fixed inset-0 z-50 hidden flex-col justify-end">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal('modal-add')"></div>
+    <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative slide-up-modal">
+      <div class="w-12 h-1 bg-white/20 rounded-full mx-auto mb-6"></div>
+      
+      <div class="flex flex-col items-center mb-6 text-center">
+        <div class="w-12 h-12 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center mb-3 shadow-[0_0_20px_rgba(168,85,247,0.3)]">
+          <i data-lucide="sparkles" class="w-6 h-6"></i>
+        </div>
+        <h2 class="text-xl font-semibold text-white">AI-Загрузка</h2>
+        <p class="text-[12px] text-gray-400 mt-1">Вставьте ссылку на YouTube или Spotify</p>
+      </div>
+
+      <div class="space-y-4">
+        <input id="input-link" type="url" placeholder="https://..." class="w-full glass-input rounded-2xl px-4 py-3.5 text-[14px] text-white outline-none transition-all">
+        
+        <button id="btn-parse" onclick="handleAddRelease()" class="btn-press w-full py-3.5 bg-purple-600 text-white font-semibold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 disabled:opacity-50">
+          <i id="parse-icon" data-lucide="sparkles" class="w-4 h-4"></i>
+          <span id="parse-text">Распознать и добавить</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- МОДАЛЬНОЕ ОКНО: Просмотр релиза (Детали) -->
+  <div id="modal-release" class="fixed inset-0 z-50 hidden flex-col justify-end">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal('modal-release')"></div>
+    <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative slide-up-modal flex flex-col items-center max-h-[90vh] overflow-y-auto hide-scrollbar">
+      <div class="w-12 h-1 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
+      
+      <img id="rel-img" src="" class="w-48 h-48 rounded-3xl object-cover shadow-2xl mb-5">
+      <h2 id="rel-title" class="text-2xl font-semibold text-center text-white tracking-tight mb-1">Название</h2>
+      <p id="rel-artist" class="text-gray-400 text-[14px] mb-6 text-center">Артист</p>
+      
+      <button id="rel-play-btn" class="btn-press w-full py-3.5 bg-white text-black font-semibold rounded-2xl flex items-center justify-center gap-2 shadow-lg mb-6">
+        <i data-lucide="play" class="w-4 h-4 fill-black"></i> Слушать
+      </button>
+
+      <div class="w-full">
+        <h3 class="text-lg font-semibold text-white mb-4">Отзывы</h3>
+        <div id="reviews-container" class="space-y-3 mb-4"></div>
+        
+        <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-[12px] text-gray-400">Ваша оценка</span>
+            <input id="rev-rating" type="number" min="1" max="10" value="10" class="w-12 bg-black/20 text-center text-white text-[13px] outline-none rounded-lg py-1 border border-white/5">
+          </div>
+          <textarea id="rev-text" placeholder="Напишите рецензию..." class="w-full h-20 bg-black/20 border border-white/5 rounded-xl outline-none p-3 text-[13px] text-white resize-none mb-3"></textarea>
+          <button onclick="addReview()" class="btn-press w-full py-2 bg-white/10 text-white text-[13px] font-semibold rounded-xl">Опубликовать</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Инициализация Telegram WebApp
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+    
+    // БЭКЕНД URL (Укажите здесь URL вашего Python сервера)
+    const BACKEND_URL = "http://127.0.0.1:8000"; 
+
+    // Состояния
+    let user = { 
+      username: tg.initDataUnsafe?.user?.first_name || 'Гость', // Для отображения берем имя
+      role: 'Пользователь' 
+    };
+    
+    // Получаем Telegram юзернейм (без @) и приводим к нижнему регистру для надежности
+    const tgUsername = tg.initDataUnsafe?.user?.username?.toLowerCase() || '';
+    
+    // Назначаем админом Создателей
+    if (tgUsername === 'monetka_man' || tgUsername === 'xllbloodxii' || user.username.toLowerCase() === 'admin') {
+      user.role = 'Создатель';
+      document.getElementById('btn-add-release').classList.remove('hidden');
+    }
+
+    document.getElementById('user-name').innerText = user.username;
+    document.getElementById('user-role').innerText = user.role;
+
+    let releases = [];
+    let likedSet = new Set();
+    let reviews = [];
+    let activeReleaseId = null;
+
+    // --- УТИЛИТЫ ---
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-msg').innerText = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      toast.classList.add('toast-anim');
+      setTimeout(() => {
+        toast.classList.remove('toast-anim');
+        toast.classList.add('opacity-0', 'pointer-events-none');
+      }, 3000);
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('main > div').forEach(el => el.classList.add('hidden'));
+      document.getElementById('screen-' + tabId).classList.remove('hidden');
+      
+      // Обновление иконок навигации
+      ['home', 'likes', 'settings'].forEach(id => {
+        const btn = document.getElementById('tab-' + id);
+        const icon = btn.querySelector('svg') || btn.querySelector('i');
+        if (id === tabId) {
+          btn.classList.replace('text-gray-500', id === 'home' ? 'text-blue-400' : id === 'likes' ? 'text-pink-400' : 'text-gray-200');
+          if (icon) icon.classList.replace('stroke-[2px]', 'stroke-[2.5px]');
+        } else {
+          btn.className = `flex flex-col items-center gap-1 text-gray-500 hover:text-${id==='home'?'blue':id==='likes'?'pink':'gray'}-400 transition-colors btn-press`;
+          if (icon) icon.classList.replace('stroke-[2.5px]', 'stroke-[2px]');
+        }
+      });
+
+      if (tabId === 'likes') renderLikes();
+    }
+
+    function changeTheme(hex, btnRef) {
+      document.documentElement.style.setProperty('--bg-color', hex);
+      document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.remove('border-white', 'scale-110');
+        btn.classList.add('border-white/10');
+      });
+      btnRef.classList.remove('border-white/10');
+      btnRef.classList.add('border-white', 'scale-110');
+    }
+
+    // --- МОДАЛКИ ---
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); }
+    function openAddModal() { openModal('modal-add'); document.getElementById('input-link').value = ''; }
+
+    // --- ЛОГИКА ПРИЛОЖЕНИЯ ---
+    function toggleLike(e, id) {
+      e.stopPropagation();
+      if (likedSet.has(id)) likedSet.delete(id);
+      else likedSet.add(id);
+      renderReleases();
+      if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
+    }
+
+    function renderReleaseCard(r) {
+      const isLiked = likedSet.has(r.id);
+      return `
+        <div onclick="openRelease('${r.id}')" class="flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative">
+          <div class="w-full aspect-square rounded-[1.2rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
+            <img src="${r.img}" class="w-full h-full object-cover">
+            <button onclick="toggleLike(event, '${r.id}')" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md active:scale-90 transition-transform">
+              <i data-lucide="heart" class="w-4 h-4 ${isLiked ? 'fill-pink-500 text-pink-500' : 'text-white'}"></i>
+            </button>
+          </div>
+          <div class="px-1">
+            <div class="text-[13px] font-semibold text-white truncate">${r.name}</div>
+            <div class="text-[11px] text-gray-500 truncate">${r.artist}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderReleases() {
+      const grid = document.getElementById('releases-grid');
+      const empty = document.getElementById('empty-state');
+      if (releases.length === 0) {
+        grid.innerHTML = '';
+        empty.classList.remove('hidden');
+      } else {
+        empty.classList.add('hidden');
+        grid.innerHTML = releases.map(renderReleaseCard).join('');
+        lucide.createIcons();
+      }
+    }
+
+    function renderLikes() {
+      const grid = document.getElementById('likes-grid');
+      const empty = document.getElementById('likes-empty');
+      const likedArr = releases.filter(r => likedSet.has(r.id));
+      if (likedArr.length === 0) {
+        grid.innerHTML = '';
+        empty.classList.remove('hidden');
+      } else {
+        empty.classList.add('hidden');
+        grid.innerHTML = likedArr.map(renderReleaseCard).join('');
+        lucide.createIcons();
+      }
+    }
+
+    // --- МАГИЯ ИИ ---
+    async function fetchCoverUrl(artist, title) {
+      try {
+        const query = encodeURIComponent(`${artist} ${title}`);
+        const res = await fetch(`https://itunes.apple.com/search?term=${query}&entity=album&limit=1`);
+        const data = await res.json();
+        if (data.results && data.results.length > 0) {
+          return data.results[0].artworkUrl100.replace('100x100bb', '300x300bb');
+        }
+      } catch (e) {}
+      return `https://via.placeholder.com/300/1c1c1e/ffffff?text=${encodeURIComponent(title.substring(0,2).toUpperCase())}`;
+    }
+
+    async function handleAddRelease() {
+      const linkInput = document.getElementById('input-link').value;
+      if (!linkInput) return showToast('Введите ссылку!');
+      
+      const btn = document.getElementById('btn-parse');
+      const icon = document.getElementById('parse-icon');
+      const text = document.getElementById('parse-text');
+      
+      btn.disabled = true;
+      icon.setAttribute('data-lucide', 'loader-2');
+      icon.classList.add('animate-spin');
+      text.innerText = 'Анализ нейросетью...';
+      lucide.createIcons();
+
+      try {
+        // Запрос к Python бэкенду
+        const res = await fetch(`${BACKEND_URL}/api/parse_link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ link: linkInput })
+        });
+        
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || 'Ошибка сервера');
+        }
+        
+        const aiData = await res.json(); // Ожидаем { artist: "...", name: "..." }
+        
+        showToast(`Распознано: ${aiData.artist} - ${aiData.name}`);
+        text.innerText = 'Поиск обложки...';
+        
+        const coverUrl = await fetchCoverUrl(aiData.artist, aiData.name);
+        
+        releases.unshift({
+          id: Date.now().toString(),
+          name: aiData.name,
+          artist: aiData.artist,
+          img: coverUrl,
+          link: linkInput
+        });
+        
+        renderReleases();
+        closeModal('modal-add');
+        showToast('Релиз добавлен в медиатеку');
+      } catch(e) {
+        showToast(e.message || 'Сбой ИИ распознавания');
+      } finally {
+        btn.disabled = false;
+        icon.classList.remove('animate-spin');
+        icon.setAttribute('data-lucide', 'sparkles');
+        text.innerText = 'Распознать и добавить';
+        lucide.createIcons();
+      }
+    }
+
+    // --- ДЕТАЛИ РЕЛИЗА И ОТЗЫВЫ ---
+    function openRelease(id) {
+      const rel = releases.find(r => r.id === id);
+      if (!rel) return;
+      activeReleaseId = id;
+      
+      document.getElementById('rel-img').src = rel.img;
+      document.getElementById('rel-title').innerText = rel.name;
+      document.getElementById('rel-artist').innerText = rel.artist;
+      document.getElementById('rel-play-btn').onclick = () => window.open(rel.link, '_blank');
+      
+      renderReviews();
+      openModal('modal-release');
+    }
+
+    function addReview() {
+      const text = document.getElementById('rev-text').value.trim();
+      const rating = document.getElementById('rev-rating').value;
+      if (!text) return showToast('Напишите текст отзыва');
+      
+      reviews.unshift({
+        id: Date.now(),
+        relId: activeReleaseId,
+        author: user.username,
+        text: text,
+        rating: rating,
+        date: new Date().toLocaleDateString()
+      });
+      
+      document.getElementById('rev-text').value = '';
+      renderReviews();
+      showToast('Отзыв опубликован');
+    }
+
+    function renderReviews() {
+      const container = document.getElementById('reviews-container');
+      const relReviews = reviews.filter(r => r.relId === activeReleaseId);
+      
+      if (relReviews.length === 0) {
+        container.innerHTML = `<div class="text-center py-4 text-[13px] text-gray-500">Пока нет отзывов</div>`;
+        return;
+      }
+      
+      container.innerHTML = relReviews.map(r => `
+        <div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-[13px] font-semibold text-white">${r.author}</span>
+            <div class="flex items-center gap-1 text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-md">
+              <i data-lucide="star" class="w-3 h-3 fill-yellow-500"></i>
+              <span class="text-[11px] font-bold">${r.rating}</span>
+            </div>
+          </div>
+          <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${r.text}</p>
+          <span class="text-[10px] text-gray-500">${r.date}</span>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    // Первичный рендер
+    lucide.createIcons();
+    renderReleases();
+
+  </script>
+</body>
+</html>
