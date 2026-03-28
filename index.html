@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Raper XXII - TG App</title>
+  <title>XXII SOUND - TG App</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,900;1,900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Poiret+One&display=swap');
     
     :root {
       --bg-color: #000000;
@@ -71,7 +72,7 @@
       margin-bottom: 20px;
     }
 
-    /* Шахматный Логотип XXII в шапке (надежный паттерн) */
+    /* Шахматный Логотип XXII в шапке */
     .logo-container {
       background-color: #ffffff;
       background-image: 
@@ -136,7 +137,7 @@
     body.light-theme .bg-black\/20 { background-color: rgba(0,0,0,0.05) !important; }
     
     body.light-theme .bg-black\/40 { background-color: rgba(255,255,255,0.9) !important; box-shadow: 0 2px 10px rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.05) !important; }
-    body.light-theme .bg-black\/40 i:not(.text-pink-500) { stroke: #000; }
+    body.light-theme .bg-black\/40 i:not(.text-red-500) { stroke: #000; } /* Теперь красные сердечки остаются красными */
     
     body.light-theme .bg-white.text-black { background-color: #000 !important; color: #fff !important; }
     body.light-theme .bg-white.text-black i { fill: #fff !important; stroke: #fff !important; }
@@ -155,7 +156,7 @@
     <div class="bg-black/80 backdrop-blur-md border border-white/10 p-10 rounded-[3rem] text-center shadow-2xl w-[85%] max-w-sm relative overflow-hidden flex flex-col items-center">
       <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-red-600/20 blur-[50px] rounded-full pointer-events-none"></div>
       <h1 class="welcome-logo relative z-10">XXII</h1>
-      <h2 class="text-3xl font-black text-white tracking-widest mb-6 relative z-10 uppercase">Raper</h2>
+      <h2 class="text-4xl font-bold text-white tracking-[0.2em] mb-6 relative z-10 uppercase" style="font-family: 'Poiret One', sans-serif;">Sound</h2>
       <p class="text-gray-300 mb-8 text-[14px] leading-relaxed relative z-10">
         Добро пожаловать, <span id="welcome-user-name" class="text-white font-bold"></span>!<br><br>
         Эксклюзивные релизы и звук, которого нет на других платформах.
@@ -173,7 +174,7 @@
   <header class="pt-6 pb-4 px-6 flex items-center justify-between z-10 bg-transparent sticky top-0">
     <div class="flex items-center gap-3">
       <div class="logo-container"><span class="logo-text">XXII</span></div>
-      <span class="font-bold tracking-tight text-lg text-white">RAPER</span>
+      <span class="font-bold tracking-tight text-xl text-white uppercase" style="font-family: 'Poiret One', sans-serif; letter-spacing: 1px;">Sound</span>
     </div>
     <div id="user-profile" onclick="openProfileModal()" class="flex items-center gap-2 bg-white/5 border border-white/5 rounded-full pl-1.5 pr-3 py-1 backdrop-blur-md cursor-pointer btn-press transition-colors hover:bg-white/10">
       <div class="w-7 h-7 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center border border-white/10">
@@ -209,7 +210,7 @@
 
     <div id="screen-likes" class="px-6 fade-in hidden">
       <div class="flex items-center gap-3 mb-6">
-        <div class="p-2.5 bg-pink-500/10 text-pink-500 rounded-2xl"><i data-lucide="heart" class="w-6 h-6 fill-pink-500"></i></div>
+        <div class="p-2.5 bg-red-500/10 text-red-500 rounded-2xl"><i data-lucide="heart" class="w-6 h-6 fill-red-500"></i></div>
         <h2 class="text-2xl font-semibold tracking-tight text-white">Лайки</h2>
       </div>
       <div id="likes-grid" class="flex flex-wrap gap-4"></div>
@@ -217,16 +218,13 @@
 
     <div id="screen-settings" class="px-6 fade-in hidden">
       <div class="flex items-center gap-3 mb-8">
-        <div class="p-2.5 bg-gray-500/10 text-gray-400 rounded-2xl"><i data-lucide="settings" class="w-6 h-6"></i></div>
+        <div class="p-2.5 bg-red-500/10 text-red-500 rounded-2xl"><i data-lucide="settings" class="w-6 h-6"></i></div>
         <h2 class="text-2xl font-semibold tracking-tight text-white">Настройки</h2>
       </div>
       <div class="glass border border-white/5 p-6 rounded-[2rem]">
         <h3 class="text-[14px] font-medium text-gray-200 mb-4">Тема оформления</h3>
-        <div class="flex justify-between gap-2" id="theme-selector">
+        <div class="flex justify-start gap-4" id="theme-selector">
           <button onclick="changeTheme('#000000', this)" class="theme-btn btn-press w-12 h-12 rounded-full bg-[#000000] border-2 border-white scale-110 shadow-inner flex items-center justify-center transition-all"><i data-lucide="check" class="w-6 h-6 text-white"></i></button>
-          <button onclick="changeTheme('#0F0F14', this)" class="theme-btn btn-press w-12 h-12 rounded-full bg-[#0F0F14] border-2 border-white/10 shadow-inner flex items-center justify-center transition-all"></button>
-          <button onclick="changeTheme('#1A1110', this)" class="theme-btn btn-press w-12 h-12 rounded-full bg-[#1A1110] border-2 border-white/10 shadow-inner flex items-center justify-center transition-all"></button>
-          <button onclick="changeTheme('#0B162C', this)" class="theme-btn btn-press w-12 h-12 rounded-full bg-[#0B162C] border-2 border-white/10 shadow-inner flex items-center justify-center transition-all"></button>
           <button onclick="changeTheme('#f2f2f7', this)" class="theme-btn btn-press w-12 h-12 rounded-full bg-[#f2f2f7] border-2 border-white/10 shadow-inner flex items-center justify-center transition-all"></button>
         </div>
       </div>
@@ -234,9 +232,9 @@
   </main>
 
   <nav class="fixed bottom-0 w-full glass border-t border-white/5 pb-safe pt-2 px-6 flex justify-between items-center z-20" style="padding-bottom: max(env(safe-area-inset-bottom), 16px);">
-    <button onclick="switchTab('home')" id="tab-home" class="flex flex-col items-center gap-1 text-red-500 btn-press"><i data-lucide="home" class="w-6 h-6 stroke-[2.5px]"></i><span class="text-[10px] font-medium">Главная</span></button>
-    <button onclick="switchTab('likes')" id="tab-likes" class="flex flex-col items-center gap-1 text-gray-500 btn-press"><i data-lucide="heart" class="w-6 h-6"></i><span class="text-[10px] font-medium">Лайки</span></button>
-    <button onclick="switchTab('settings')" id="tab-settings" class="flex flex-col items-center gap-1 text-gray-500 btn-press"><i data-lucide="settings" class="w-6 h-6"></i><span class="text-[10px] font-medium">Опции</span></button>
+    <button onclick="switchTab('home')" id="tab-home" class="flex flex-col items-center gap-1 text-red-500 btn-press transition-colors"><i data-lucide="home" class="w-6 h-6 stroke-[2.5px]"></i><span class="text-[10px] font-medium">Главная</span></button>
+    <button onclick="switchTab('likes')" id="tab-likes" class="flex flex-col items-center gap-1 text-gray-500 btn-press transition-colors"><i data-lucide="heart" class="w-6 h-6"></i><span class="text-[10px] font-medium">Лайки</span></button>
+    <button onclick="switchTab('settings')" id="tab-settings" class="flex flex-col items-center gap-1 text-gray-500 btn-press transition-colors"><i data-lucide="settings" class="w-6 h-6"></i><span class="text-[10px] font-medium">Опции</span></button>
   </nav>
 
   <div id="modal-add" class="fixed inset-0 z-50 hidden flex flex-col justify-end">
@@ -321,23 +319,28 @@
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
       
       <div class="flex flex-col items-center mb-6">
-        <div class="w-24 h-24 rounded-[1.5rem] bg-[#1c1c1e] flex items-center justify-center border border-white/10 shadow-2xl mb-4 overflow-hidden">
+        <div class="w-24 h-24 rounded-[1.5rem] bg-[#1c1c1e] flex items-center justify-center border border-white/10 shadow-2xl mb-4 overflow-hidden shrink-0">
           <img id="profile-avatar" src="" class="w-full h-full object-cover">
         </div>
         <h2 id="profile-name" class="text-2xl font-bold text-white mb-1">Имя</h2>
-        <div class="px-3 py-1 rounded-lg text-[11px] font-black uppercase tracking-widest mb-8 transition-colors" id="profile-role">Роль</div>
+        <div class="px-3 py-1 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6 transition-colors" id="profile-role">Роль</div>
         
-        <div class="w-full grid grid-cols-2 gap-4">
-          <div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col items-center text-center shadow-inner">
-            <i data-lucide="message-square" class="w-6 h-6 text-gray-400 mb-3"></i>
+        <div class="w-full grid grid-cols-2 gap-4 mb-6">
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center text-center shadow-inner">
+            <i data-lucide="message-square" class="w-6 h-6 text-gray-400 mb-2"></i>
             <span id="profile-reviews-count" class="text-2xl font-black text-white">0</span>
             <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">Рецензий</span>
           </div>
-          <div class="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col items-center text-center shadow-inner">
-            <i data-lucide="calendar" class="w-6 h-6 text-gray-400 mb-3"></i>
-            <span id="profile-reg-date" class="text-sm font-black text-white mt-1.5">28.03.2026</span>
-            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1.5">В проекте с</span>
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center text-center shadow-inner">
+            <i data-lucide="heart" class="w-6 h-6 text-red-500 mb-2"></i>
+            <span id="profile-likes-count" class="text-2xl font-black text-white">0</span>
+            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">Лайков</span>
           </div>
+        </div>
+
+        <div class="w-full text-left">
+          <h3 class="text-[15px] font-bold text-white mb-3 pl-2">Ваши рецензии</h3>
+          <div id="profile-user-reviews" class="space-y-3"></div>
         </div>
       </div>
     </div>
@@ -347,7 +350,6 @@
     const tg = window.Telegram.WebApp;
     tg.expand();
 
-    // Бэкенд Render
     const BACKEND_URL = "https://music-backend-qjvk.onrender.com"; 
 
     const tgUser = tg.initDataUnsafe?.user;
@@ -359,7 +361,6 @@
       localStorage.setItem('raper_reg_date', regDate);
     }
 
-    // Надежное определение имени, чтобы избежать "Добро пожаловать, !"
     const displayName = (tgUser?.username ? `@${tgUser.username}` : tgUser?.first_name) || 'Гость';
 
     let user = { username: displayName, role: 'Пользователь', regDate: regDate };
@@ -368,7 +369,6 @@
       user.role = 'Создатель';
     }
 
-    // --- ЛОГИКА WELCOME SCREEN ---
     document.getElementById('welcome-user-name').innerText = user.username;
     
     if (localStorage.getItem('raper_welcomed_v1')) {
@@ -437,7 +437,7 @@
         const btn = document.getElementById('tab-' + id);
         const icon = btn.querySelector('svg') || btn.querySelector('i');
         if (id === tabId) { 
-          btn.className = `flex flex-col items-center gap-1 ${id==='home'?'text-red-500':id==='likes'?'text-pink-400':'text-white'} btn-press transition-colors`; 
+          btn.className = `flex flex-col items-center gap-1 text-red-500 btn-press transition-colors`; 
           if(icon) icon.classList.add('stroke-[2.5px]'); 
         } else { 
           btn.className = `flex flex-col items-center gap-1 text-gray-500 btn-press transition-colors`; 
@@ -471,19 +471,37 @@
     function openProfileModal() {
       const nameEl = document.getElementById('profile-name');
       if(nameEl) {
-        const reviewCount = reviews.filter(r => r.author === user.username).length;
+        const userReviews = reviews.filter(r => r.author === user.username);
         nameEl.innerText = user.username;
         
         const pRole = document.getElementById('profile-role');
         pRole.innerText = user.role;
         if (user.role === 'Создатель') {
-            pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-[11px] font-black uppercase tracking-widest mb-8";
+            pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
         } else {
-            pRole.className = "px-3 py-1 bg-white/10 border border-white/20 text-white rounded-lg text-[11px] font-black uppercase tracking-widest mb-8";
+            pRole.className = "px-3 py-1 bg-white/10 border border-white/20 text-white rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
         }
         
-        document.getElementById('profile-reviews-count').innerText = reviewCount;
-        document.getElementById('profile-reg-date').innerText = user.regDate;
+        document.getElementById('profile-reviews-count').innerText = userReviews.length;
+        document.getElementById('profile-likes-count').innerText = likedSet.size;
+        
+        const revContainer = document.getElementById('profile-user-reviews');
+        if (userReviews.length > 0) {
+          revContainer.innerHTML = userReviews.map(r => {
+            const rel = releases.find(release => release.id === r.relId);
+            const relName = rel ? rel.name : 'Удаленный релиз';
+            return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left">
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-[13px] font-bold text-gray-300 truncate pr-2">${relName}</span>
+                <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px] shrink-0">${r.rating}</div>
+              </div>
+              <p class="text-[13px] text-gray-200 leading-relaxed mb-2">${r.text}</p>
+              <span class="text-[10px] text-gray-500 font-medium">${r.date}</span>
+            </div>`;
+          }).join('');
+        } else {
+          revContainer.innerHTML = `<div class="text-center py-6 text-[13px] text-gray-500">Вы еще не написали ни одной рецензии</div>`;
+        }
         
         const safeName = user.username.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
         document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
@@ -501,17 +519,25 @@
       document.getElementById(`rate-${val}`).classList.add('active'); 
     }
 
-    // Синхронизация с Render SQLite 
+    // Загрузка данных с Render с защитой от таймаута
     async function fetchDB() {
         try {
-            const res = await fetch(`${BACKEND_URL}/api/data?username=${encodeURIComponent(user.username)}`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 12000); // Отмена запроса через 12 секунд
+            
+            const res = await fetch(`${BACKEND_URL}/api/data?username=${encodeURIComponent(user.username)}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
             if(!res.ok) throw new Error();
             const data = await res.json();
             releases = data.releases || [];
             reviews = data.reviews || [];
             likedSet = new Set(data.likes || []);
         } catch(e) {
-            console.error("Ошибка загрузки БД. Сервер спит или недоступен.");
+            console.error("Ошибка загрузки БД", e);
+            showToast("Работаем в оффлайн-режиме (сервер недоступен)");
         }
         renderReleases();
         switchTab('home');
@@ -562,7 +588,7 @@
         const newRel = { id: Date.now().toString(), name: parsedName, artist: parsedArtist, img: parsedCover, link };
         
         // Отправка в БД Render
-        fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
+        fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) }).catch(e => console.error(e));
         
         releases.unshift(newRel);
         renderReleases(); closeModal('modal-add'); showToast('Релиз добавлен!');
@@ -600,7 +626,7 @@
       const newRel = { id: Date.now().toString(), name: title, artist: artist, img: cover, link: currentPendingLink };
       
       // Отправка в БД Render
-      fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
+      fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) }).catch(e => console.error(e));
       
       releases.unshift(newRel);
       renderReleases(); closeModal('modal-add'); showToast('Релиз сохранен!');
@@ -624,7 +650,7 @@
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ releaseId: id, username: user.username, isLike: isLiking })
-      });
+      }).catch(e => console.error(e));
       
       renderReleases();
       if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
@@ -638,7 +664,7 @@
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
             <img src="${r.img || fb}" onerror="this.src='${fb}'" class="w-full h-full object-cover">
             <button onclick="toggleLikeAPI(event, '${r.id}')" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
-              <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-pink-500 text-pink-500':'text-white'}"></i>
+              <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-red-500 text-red-500':'text-white'}"></i>
             </button>
           </div>
           <div class="px-1"><div class="text-[13px] font-bold text-white truncate">${r.name}</div><div class="text-[11px] text-gray-500 truncate">${r.artist}</div></div>
@@ -689,7 +715,7 @@
       if (!releaseToDelete) return;
       
       // Отправка в БД Render
-      fetch(`${BACKEND_URL}/api/releases/${releaseToDelete}`, { method: 'DELETE' });
+      fetch(`${BACKEND_URL}/api/releases/${releaseToDelete}`, { method: 'DELETE' }).catch(e => console.error(e));
       
       releases = releases.filter(r => r.id !== releaseToDelete);
       if (likedSet.has(releaseToDelete)) likedSet.delete(releaseToDelete);
@@ -710,7 +736,7 @@
       const newRev = { id: Date.now().toString(), relId: activeReleaseId, author: user.username, text: t, rating: selectedRating, date: new Date().toLocaleDateString('ru-RU') };
       
       // Отправка в БД Render
-      fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRev) });
+      fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRev) }).catch(e => console.error(e));
       
       reviews.unshift(newRev);
       document.getElementById('rev-text').value = ''; renderReviews(); showToast('Опубликовано!');
@@ -747,7 +773,7 @@
     lucide.createIcons();
     selectRating(10);
     
-    // Запуск синхронизации с базой SQLite (твой Render)
+    // Запуск синхронизации с БД Render
     fetchDB();
   </script>
 </body>
