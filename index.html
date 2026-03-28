@@ -250,7 +250,7 @@
       <div id="add-form-step-1" class="space-y-4">
         <input id="input-link" type="url" placeholder="Ссылка на трек или клип..." class="w-full glass-input rounded-2xl px-4 py-4 text-[14px] text-white outline-none focus:ring-1 ring-red-500/50">
         <button id="btn-submit" onclick="handleAddRelease()" class="btn-press w-full py-4 bg-red-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-all">
-          <span id="btn-add-text">Считать данные</span>
+          <span id="btn-add-text">Распознать и добавить</span>
         </button>
       </div>
 
@@ -523,7 +523,7 @@
       }
     }
 
-    function openAddModal() { openModal('modal-add'); document.getElementById('input-link').value = ''; document.getElementById('btn-add-text').innerText = 'Считать данные'; }
+    function openAddModal() { openModal('modal-add'); document.getElementById('input-link').value = ''; document.getElementById('btn-add-text').innerText = 'Распознать и добавить'; }
     
     function selectRating(val) { 
       selectedRating = val; 
@@ -559,68 +559,109 @@
         switchTab('home');
     }
 
-    // --- ВОЗВРАЩЕНО АВТОМАТИЧЕСКОЕ СОХРАНЕНИЕ ---
+    // --- НОВАЯ УМНАЯ ЛОГИКА РАСПОЗНАВАНИЯ ---
     async function handleAddRelease() {
       const link = document.getElementById('input-link').value.trim();
       if (!link) return showToast('Введите ссылку');
       
       const btnText = document.getElementById('btn-add-text');
-      btnText.innerText = 'Загрузка...';
+      btnText.innerText = 'Анализ ссылки...';
 
-      let parsedArtist = null; let parsedName = null; let parsedCover = null;
+      let parsedArtist = 'Артист'; 
+      let parsedName = 'Неизвестный релиз'; 
+      let parsedCover = '';
+      let isSuccess = false;
 
       try {
-        const res = await fetch(`${BACKEND_URL}/api/parse_link`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ link }) });
-        if (!res.ok) throw new Error('Backend Fail');
-        const data = await res.json();
+        // 1. СНАЧАЛА используем oEmbed (Идеально и безошибочно читает YouTube, Spotify и т.д.)
+        const embedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(link)}`);
+        const embedData = await embedRes.json();
         
-        if (data.name && data.artist && data.artist !== 'Артист') {
-            parsedArtist = data.artist; parsedName = data.name; parsedCover = data.img;
-        } else throw new Error('Empty Backend Data');
+        if (!embedData.error && embedData.title) {
+            let title = embedData.title;
+            let author = embedData.author_name || 'Артист';
+            
+            // Очищаем мусор из названия (Official Video, Audio и т.д.)
+            title = title.replace(/(\(Official.*?\)|\[Official.*?\]|\(Lyric.*?\)|\[Lyric.*?\]|\(Audio\)|\[Audio\]|ft\..*?|feat\..*?)/gi, '').trim();
+            
+            if (title.includes(' - ')) {
+                const parts = title.split(' - ');
+                parsedArtist = parts[0].trim();
+                parsedName = parts.slice(1).join(' - ').trim();
+            } else {
+                parsedArtist = author.replace(/ - Topic/gi, '').trim();
+                parsedName = title;
+            }
+            
+            parsedCover = embedData.thumbnail_url || '';
+            isSuccess = true;
+        } else {
+            throw new Error('noembed failed');
+        }
       } catch(e) {
+        // 2. Если oEmbed не помог (редкие сайты) - используем ИИ бэкенд
         try {
-            const embedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(link)}`);
-            const embedData = await embedRes.json();
-            if (embedData.error || !embedData.title) throw new Error('oEmbed Fail');
-
-            parsedArtist = embedData.author_name || 'Артист'; parsedName = embedData.title || 'Релиз';
-            if (parsedName.includes(' - ')) { const p = parsedName.split(' - '); parsedArtist = p[0].trim(); parsedName = p.slice(1).join(' - ').trim(); }
-            parsedCover = embedData.thumbnail_url || null;
-        } catch(err) {
-            // ФОЛЛБЕК НА РУЧНОЙ ВВОД ПОЯВИТСЯ ТОЛЬКО ПРИ ПОЛНОЙ ОШИБКЕ ПАРСИНГА ССЫЛКИ
+            const res = await fetch(`${BACKEND_URL}/api/parse_link`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ link }) });
+            if (!res.ok) throw new Error('Backend Fail');
+            const data = await res.json();
+            
+            if (data.name && data.name !== 'Релиз' && data.name !== 'YouTube') {
+                parsedArtist = data.artist; 
+                parsedName = data.name; 
+                parsedCover = data.img || '';
+                isSuccess = true;
+            } else {
+                throw new Error('AI Parse Fail');
+            }
+        } catch (err) {
+            // 3. Если всё сломалось - ФОЛЛБЕК НА РУЧНОЙ ВВОД
             document.getElementById('add-form-step-1').classList.add('hidden');
             document.getElementById('add-form-step-manual').classList.remove('hidden');
             document.getElementById('manual-step-alert').innerText = 'Данные недоступны. Введите вручную:';
             document.getElementById('manual-step-alert').className = 'text-[12px] text-amber-400 bg-amber-400/10 p-3 rounded-xl mb-2 text-center';
             currentPendingLink = link;
-            btnText.innerText = 'Считать данные';
+            btnText.innerText = 'Распознать и добавить';
             return showToast('Не удалось считать. Введите вручную.');
         }
       }
 
-      // ЕСЛИ УДАЛОСЬ ПРОЧИТАТЬ ССЫЛКУ — СРАЗУ СОХРАНЯЕМ В БД И ДОБАВЛЯЕМ В ЛЕНТУ
-      try {
-        if (!parsedCover) {
-           const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(parsedArtist + ' ' + parsedName)}&limit=1`);
-           const itunesData = await itunesRes.json();
-           parsedCover = itunesData.results?.[0]?.artworkUrl100?.replace('100x100bb', '400x400bb') || '';
-        }
-        
-        const newRel = { id: Date.now().toString(), name: parsedName, artist: parsedArtist, img: parsedCover, link, timestamp: Date.now() };
-        
-        // Отправка в БД Render
-        const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
-        if (!saveRes.ok) throw new Error('Ошибка записи в БД');
-        
-        releases.unshift(newRel);
-        renderReleases(); 
-        closeModal('modal-add'); 
-        showToast('Релиз добавлен!');
-      } catch(e) { 
-        showToast('Ошибка сохранения: ' + e.message); 
-        console.error(e); 
-      } finally { 
-        btnText.innerText = 'Считать данные'; 
+      if (isSuccess) {
+          // Пытаемся найти качественную квадратную обложку 1:1 и точное название в iTunes
+          try {
+              btnText.innerText = 'Поиск обложки...';
+              const query = encodeURIComponent(`${parsedArtist} ${parsedName}`).replace(/%20/g, '+');
+              const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=1`);
+              const itunesData = await itunesRes.json();
+              
+              if (itunesData.results && itunesData.results.length > 0) {
+                  const track = itunesData.results[0];
+                  // Заменяем превьюшку из YouTube на HD-обложку альбома
+                  parsedCover = track.artworkUrl100.replace('100x100bb', '600x600bb');
+                  parsedArtist = track.artistName;
+                  parsedName = track.trackName;
+              }
+          } catch(e) {
+              console.log("iTunes search error:", e);
+          }
+          
+          const newRel = { id: Date.now().toString(), name: parsedName, artist: parsedArtist, img: parsedCover, link: link, timestamp: Date.now() };
+          
+          // СОХРАНЯЕМ В БД И ДОБАВЛЯЕМ В ЛЕНТУ МГНОВЕННО
+          try {
+              btnText.innerText = 'Сохранение...';
+              const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
+              if (!saveRes.ok) throw new Error('DB Save Error');
+              
+              releases.unshift(newRel);
+              renderReleases(); 
+              closeModal('modal-add'); 
+              showToast('Релиз успешно добавлен!');
+          } catch(e) {
+              showToast('Ошибка сохранения: ' + e.message); 
+              console.error(e);
+          } finally {
+              btnText.innerText = 'Распознать и добавить'; 
+          }
       }
     }
 
