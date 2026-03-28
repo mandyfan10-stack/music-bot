@@ -297,7 +297,7 @@
     </div>
   </div>
 
-  <div id="modal-confirm-delete" class="fixed inset-0 z-[60] hidden flex flex-col justify-end">
+  <div id="modal-confirm-delete" class="fixed inset-0 z-[70] hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" onclick="closeModal('modal-confirm-delete')"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container text-center flex-col">
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
@@ -313,7 +313,7 @@
     </div>
   </div>
 
-  <div id="modal-profile" class="fixed inset-0 z-50 hidden flex flex-col justify-end">
+  <div id="modal-profile" class="fixed inset-0 z-[60] hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" onclick="closeModal('modal-profile')"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container text-center max-h-[92vh] overflow-y-auto hide-scrollbar flex-col">
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
@@ -468,29 +468,39 @@
       }, 450); 
     }
 
-    function openProfileModal() {
+    function openProfileModal(targetUser = null) {
+      const profileUsername = typeof targetUser === 'string' ? targetUser : user.username;
       const nameEl = document.getElementById('profile-name');
       if(nameEl) {
-        const userReviews = reviews.filter(r => r.author === user.username);
-        nameEl.innerText = user.username;
+        const userReviews = reviews.filter(r => r.author === profileUsername);
+        nameEl.innerText = profileUsername;
+        
+        const isMe = profileUsername === user.username;
+        let role = isMe ? user.role : 'Пользователь';
+        if (!isMe) {
+            const lower = profileUsername.replace('@', '').toLowerCase();
+            if (lower === 'monetka_man' || lower === 'xllbloodxii' || lower === 'admin') {
+                role = 'Создатель';
+            }
+        }
         
         const pRole = document.getElementById('profile-role');
-        pRole.innerText = user.role;
-        if (user.role === 'Создатель') {
+        pRole.innerText = role;
+        if (role === 'Создатель') {
             pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
         } else {
             pRole.className = "px-3 py-1 bg-white/10 border border-white/20 text-white rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
         }
         
         document.getElementById('profile-reviews-count').innerText = userReviews.length;
-        document.getElementById('profile-likes-count').innerText = likedSet.size;
+        document.getElementById('profile-likes-count').innerText = isMe ? likedSet.size : '?';
         
         const revContainer = document.getElementById('profile-user-reviews');
         if (userReviews.length > 0) {
           revContainer.innerHTML = userReviews.map(r => {
             const rel = releases.find(release => release.id === r.relId);
             const relName = rel ? rel.name : 'Удаленный релиз';
-            return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left">
+            return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${r.relId}')">
               <div class="flex justify-between items-center mb-2">
                 <span class="text-[13px] font-bold text-gray-300 truncate pr-2">${relName}</span>
                 <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px] shrink-0">${r.rating}</div>
@@ -500,10 +510,10 @@
             </div>`;
           }).join('');
         } else {
-          revContainer.innerHTML = `<div class="text-center py-6 text-[13px] text-gray-500">Вы еще не написали ни одной рецензии</div>`;
+          revContainer.innerHTML = `<div class="text-center py-6 text-[13px] text-gray-500">${isMe ? 'Вы еще не написали' : 'Пользователь еще не написал'} ни одной рецензии</div>`;
         }
         
-        const safeName = user.username.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
+        const safeName = profileUsername.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
         document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
         
         openModal('modal-profile');
@@ -589,14 +599,15 @@
            parsedCover = itunesData.results?.[0]?.artworkUrl100?.replace('100x100bb', '400x400bb') || '';
         }
         
-        const newRel = { id: Date.now().toString(), name: parsedName, artist: parsedArtist, img: parsedCover, link };
+        const newRel = { id: Date.now().toString(), name: parsedName, artist: parsedArtist, img: parsedCover, link, timestamp: Date.now() };
         
         // Отправка в БД Render
-        fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) }).catch(e => console.error(e));
+        const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
+        if (!saveRes.ok) throw new Error('DB Error');
         
         releases.unshift(newRel);
         renderReleases(); closeModal('modal-add'); showToast('Релиз добавлен!');
-      } catch(e) { showToast('Ошибка обложки'); } finally { btnText.innerText = 'Считать данные'; }
+      } catch(e) { showToast('Ошибка сохранения: ' + e.message); console.error(e); } finally { btnText.innerText = 'Считать данные'; }
     }
 
     function handleCoverUpload(event) {
@@ -627,7 +638,7 @@
         } catch(e) {}
       }
       
-      const newRel = { id: Date.now().toString(), name: title, artist: artist, img: cover, link: currentPendingLink };
+      const newRel = { id: Date.now().toString(), name: title, artist: artist, img: cover, link: currentPendingLink, timestamp: Date.now() };
       
       // Отправка в БД Render
       fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) }).catch(e => console.error(e));
@@ -737,7 +748,7 @@
     function addReview() {
       const t = document.getElementById('rev-text').value.trim(); if (!t) return showToast('Напишите текст');
       
-      const newRev = { id: Date.now().toString(), relId: activeReleaseId, author: user.username, text: t, rating: selectedRating, date: new Date().toLocaleDateString('ru-RU') };
+      const newRev = { id: Date.now().toString(), relId: activeReleaseId, author: user.username, text: t, rating: selectedRating, date: new Date().toLocaleDateString('ru-RU'), timestamp: Date.now() };
       
       // Отправка в БД Render
       fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRev) }).catch(e => console.error(e));
@@ -749,7 +760,7 @@
     function renderReviews() {
       const container = document.getElementById('reviews-container'); const relReviews = reviews.filter(r => r.relId === activeReleaseId);
       container.innerHTML = relReviews.map((r, i) => `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
-          <div class="flex justify-between items-center mb-2"><span class="text-[13px] font-bold text-white">${r.author}</span><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div></div>
+          <div class="flex justify-between items-center mb-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${r.author}')">${r.author}</span><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${r.text}</p><span class="text-[10px] text-gray-500 font-medium">${r.date}</span></div>`).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
     }
 
