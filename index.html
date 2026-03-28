@@ -207,14 +207,16 @@
     // БЭКЕНД URL (Укажите здесь URL вашего Python сервера)
     const BACKEND_URL = "http://127.0.0.1:8000"; 
 
+    // Получаем данные пользователя из Telegram
+    const tgUser = tg.initDataUnsafe?.user;
+    const tgUsername = tgUser?.username?.toLowerCase() || '';
+
     // Состояния
     let user = { 
-      username: tg.initDataUnsafe?.user?.first_name || 'Гость', // Для отображения берем имя
+      // Приоритет: @юзернейм -> Имя -> 'Гость'
+      username: tgUser?.username ? `@${tgUser.username}` : (tgUser?.first_name || 'Гость'),
       role: 'Пользователь' 
     };
-    
-    // Получаем Telegram юзернейм (без @) и приводим к нижнему регистру для надежности
-    const tgUsername = tg.initDataUnsafe?.user?.username?.toLowerCase() || '';
     
     // Назначаем админом Создателей
     if (tgUsername === 'monetka_man' || tgUsername === 'xllbloodxii' || user.username.toLowerCase() === 'admin') {
