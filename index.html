@@ -137,7 +137,7 @@
     body.light-theme .bg-black\/20 { background-color: rgba(0,0,0,0.05) !important; }
     
     body.light-theme .bg-black\/40 { background-color: rgba(255,255,255,0.9) !important; box-shadow: 0 2px 10px rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.05) !important; }
-    body.light-theme .bg-black\/40 i:not(.text-red-500) { stroke: #000; } /* Теперь красные сердечки остаются красными */
+    body.light-theme .bg-black\/40 i:not(.text-red-500) { stroke: #000; } 
     
     body.light-theme .bg-white.text-black { background-color: #000 !important; color: #fff !important; }
     body.light-theme .bg-white.text-black i { fill: #fff !important; stroke: #fff !important; }
@@ -519,24 +519,28 @@
       document.getElementById(`rate-${val}`).classList.add('active'); 
     }
 
-    // Загрузка данных с Render с защитой от таймаута
+    // Загрузка данных с Render с защитой от таймаута (увеличено до 60 сек для бесплатного тарифа)
     async function fetchDB() {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 12000); // Отмена запроса через 12 секунд
+            const timeoutId = setTimeout(() => controller.abort(), 60000); 
             
             const res = await fetch(`${BACKEND_URL}/api/data?username=${encodeURIComponent(user.username)}`, {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
             
-            if(!res.ok) throw new Error();
+            if(!res.ok) throw new Error('HTTP ' + res.status);
             const data = await res.json();
             releases = data.releases || [];
             reviews = data.reviews || [];
             likedSet = new Set(data.likes || []);
         } catch(e) {
-            console.error("Ошибка загрузки БД", e);
+            if (e.name === 'AbortError') {
+                console.error("Сервер Render не успел проснуться за 60 секунд.");
+            } else {
+                console.error("Ошибка загрузки БД:", e.message || e);
+            }
             showToast("Работаем в оффлайн-режиме (сервер недоступен)");
         }
         renderReleases();
