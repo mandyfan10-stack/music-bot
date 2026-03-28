@@ -53,7 +53,7 @@
     .welcome-bg {
       background-color: white;
       background-image: conic-gradient(#000 90deg, transparent 90deg, transparent 270deg, #000 270deg);
-      background-size: 80px 80px; /* Крупная шахматная клетка */
+      background-size: 80px 80px; 
     }
     .welcome-logo {
       font-family: 'Playfair Display', serif; 
@@ -105,7 +105,6 @@
     /* ========================================= */
     body.light-theme { --bg-color: #f2f2f7; color: #000; }
     
-    /* Инверсия текста (исключая цветные фоны) */
     body.light-theme .text-white { color: #000 !important; }
     body.light-theme .bg-red-600 { color: #fff !important; }
     body.light-theme .bg-red-600 .text-white { color: #fff !important; }
@@ -118,7 +117,6 @@
     body.light-theme .text-gray-500 { color: #8e8e93 !important; }
     body.light-theme .text-amber-400 { color: #d97706 !important; }
     
-    /* Инверсия фонов и рамок */
     body.light-theme .glass { background: rgba(255, 255, 255, 0.85); border-color: rgba(0, 0, 0, 0.08); box-shadow: 0 4px 24px rgba(0,0,0,0.04); }
     body.light-theme .glass-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); color: #000; }
     body.light-theme .glass-input::placeholder { color: #8e8e93; }
@@ -131,20 +129,16 @@
     body.light-theme .bg-\[\#1c1c1e\] { background-color: #fff !important; border-color: rgba(0,0,0,0.08) !important; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
     body.light-theme .bg-black\/20 { background-color: rgba(0,0,0,0.05) !important; }
     
-    /* Кнопки лайков на картинке */
     body.light-theme .bg-black\/40 { background-color: rgba(255,255,255,0.9) !important; box-shadow: 0 2px 10px rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.05) !important; }
     body.light-theme .bg-black\/40 i:not(.text-pink-500) { stroke: #000; }
     
-    /* Кнопка "Слушать" */
     body.light-theme .bg-white.text-black { background-color: #000 !important; color: #fff !important; }
     body.light-theme .bg-white.text-black i { fill: #fff !important; stroke: #fff !important; }
     body.light-theme .fill-black { fill: #fff !important; }
     
-    /* Шкала рейтинга */
     body.light-theme .rating-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #000; }
     body.light-theme .rating-btn.active { background: #000; color: #fff; border-color: #000; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
     
-    /* Прочие элементы */
     body.light-theme .logo-container { background-image: conic-gradient(#fff 90deg, transparent 90deg, transparent 270deg, #fff 270deg); background-color: #e5e5ea; border-color: rgba(0,0,0,0.1); }
     body.light-theme .modal-overlay { background: rgba(0,0,0,0.25); }
     body.light-theme #toast { background: rgba(255,255,255,0.95); color: #000; border-color: rgba(0,0,0,0.1); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
@@ -152,23 +146,15 @@
 </head>
 <body class="antialiased h-screen flex flex-col">
 
-  <!-- ========================================= -->
-  <!-- ПРИВЕТСТВЕННЫЙ ЭКРАН (ONBOARDING)         -->
-  <!-- ========================================= -->
   <div id="welcome-screen" class="fixed inset-0 z-[200] flex flex-col items-center justify-center welcome-bg transition-opacity duration-700">
-    <!-- Стеклянная подложка -->
     <div class="bg-black/80 backdrop-blur-md border border-white/10 p-10 rounded-[3rem] text-center shadow-2xl max-w-[85%] relative overflow-hidden flex flex-col items-center">
-      <!-- Красное свечение на фоне -->
       <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-red-600/20 blur-[50px] rounded-full pointer-events-none"></div>
-      
       <h1 class="welcome-logo relative z-10">XXII</h1>
       <h2 class="text-3xl font-black text-white tracking-widest mb-6 relative z-10 uppercase">Raper</h2>
-      
       <p class="text-gray-300 mb-8 text-[14px] leading-relaxed relative z-10">
         Добро пожаловать, <span id="welcome-user-name" class="text-white font-bold"></span>!<br><br>
         Эксклюзивные релизы и звук, которого нет на других платформах.
       </p>
-      
       <button onclick="closeWelcomeScreen()" class="btn-press w-full py-4 bg-red-600 text-white font-bold rounded-2xl shadow-[0_0_30px_rgba(220,38,38,0.4)] transition-all relative z-10 uppercase tracking-widest text-[14px]">
         Войти
       </button>
@@ -199,7 +185,7 @@
     
     <div id="screen-loading" class="px-6 flex flex-col items-center justify-center h-[60vh] opacity-50">
         <i data-lucide="loader-2" class="w-8 h-8 text-gray-400 animate-spin mb-4"></i>
-        <p class="text-sm text-gray-400">Синхронизация с базой...</p>
+        <p class="text-sm text-gray-400">Синхронизация с облаком...</p>
     </div>
 
     <div id="screen-home" class="px-6 fade-in hidden">
@@ -352,11 +338,24 @@
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
     const tg = window.Telegram.WebApp;
     tg.expand();
 
+    // Бэкенд Render теперь нужен ТОЛЬКО для парсинга ссылок
     const BACKEND_URL = "https://music-backend-qjvk.onrender.com"; 
+
+    // Настройки облачной базы данных Firebase (выдаются окружением)
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'raper-xxii-app';
+    let currentUser = null;
 
     const tgUser = tg.initDataUnsafe?.user;
     const tgUsername = tgUser?.username?.toLowerCase() || '';
@@ -373,24 +372,12 @@
       user.role = 'Создатель';
     }
 
-    // --- ЛОГИКА WELCOME SCREEN ---
     document.getElementById('welcome-user-name').innerText = user.username;
-    
     if (localStorage.getItem('raper_welcomed_v1')) {
         document.getElementById('welcome-screen').classList.add('hidden');
     }
 
-    function closeWelcomeScreen() {
-        const ws = document.getElementById('welcome-screen');
-        ws.classList.add('opacity-0');
-        setTimeout(() => {
-            ws.classList.add('hidden');
-            localStorage.setItem('raper_welcomed_v1', 'true');
-        }, 700);
-    }
-
     document.getElementById('user-name').innerText = user.username;
-    
     const headerRoleEl = document.getElementById('user-role');
     headerRoleEl.innerText = user.role;
     if (user.role === 'Создатель') {
@@ -410,11 +397,12 @@
         btn.className = 'rating-btn btn-press';
         btn.id = `rate-${i}`;
         btn.innerText = i;
-        btn.onclick = () => selectRating(i);
+        btn.onclick = () => window.selectRating(i);
         ratingContainer.appendChild(btn);
     }
 
-    function showToast(msg) {
+    // --- ФУНКЦИИ (Экспортированы в window для работы из HTML) ---
+    window.showToast = function(msg) {
       const t = document.getElementById('toast');
       document.getElementById('toast-msg').innerText = msg;
       t.classList.replace('opacity-0', 'opacity-100');
@@ -422,13 +410,22 @@
       setTimeout(() => { t.classList.replace('opacity-100', 'opacity-0'); t.classList.replace('pointer-events-auto', 'pointer-events-none'); }, 2500);
     }
 
-    function switchTab(tabId) {
+    window.closeWelcomeScreen = function() {
+        const ws = document.getElementById('welcome-screen');
+        ws.classList.add('opacity-0');
+        setTimeout(() => {
+            ws.classList.add('hidden');
+            localStorage.setItem('raper_welcomed_v1', 'true');
+        }, 700);
+    }
+
+    window.switchTab = function(tabId) {
       const current = document.querySelector('main > div.fade-in:not(.hidden)');
       const next = document.getElementById('screen-' + tabId);
       if (current === next) return;
 
-      next.classList.remove('fade-in');
-      void next.offsetWidth; 
+      if(current) current.classList.remove('fade-in');
+      void document.body.offsetWidth; 
       
       document.getElementById('screen-home').classList.add('hidden');
       document.getElementById('screen-likes').classList.add('hidden');
@@ -452,13 +449,13 @@
       if (tabId === 'likes') renderLikes();
     }
 
-    function openModal(id) {
+    window.openModal = function(id) {
       const m = document.getElementById(id); m.classList.remove('hidden');
       m.querySelector('.modal-overlay').classList.add('fade-in');
       m.querySelector('.modal-container').classList.add('slide-up-modal');
     }
 
-    function closeModal(id) {
+    window.closeModal = function(id) {
       const m = document.getElementById(id); const c = m.querySelector('.modal-container'); const o = m.querySelector('.modal-overlay');
       c.classList.replace('slide-up-modal', 'slide-down-modal'); o.classList.replace('fade-in', 'fade-out');
       setTimeout(() => { 
@@ -473,7 +470,7 @@
       }, 450); 
     }
 
-    function openProfileModal() {
+    window.openProfileModal = function() {
       const nameEl = document.getElementById('profile-name');
       if(nameEl) {
         const reviewCount = reviews.filter(r => r.author === user.username).length;
@@ -493,36 +490,17 @@
         const safeName = user.username.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
         document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
         
-        openModal('modal-profile');
+        window.openModal('modal-profile');
         lucide.createIcons();
       }
     }
 
-    function openAddModal() { openModal('modal-add'); document.getElementById('input-link').value = ''; document.getElementById('btn-add-text').innerText = 'Считать данные'; }
-    
-    function selectRating(val) { 
-      selectedRating = val; 
-      document.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('active')); 
-      document.getElementById(`rate-${val}`).classList.add('active'); 
-    }
+    window.openAddModal = function() { window.openModal('modal-add'); document.getElementById('input-link').value = ''; document.getElementById('btn-add-text').innerText = 'Считать данные'; }
+    window.selectRating = function(val) { selectedRating = val; document.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('active')); document.getElementById(`rate-${val}`).classList.add('active'); }
 
-    async function fetchDB() {
-        try {
-            const res = await fetch(`${BACKEND_URL}/api/data?username=${encodeURIComponent(user.username)}`);
-            const data = await res.json();
-            releases = data.releases || [];
-            reviews = data.reviews || [];
-            likedSet = new Set(data.likes || []);
-        } catch(e) {
-            console.error("Ошибка загрузки БД", e);
-        }
-        renderReleases();
-        switchTab('home');
-    }
-
-    async function handleAddRelease() {
+    window.handleAddRelease = async function() {
       const link = document.getElementById('input-link').value.trim();
-      if (!link) return showToast('Введите ссылку');
+      if (!link) return window.showToast('Введите ссылку');
       
       const btnText = document.getElementById('btn-add-text');
       btnText.innerText = 'Загрузка...';
@@ -551,7 +529,7 @@
             document.getElementById('add-form-step-manual').classList.remove('hidden');
             currentPendingLink = link;
             btnText.innerText = 'Считать данные';
-            return showToast('Не удалось считать. Введите вручную.');
+            return window.showToast('Не удалось считать. Введите вручную.');
         }
       }
 
@@ -562,16 +540,17 @@
            parsedCover = itunesData.results?.[0]?.artworkUrl100?.replace('100x100bb', '400x400bb') || '';
         }
         
-        const newRel = { id: Date.now().toString(), name: parsedName, artist: parsedArtist, img: parsedCover, link };
+        const newRel = { id: Date.now().toString(), name: parsedName, artist: parsedArtist, img: parsedCover, link, timestamp: Date.now() };
         
-        await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
-        
-        releases.unshift(newRel);
-        renderReleases(); closeModal('modal-add'); showToast('Релиз добавлен в БД');
-      } catch(e) { showToast('Ошибка обложки'); } finally { btnText.innerText = 'Считать данные'; }
+        // СОХРАНЕНИЕ В ОБЛАКО FIRESTORE
+        if(currentUser) {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'releases', newRel.id), newRel);
+        }
+        window.closeModal('modal-add'); window.showToast('Релиз добавлен!');
+      } catch(e) { window.showToast('Ошибка обложки'); } finally { btnText.innerText = 'Считать данные'; }
     }
 
-    function handleCoverUpload(event) {
+    window.handleCoverUpload = function(event) {
       const file = event.target.files[0];
       if (!file) return;
       const reader = new FileReader();
@@ -584,14 +563,13 @@
       reader.readAsDataURL(file);
     }
 
-    async function saveManualRelease() {
+    window.saveManualRelease = async function() {
       const artist = document.getElementById('manual-artist').value.trim(); const title = document.getElementById('manual-title').value.trim();
-      if(!artist || !title) return showToast('Заполните оба поля');
+      if(!artist || !title) return window.showToast('Заполните оба поля');
       
       let cover = manualCoverBase64; 
-      
       if (!cover) {
-        showToast('Ищем обложку...');
+        window.showToast('Ищем обложку...');
         try {
           const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artist + ' ' + title)}&limit=1`);
           const itunesData = await itunesRes.json();
@@ -599,12 +577,13 @@
         } catch(e) {}
       }
       
-      const newRel = { id: Date.now().toString(), name: title, artist: artist, img: cover, link: currentPendingLink };
+      const newRel = { id: Date.now().toString(), name: title, artist: artist, img: cover, link: currentPendingLink, timestamp: Date.now() };
       
-      await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
-      releases.unshift(newRel);
+      if(currentUser) {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'releases', newRel.id), newRel);
+      }
       
-      renderReleases(); closeModal('modal-add'); showToast('Релиз сохранен в БД');
+      window.closeModal('modal-add'); window.showToast('Релиз сохранен!');
       document.getElementById('manual-artist').value = ''; document.getElementById('manual-title').value = '';
     }
 
@@ -613,32 +592,28 @@
         return `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
     }
     
-    function toggleLikeAPI(e, id) {
+    window.toggleLikeAPI = async function(e, id) {
       e.stopPropagation();
-      const isLiking = !likedSet.has(id);
-      
-      if (isLiking) likedSet.add(id);
-      else likedSet.delete(id);
-      
-      fetch(`${BACKEND_URL}/api/likes`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ releaseId: id, username: user.username, isLike: isLiking })
-      });
-      
-      renderReleases();
-      if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
-    }
+      if(!currentUser) return;
 
+      const isLiking = !likedSet.has(id);
+      const likeId = `${id}_${user.username}`;
+
+      if (isLiking) {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'likes', likeId), { releaseId: id, username: user.username });
+      } else {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'likes', likeId));
+      }
+    }
 
     function renderReleaseCard(r, index) {
       const isLiked = likedSet.has(r.id);
       const fb = getFallbackImg(r.name);
       const delay = index * 50; 
-      return `<div onclick="openRelease('${r.id}')" class="card-enter flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative" style="animation-delay: ${delay}ms">
+      return `<div onclick="window.openRelease('${r.id}')" class="card-enter flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative" style="animation-delay: ${delay}ms">
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
             <img src="${r.img || fb}" onerror="this.src='${fb}'" class="w-full h-full object-cover">
-            <button onclick="toggleLikeAPI(event, '${r.id}')" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
+            <button onclick="window.toggleLikeAPI(event, '${r.id}')" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
               <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-pink-500 text-pink-500':'text-white'}"></i>
             </button>
           </div>
@@ -658,7 +633,7 @@
       lucide.createIcons();
     }
 
-    function openRelease(id) {
+    window.openRelease = function(id) {
       const rel = releases.find(r => r.id === id); if (!rel) return; activeReleaseId = id;
       const fb = getFallbackImg(rel.name);
       document.getElementById('rel-img').src = rel.img || fb;
@@ -672,47 +647,40 @@
       if (user.role === 'Создатель') {
         delBtn.classList.remove('hidden');
         delBtn.classList.add('flex');
-        delBtn.onclick = () => openConfirmDelete(id);
+        delBtn.onclick = () => window.openConfirmDelete(id);
       } else {
         delBtn.classList.add('hidden');
         delBtn.classList.remove('flex');
       }
 
-      selectRating(10); renderReviews(); openModal('modal-release');
+      window.selectRating(10); renderReviews(); window.openModal('modal-release');
     }
 
-    function openConfirmDelete(id) {
+    window.openConfirmDelete = function(id) {
       releaseToDelete = id;
-      openModal('modal-confirm-delete');
+      window.openModal('modal-confirm-delete');
     }
 
-    async function executeDeleteRelease() {
-      if (!releaseToDelete) return;
+    window.executeDeleteRelease = async function() {
+      if (!releaseToDelete || !currentUser) return;
       
-      await fetch(`${BACKEND_URL}/api/releases/${releaseToDelete}`, { method: 'DELETE' });
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'releases', releaseToDelete));
       
-      releases = releases.filter(r => r.id !== releaseToDelete);
-      if (likedSet.has(releaseToDelete)) likedSet.delete(releaseToDelete);
-      reviews = reviews.filter(r => r.relId !== releaseToDelete);
-      
-      renderReleases();
-      if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
-      
-      closeModal('modal-confirm-delete');
-      closeModal('modal-release');
-      showToast('Удалено из базы данных');
+      window.closeModal('modal-confirm-delete');
+      window.closeModal('modal-release');
+      window.showToast('Удалено!');
       releaseToDelete = null;
     }
 
-    async function addReview() {
-      const t = document.getElementById('rev-text').value.trim(); if (!t) return showToast('Напишите текст');
+    window.addReview = async function() {
+      const t = document.getElementById('rev-text').value.trim(); if (!t) return window.showToast('Напишите текст');
+      if(!currentUser) return;
+
+      const newRev = { id: Date.now().toString(), relId: activeReleaseId, author: user.username, text: t, rating: selectedRating, date: new Date().toLocaleDateString('ru-RU'), timestamp: Date.now() };
       
-      const newRev = { id: Date.now().toString(), relId: activeReleaseId, author: user.username, text: t, rating: selectedRating, date: new Date().toLocaleDateString('ru-RU') };
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'reviews', newRev.id), newRev);
       
-      await fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRev) });
-      
-      reviews.unshift(newRev);
-      document.getElementById('rev-text').value = ''; renderReviews(); showToast('Сохранено в БД');
+      document.getElementById('rev-text').value = ''; window.showToast('Опубликовано!');
     }
 
     function renderReviews() {
@@ -722,7 +690,7 @@
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${r.text}</p><span class="text-[10px] text-gray-500 font-medium">${r.date}</span></div>`).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
     }
 
-    function changeTheme(hex, btnRef) { 
+    window.changeTheme = function(hex, btnRef) { 
       document.documentElement.style.setProperty('--bg-color', hex); 
       
       const isLight = hex === '#f2f2f7';
@@ -743,11 +711,61 @@
       lucide.createIcons();
     }
 
+    // --- ПОДКЛЮЧЕНИЕ К ОБЛАКУ FIRESTORE ---
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error("Auth init error:", err);
+      }
+    };
+    initAuth();
+
+    onAuthStateChanged(auth, (u) => {
+        currentUser = u;
+        if (u) {
+            setupCloudListeners();
+        }
+    });
+
+    function setupCloudListeners() {
+        // Слушаем релизы
+        const releasesRef = collection(db, 'artifacts', appId, 'public', 'data', 'releases');
+        onSnapshot(releasesRef, (snapshot) => {
+            releases = snapshot.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp);
+            renderReleases();
+            if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
+            
+            // Убираем экран загрузки при получении первых данных
+            if(!document.getElementById('screen-loading').classList.contains('hidden')){
+                window.switchTab('home');
+            }
+        }, (error) => console.error(error));
+
+        // Слушаем отзывы
+        const reviewsRef = collection(db, 'artifacts', appId, 'public', 'data', 'reviews');
+        onSnapshot(reviewsRef, (snapshot) => {
+            reviews = snapshot.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp);
+            if (activeReleaseId) renderReviews();
+        }, (error) => console.error(error));
+
+        // Слушаем лайки
+        const likesRef = collection(db, 'artifacts', appId, 'public', 'data', 'likes');
+        onSnapshot(likesRef, (snapshot) => {
+            const allLikes = snapshot.docs.map(d => d.data());
+            // Фильтруем только лайки текущего пользователя
+            likedSet = new Set(allLikes.filter(l => l.username === user.username).map(l => l.releaseId));
+            renderReleases();
+            if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
+        }, (error) => console.error(error));
+    }
+
     lucide.createIcons();
-    selectRating(10);
-    
-    // Запуск синхронизации с БД
-    fetchDB();
+    window.selectRating(10);
   </script>
 </body>
 </html>
