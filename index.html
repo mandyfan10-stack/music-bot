@@ -395,7 +395,18 @@
         document.getElementById('btn-add-release').classList.remove('hidden');
     }
 
-    let releases = [], likedSet = new Set(), reviews = [], activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5 };
+    let releases = [], likedSet = new Set(), reviews = [], activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+
+    function getCriteriaAverage(criteria = {}) {
+      const values = criteriaConfig.map(({ key }) => typeof criteria[key] === 'number' ? criteria[key] : 5);
+      return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
+    }
+
+    function formatCriteria(criteria = {}) {
+      return criteriaConfig
+        .map(({ key }) => typeof criteria[key] === 'number' ? criteria[key] : 5)
+        .join('/');
+    }
     let currentPendingLink = '';
     let manualCoverBase64 = null;
     let releaseToDelete = null;
@@ -414,7 +425,10 @@
     const criteriaConfig = [
       { key: 'sound', label: 'Звук' },
       { key: 'production', label: 'Продакшн' },
-      { key: 'originality', label: 'Оригинальность' }
+      { key: 'originality', label: 'Оригинальность' },
+      { key: 'meaning', label: 'Смысл текста' },
+      { key: 'relevance', label: 'Актуальность' },
+      { key: 'image', label: 'Сохранение образа' }
     ];
     criteriaConfig.forEach(({ key, label }) => {
       const wrap = document.createElement('div');
@@ -446,7 +460,7 @@
 
     function resetReviewInputs() {
       selectedRating = 10;
-      selectedCriteria = { sound: 5, production: 5, originality: 5 };
+      selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
       selectRating(10);
       criteriaConfig.forEach(({ key }) => {
         const el = document.getElementById(`criterion-${key}`);
@@ -850,7 +864,7 @@
     function addReview() {
       const t = document.getElementById('rev-text').value.trim(); if (!t) return showToast('Напишите текст');
 
-      const objectiveRating = Math.round((selectedCriteria.sound + selectedCriteria.production + selectedCriteria.originality) / 3 * 10) / 10;
+      const objectiveRating = getCriteriaAverage(selectedCriteria);
       const finalRating = Math.round((objectiveRating + selectedRating) / 2 * 10) / 10;
       const newRev = {
         id: Date.now().toString(),
@@ -876,7 +890,7 @@
       const container = document.getElementById('reviews-container'); const relReviews = reviews.filter(r => r.relId === activeReleaseId);
       container.innerHTML = relReviews.map((r, i) => {
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
-        const criteria = r.criteria ? ` · ${r.criteria.sound}/${r.criteria.production}/${r.criteria.originality}` : '';
+        const criteria = r.criteria ? ` · ${formatCriteria(r.criteria)}` : '';
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
           <div class="flex justify-between items-center mb-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${r.author}')">${r.author}</span><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${r.text}</p><span class="text-[10px] text-gray-500 font-medium">${r.date}${criteria} · объективно ${objective}</span></div>`;
@@ -913,3 +927,4 @@
   </script>
 </body>
 </html>
+
