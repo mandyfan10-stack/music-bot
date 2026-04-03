@@ -288,7 +288,8 @@
       <div class="w-full">
         <h3 class="text-lg font-bold text-white mb-4">Написать рецензию</h3>
         <div class="bg-white/5 border border-white/10 rounded-[1.5rem] p-5">
-           <div class="flex flex-wrap gap-2 justify-center mb-4" id="rating-buttons-container"></div>
+           <div class="flex flex-wrap gap-2 justify-center mb-3" id="rating-buttons-container"></div>
+           <div class="flex flex-wrap gap-2 justify-center mb-4" id="criteria-buttons-container"></div>
            <textarea id="rev-text" placeholder="Мнение о саунде..." class="w-full h-24 bg-black/20 border border-white/5 rounded-xl outline-none p-3 text-[13px] text-white resize-none mb-4 transition-all focus:border-red-500/30"></textarea>
            <button onclick="addReview()" class="btn-press w-full py-3 bg-white/10 text-white text-[13px] font-bold rounded-xl border border-white/10">Опубликовать</button>
         </div>
@@ -394,7 +395,7 @@
         document.getElementById('btn-add-release').classList.remove('hidden');
     }
 
-    let releases = [], likedSet = new Set(), reviews = [], activeReleaseId = null, selectedRating = 10;
+    let releases = [], likedSet = new Set(), reviews = [], activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5 };
     let currentPendingLink = '';
     let manualCoverBase64 = null;
     let releaseToDelete = null;
@@ -407,6 +408,52 @@
         btn.innerText = i;
         btn.onclick = () => selectRating(i);
         ratingContainer.appendChild(btn);
+    }
+
+    const criteriaContainer = document.getElementById('criteria-buttons-container');
+    const criteriaConfig = [
+      { key: 'sound', label: 'Звук' },
+      { key: 'production', label: 'Продакшн' },
+      { key: 'originality', label: 'Оригинальность' }
+    ];
+    criteriaConfig.forEach(({ key, label }) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-3 py-2';
+      wrap.innerHTML = `<span class="text-[11px] text-gray-400 font-medium">${label}</span>`;
+      const valueEl = document.createElement('span');
+      valueEl.id = `criterion-${key}`;
+      valueEl.className = 'text-[12px] font-bold text-white min-w-4 text-center';
+      valueEl.innerText = '5';
+      wrap.appendChild(valueEl);
+      const minus = document.createElement('button');
+      minus.className = 'rating-btn btn-press !w-7 !h-7 !rounded-full';
+      minus.innerText = '−';
+      minus.onclick = () => setCriterion(key, -1);
+      const plus = document.createElement('button');
+      plus.className = 'rating-btn btn-press !w-7 !h-7 !rounded-full';
+      plus.innerText = '+';
+      plus.onclick = () => setCriterion(key, 1);
+      wrap.appendChild(minus);
+      wrap.appendChild(plus);
+      criteriaContainer.appendChild(wrap);
+    });
+
+    function setCriterion(key, delta) {
+      const next = Math.max(1, Math.min(10, (selectedCriteria[key] || 5) + delta));
+      selectedCriteria = { ...selectedCriteria, [key]: next };
+      document.getElementById(`criterion-${key}`).innerText = next;
+    }
+
+    function resetReviewInputs() {
+      selectedRating = 10;
+      selectedCriteria = { sound: 5, production: 5, originality: 5 };
+      selectRating(10);
+      criteriaConfig.forEach(({ key }) => {
+        const el = document.getElementById(`criterion-${key}`);
+        if (el) el.innerText = '5';
+      });
+      const text = document.getElementById('rev-text');
+      if (text) text.value = '';
     }
 
     function showToast(msg) {
@@ -758,11 +805,11 @@
       const fb = getFallbackImg(rel.name);
       document.getElementById('rel-img').src = rel.img || fb;
       document.getElementById('rel-img').onerror = function() { this.src = fb; };
-      
+
       document.getElementById('rel-title').innerText = rel.name;
       document.getElementById('rel-artist').innerText = rel.artist;
       document.getElementById('rel-play-btn').onclick = () => window.open(rel.link, '_blank');
-      
+
       const delBtn = document.getElementById('rel-delete-btn');
       if (user.role === 'Создатель') {
         delBtn.classList.remove('hidden');
@@ -773,7 +820,7 @@
         delBtn.classList.remove('flex');
       }
 
-      selectRating(10); renderReviews(); openModal('modal-release');
+      resetReviewInputs(); renderReviews(); openModal('modal-release');
     }
 
     function openConfirmDelete(id) {
@@ -802,21 +849,38 @@
 
     function addReview() {
       const t = document.getElementById('rev-text').value.trim(); if (!t) return showToast('Напишите текст');
-      
-      const newRev = { id: Date.now().toString(), relId: activeReleaseId, author: user.username, text: t, rating: selectedRating, date: new Date().toLocaleDateString('ru-RU'), timestamp: Date.now() };
-      
+
+      const objectiveRating = Math.round((selectedCriteria.sound + selectedCriteria.production + selectedCriteria.originality) / 3 * 10) / 10;
+      const finalRating = Math.round((objectiveRating + selectedRating) / 2 * 10) / 10;
+      const newRev = {
+        id: Date.now().toString(),
+        relId: activeReleaseId,
+        author: user.username,
+        text: t,
+        rating: finalRating,
+        baseRating: selectedRating,
+        criteria: { ...selectedCriteria },
+        objectiveRating,
+        date: new Date().toLocaleDateString('ru-RU'),
+        timestamp: Date.now()
+      };
+
       // Отправка в БД Render
       fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRev) }).catch(e => console.error(e));
-      
+
       reviews.unshift(newRev);
       document.getElementById('rev-text').value = ''; renderReviews(); showToast('Опубликовано!');
     }
 
     function renderReviews() {
       const container = document.getElementById('reviews-container'); const relReviews = reviews.filter(r => r.relId === activeReleaseId);
-      container.innerHTML = relReviews.map((r, i) => `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
+      container.innerHTML = relReviews.map((r, i) => {
+        const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
+        const criteria = r.criteria ? ` · ${r.criteria.sound}/${r.criteria.production}/${r.criteria.originality}` : '';
+        return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
           <div class="flex justify-between items-center mb-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${r.author}')">${r.author}</span><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div></div>
-          <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${r.text}</p><span class="text-[10px] text-gray-500 font-medium">${r.date}</span></div>`).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
+          <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${r.text}</p><span class="text-[10px] text-gray-500 font-medium">${r.date}${criteria} · объективно ${objective}</span></div>`;
+      }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
     }
 
     function changeTheme(hex, btnRef) { 
@@ -842,7 +906,8 @@
 
     lucide.createIcons();
     selectRating(10);
-    
+    resetReviewInputs();
+
     // Запуск синхронизации с БД Render
     fetchDB();
   </script>
