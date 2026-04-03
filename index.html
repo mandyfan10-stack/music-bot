@@ -314,6 +314,22 @@
     </div>
   </div>
 
+  <div id="modal-confirm-review-delete" class="fixed inset-0 z-[75] hidden flex flex-col justify-end">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" onclick="closeModal('modal-confirm-review-delete')"></div>
+    <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container text-center flex-col">
+      <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
+      <div class="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+        <i data-lucide="trash-2" class="w-8 h-8"></i>
+      </div>
+      <h3 class="text-xl font-bold text-white mb-2">Удалить рецензию?</h3>
+      <p class="text-[13px] text-gray-400 mb-8">После удаления вы сможете опубликовать рецензию на этот трек заново.</p>
+      <div class="flex gap-3">
+        <button onclick="closeModal('modal-confirm-review-delete')" class="btn-press flex-1 py-3.5 bg-white/10 text-white font-bold rounded-2xl border border-white/10">Отмена</button>
+        <button onclick="executeDeleteReview()" class="btn-press flex-1 py-3.5 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-900/20">Удалить</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-profile" class="fixed inset-0 z-[60] hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" onclick="closeModal('modal-profile')"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container text-center max-h-[92vh] overflow-y-auto hide-scrollbar flex-col">
@@ -396,6 +412,16 @@
     }
 
     let releases = [], likedSet = new Set(), reviews = [], activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let pendingReviewDelete = null;
+    let pendingReviewTargetReleaseId = null;
+    let reviewDeleteMode = false;
+    let reviewPublishBlocked = false;
+    let existingReviewForActiveRelease = null;
+    let activeProfileUsername = null;
+    let activeProfileUserReviews = [];
+    let activeReleaseReviews = [];
+    const REVIEW_MIN_LENGTH = 30;
+    const REVIEW_MAX_LENGTH = 3000;
 
     function getCriteriaAverage(criteria = {}) {
       const values = criteriaConfig.map(({ key }) => typeof criteria[key] === 'number' ? criteria[key] : 5);
@@ -517,8 +543,8 @@
     function closeModal(id) {
       const m = document.getElementById(id); const c = m.querySelector('.modal-container'); const o = m.querySelector('.modal-overlay');
       c.classList.replace('slide-up-modal', 'slide-down-modal'); o.classList.replace('fade-in', 'fade-out');
-      setTimeout(() => { 
-        m.classList.add('hidden'); c.classList.remove('slide-down-modal'); o.classList.remove('fade-out'); 
+      setTimeout(() => {
+        m.classList.add('hidden'); c.classList.remove('slide-down-modal'); o.classList.remove('fade-out');
         if(id === 'modal-add') {
           document.getElementById('add-form-step-1').classList.remove('hidden');
           document.getElementById('add-form-step-manual').classList.add('hidden');
@@ -528,16 +554,26 @@
           document.getElementById('manual-title').value = '';
           lucide.createIcons();
         }
-      }, 450); 
+        if(id === 'modal-release') {
+          reviewPublishBlocked = false;
+          existingReviewForActiveRelease = null;
+        }
+        if(id === 'modal-confirm-review-delete') {
+          pendingReviewDelete = null;
+          pendingReviewTargetReleaseId = null;
+          reviewDeleteMode = false;
+        }
+      }, 450);
     }
 
     function openProfileModal(targetUser = null) {
-      const profileUsername = typeof targetUser === 'string' ? targetUser : user.username;
+      activeProfileUsername = typeof targetUser === 'string' ? targetUser : user.username;
+      const profileUsername = activeProfileUsername;
       const nameEl = document.getElementById('profile-name');
       if(nameEl) {
         const userReviews = reviews.filter(r => r.author === profileUsername);
         nameEl.innerText = profileUsername;
-        
+
         const isMe = profileUsername === user.username;
         let role = isMe ? user.role : 'Пользователь';
         if (!isMe) {
@@ -546,7 +582,7 @@
                 role = 'Создатель';
             }
         }
-        
+
         const pRole = document.getElementById('profile-role');
         pRole.innerText = role;
         if (role === 'Создатель') {
@@ -554,19 +590,23 @@
         } else {
             pRole.className = "px-3 py-1 bg-white/10 border border-white/20 text-white rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
         }
-        
+
         document.getElementById('profile-reviews-count').innerText = userReviews.length;
         document.getElementById('profile-likes-count').innerText = isMe ? likedSet.size : '?';
-        
+
         const revContainer = document.getElementById('profile-user-reviews');
         if (userReviews.length > 0) {
           revContainer.innerHTML = userReviews.map(r => {
             const rel = releases.find(release => release.id === r.relId);
             const relName = rel ? rel.name : 'Удаленный релиз';
+            const canDelete = isMe && r.author === user.username;
             return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${r.relId}')">
-              <div class="flex justify-between items-center mb-2">
+              <div class="flex justify-between items-center mb-2 gap-2">
                 <span class="text-[13px] font-bold text-gray-300 truncate pr-2">${relName}</span>
-                <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px] shrink-0">${r.rating}</div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px]">${r.rating}</div>
+                  ${canDelete ? `<button onclick="openConfirmReviewDelete('${r.id}', '${r.relId}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}
+                </div>
               </div>
               <p class="text-[13px] text-gray-200 leading-relaxed mb-2">${r.text}</p>
               <span class="text-[10px] text-gray-500 font-medium">${r.date}</span>
@@ -575,10 +615,10 @@
         } else {
           revContainer.innerHTML = `<div class="text-center py-6 text-[13px] text-gray-500">${isMe ? 'Вы еще не написали' : 'Пользователь еще не написал'} ни одной рецензии</div>`;
         }
-        
+
         const safeName = profileUsername.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
         document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
-        
+
         openModal('modal-profile');
         lucide.createIcons();
       }
@@ -824,6 +864,9 @@
       document.getElementById('rel-artist').innerText = rel.artist;
       document.getElementById('rel-play-btn').onclick = () => window.open(rel.link, '_blank');
 
+      existingReviewForActiveRelease = getExistingReviewForRelease(id);
+      reviewPublishBlocked = !!existingReviewForActiveRelease;
+
       const delBtn = document.getElementById('rel-delete-btn');
       if (user.role === 'Создатель') {
         delBtn.classList.remove('hidden');
@@ -835,11 +878,58 @@
       }
 
       resetReviewInputs(); renderReviews(); openModal('modal-release');
+      const submitBtn = document.querySelector('#modal-release button[onclick="addReview()"]');
+      if (submitBtn) {
+        submitBtn.innerText = reviewPublishBlocked ? 'Рецензия уже опубликована' : 'Опубликовать';
+        submitBtn.disabled = reviewPublishBlocked;
+        submitBtn.classList.toggle('opacity-50', reviewPublishBlocked);
+        submitBtn.classList.toggle('cursor-not-allowed', reviewPublishBlocked);
+      }
     }
 
     function openConfirmDelete(id) {
       releaseToDelete = id;
       openModal('modal-confirm-delete');
+    }
+
+    function getExistingReviewForRelease(releaseId) {
+      return reviews.find(r => r.relId === releaseId && r.author === user.username) || null;
+    }
+
+    function openConfirmReviewDelete(reviewId, releaseId) {
+      pendingReviewDelete = reviewId;
+      pendingReviewTargetReleaseId = releaseId;
+      reviewDeleteMode = true;
+      openModal('modal-confirm-review-delete');
+    }
+
+    function executeDeleteReview() {
+      if (!pendingReviewDelete) return;
+
+      fetch(`${BACKEND_URL}/api/reviews/${pendingReviewDelete}`, { method: 'DELETE' }).catch(e => console.error(e));
+
+      reviews = reviews.filter(r => r.id !== pendingReviewDelete);
+      if (activeReleaseId && pendingReviewTargetReleaseId === activeReleaseId) {
+        renderReviews();
+      }
+      if (document.getElementById('modal-profile') && !document.getElementById('modal-profile').classList.contains('hidden')) {
+        openProfileModal(activeProfileUsername || user.username);
+      }
+      if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
+
+      closeModal('modal-confirm-review-delete');
+      showToast('Рецензия удалена!');
+      pendingReviewDelete = null;
+      pendingReviewTargetReleaseId = null;
+      reviewDeleteMode = false;
+      reviewPublishBlocked = false;
+      existingReviewForActiveRelease = null;
+      const submitBtn = document.querySelector('#modal-release button[onclick="addReview()"]');
+      if (submitBtn) {
+        submitBtn.innerText = 'Опубликовать';
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
     }
 
     function executeDeleteRelease() {
@@ -862,7 +952,12 @@
     }
 
     function addReview() {
-      const t = document.getElementById('rev-text').value.trim(); if (!t) return showToast('Напишите текст');
+      if (reviewPublishBlocked) return showToast('На этот трек уже есть ваша рецензия');
+      const t = document.getElementById('rev-text').value.trim();
+      if (!t) return showToast('Напишите текст');
+      if (t.length < REVIEW_MIN_LENGTH) return showToast(`Минимум ${REVIEW_MIN_LENGTH} символов`);
+      if (t.length > REVIEW_MAX_LENGTH) return showToast(`Максимум ${REVIEW_MAX_LENGTH} символов`);
+      if (reviews.some(r => r.relId === activeReleaseId && r.author === user.username)) return showToast('На этот трек уже есть ваша рецензия');
 
       const objectiveRating = getCriteriaAverage(selectedCriteria);
       const finalRating = Math.round((objectiveRating + selectedRating) / 2 * 10) / 10;
@@ -879,22 +974,34 @@
         timestamp: Date.now()
       };
 
-      // Отправка в БД Render
       fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRev) }).catch(e => console.error(e));
 
       reviews.unshift(newRev);
-      document.getElementById('rev-text').value = ''; renderReviews(); showToast('Опубликовано!');
+      existingReviewForActiveRelease = newRev;
+      reviewPublishBlocked = true;
+      document.getElementById('rev-text').value = '';
+      renderReviews();
+      const submitBtn = document.querySelector('#modal-release button[onclick="addReview()"]');
+      if (submitBtn) {
+        submitBtn.innerText = 'Рецензия уже опубликована';
+        submitBtn.disabled = true;
+        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      }
+      showToast('Опубликовано!');
     }
 
     function renderReviews() {
       const container = document.getElementById('reviews-container'); const relReviews = reviews.filter(r => r.relId === activeReleaseId);
+      activeReleaseReviews = relReviews;
       container.innerHTML = relReviews.map((r, i) => {
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
         const criteria = r.criteria ? ` · ${formatCriteria(r.criteria)}` : '';
+        const canDelete = r.author === user.username;
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
-          <div class="flex justify-between items-center mb-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${r.author}')">${r.author}</span><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div></div>
+          <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${r.author}')">${r.author}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${r.id}', '${r.relId}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${r.text}</p><span class="text-[10px] text-gray-500 font-medium">${r.date}${criteria} · объективно ${objective}</span></div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
+      lucide.createIcons();
     }
 
     function changeTheme(hex, btnRef) { 
