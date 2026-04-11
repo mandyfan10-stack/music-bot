@@ -148,6 +148,15 @@
     
     body.light-theme .modal-overlay { background: rgba(0,0,0,0.25); }
     body.light-theme #toast { background: rgba(255,255,255,0.95); color: #000; border-color: rgba(0,0,0,0.1); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+
+    /* Перенос длинных слов на мобильных */
+    .modal-container, #reviews-container, #profile-user-reviews, #releases-grid, #likes-grid {
+      overflow-wrap: break-word;
+      word-break: break-word;
+      min-width: 0;
+    }
+    .modal-container * { min-width: 0; }
+    p, span, div { overflow-wrap: break-word; }
   </style>
 </head>
 <body class="antialiased h-screen flex flex-col">
