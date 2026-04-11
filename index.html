@@ -405,6 +405,7 @@
       isAuthenticated: false
     };
     let blockedUsers = [];
+    let adminUsernames = [];
 
     // Заголовки авторизации для всех API-запросов
     function authHeaders(extra = {}) {
@@ -621,12 +622,14 @@
         nameEl.innerText = escapeHtml(profileUsername);
 
         const isMe = profileUsername === user.username;
-        // Роль: для себя — с сервера, для чужих — обычный
-        let role = isMe ? user.role : 'Пользователь';
+        // Проверяем, является ли этот пользователь админом (из серверного списка)
+        const profileCleanName = profileUsername.replace(/^@/, '').toLowerCase();
+        const isProfileAdmin = adminUsernames.includes(profileCleanName);
+        let role = isProfileAdmin ? 'Создатель' : 'Пользователь';
 
         const pRole = document.getElementById('profile-role');
         pRole.innerText = role;
-        if (isMe && user.isAdmin) {
+        if (isProfileAdmin) {
             pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
         } else {
             pRole.className = "px-3 py-1 bg-white/10 border border-white/20 text-white rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
@@ -747,6 +750,7 @@
             reviews = data.reviews || [];
             likedSet = new Set(data.likes || []);
             blockedUsers = data.blockedUsers || [];
+            adminUsernames = data.adminUsernames || [];
 
             // Роль определяется СЕРВЕРОМ
             if (data.currentUser) {
