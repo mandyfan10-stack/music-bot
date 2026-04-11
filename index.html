@@ -974,10 +974,15 @@
     function renderReleaseCard(r, index) {
       const isLiked = likedSet.has(r.id);
       const fb = getFallbackImg(r.name);
-      const delay = index * 50; 
+      const delay = index * 50;
+      // Средний рейтинг релиза
+      const relReviews = reviews.filter(rv => rv.relId === r.id);
+      const avgRating = relReviews.length > 0 ? (relReviews.reduce((s, rv) => s + (rv.rating || 0), 0) / relReviews.length).toFixed(1) : null;
+      const ratingBadge = avgRating ? `<div class="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
       return `<div onclick="openRelease('${r.id}')" class="card-enter flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative" style="animation-delay: ${delay}ms">
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
             <img src="${r.img || fb}" onerror="this.src='${fb}'" class="w-full h-full object-cover">
+            ${ratingBadge}
             <button onclick="toggleLikeAPI(event, '${r.id}')" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
               <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-red-500 text-red-500':'text-white'}"></i>
             </button>
@@ -1083,11 +1088,17 @@
       }
     }
 
-    function executeDeleteRelease() {
+    async function executeDeleteRelease() {
       if (!releaseToDelete) return;
       
-      // Отправка в БД Render
-      fetch(`${BACKEND_URL}/api/releases/${releaseToDelete}`, { method: 'DELETE', headers: authHeaders() }).catch(e => console.error(e));
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/releases/${releaseToDelete}`, { method: 'DELETE', headers: authHeaders() });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+      } catch(e) {
+        console.error('Ошибка удаления релиза:', e);
+        showToast('Ошибка удаления — попробуйте позже');
+        return;
+      }
       
       releases = releases.filter(r => r.id !== releaseToDelete);
       if (likedSet.has(releaseToDelete)) likedSet.delete(releaseToDelete);
@@ -1103,6 +1114,8 @@
     }
 
     async function addReview() {
+      if (user.isBlocked) return showToast('Ваш аккаунт заблокирован');
+      if (!user.isAuthenticated) return showToast('Войдите через Telegram');
       if (reviewPublishBlocked) return showToast('На этот трек уже есть ваша рецензия');
       const t = document.getElementById('rev-text').value.trim();
       if (!t) return showToast('Напишите текст');
@@ -1169,6 +1182,9 @@
       if(isLight) document.body.classList.add('light-theme');
       else document.body.classList.remove('light-theme');
 
+      // Сохраняем выбор темы
+      localStorage.setItem('xxii_theme', hex);
+
       document.querySelectorAll('.theme-btn').forEach(btn => {
         btn.classList.remove('border-white', 'border-black', 'scale-110');
         btn.classList.add('border-white/10');
@@ -1186,6 +1202,16 @@
     lucide.createIcons();
     selectRating(10);
     resetReviewInputs();
+
+    // Восстановление темы из localStorage
+    (function restoreTheme() {
+      const saved = localStorage.getItem('xxii_theme');
+      if (saved && saved !== '#000000') {
+        const btns = document.querySelectorAll('.theme-btn');
+        const target = saved === '#f2f2f7' ? btns[1] : btns[0];
+        if (target) changeTheme(saved, target);
+      }
+    })();
 
     // Запуск синхронизации с БД Render
     fetchDB();
