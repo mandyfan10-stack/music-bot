@@ -603,8 +603,8 @@
       // Считаем релизы по каждому жанру
       const genreCounts = {};
       releases.forEach(r => {
-        const g = r.genre || '';
-        if (g) genreCounts[g] = (genreCounts[g] || 0) + 1;
+        const g = r.genre || 'Другое';
+        genreCounts[g] = (genreCounts[g] || 0) + 1;
       });
 
       // Фильтруем жанры
@@ -675,7 +675,7 @@
       if (activeGenreFilter) {
         badge.classList.remove('hidden');
         document.getElementById('active-genre-name').innerText = activeGenreFilter;
-        const count = releases.filter(r => (r.genre || '') === activeGenreFilter).length;
+        const count = releases.filter(r => (r.genre || 'Другое') === activeGenreFilter).length;
         document.getElementById('active-genre-count').innerText = `${count} релиз${count === 1 ? '' : count > 1 && count < 5 ? 'а' : 'ов'}`;
         lucide.createIcons();
       } else {
@@ -732,7 +732,7 @@
 
       // Фильтр по жанру
       if (activeGenreFilter) {
-        filtered = filtered.filter(r => (r.genre || '') === activeGenreFilter);
+        filtered = filtered.filter(r => (r.genre || 'Другое') === activeGenreFilter);
       }
 
       // Сортировка
