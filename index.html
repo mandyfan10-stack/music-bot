@@ -355,8 +355,19 @@
           </div>
         </div>
 
+        <div id="profile-admin-actions" class="w-full mb-6 hidden">
+          <button id="profile-block-btn" onclick="toggleBlockUser()" class="btn-press w-full py-3 bg-red-500/10 border border-red-500/20 text-red-500 font-bold rounded-2xl flex items-center justify-center gap-2 mb-2">
+            <i data-lucide="ban" class="w-4 h-4"></i>
+            <span id="profile-block-text">Заблокировать</span>
+          </button>
+          <button id="profile-delete-all-btn" onclick="deleteAllReviewsByUser()" class="btn-press w-full py-3 bg-white/5 border border-white/10 text-gray-300 font-bold rounded-2xl flex items-center justify-center gap-2">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            Удалить все рецензии
+          </button>
+        </div>
+
         <div class="w-full text-left">
-          <h3 class="text-[15px] font-bold text-white mb-3 pl-2">Ваши рецензии</h3>
+          <h3 class="text-[15px] font-bold text-white mb-3 pl-2">Рецензии</h3>
           <div id="profile-user-reviews" class="space-y-3"></div>
         </div>
       </div>
@@ -367,27 +378,36 @@
     const tg = window.Telegram.WebApp;
     tg.expand();
 
-    const BACKEND_URL = "https://music-backend-qjvk.onrender.com"; 
+    const BACKEND_URL = "https://music-backend-qjvk.onrender.com";
 
+    // Telegram initData — подписанная строка для серверной проверки
+    const tgInitData = tg.initData || '';
     const tgUser = tg.initDataUnsafe?.user;
-    const tgUsername = tgUser?.username?.toLowerCase() || '';
 
-    let regDate = localStorage.getItem('raper_reg_date');
-    if (!regDate) {
-      regDate = new Date().toLocaleDateString('ru-RU');
-      localStorage.setItem('raper_reg_date', regDate);
-    }
+    // Базовый display name (до ответа сервера)
+    const localDisplayName = (tgUser?.username ? `@${tgUser.username}` : tgUser?.first_name) || 'Гость';
 
-    const displayName = (tgUser?.username ? `@${tgUser.username}` : tgUser?.first_name) || 'Гость';
+    // Роль определяется ТОЛЬКО сервером, не клиентом!
+    let user = {
+      username: localDisplayName,
+      role: 'Пользователь',
+      isAdmin: false,
+      isBlocked: false,
+      isAuthenticated: false
+    };
+    let blockedUsers = [];
 
-    let user = { username: displayName, role: 'Пользователь', regDate: regDate };
-    
-    if (tgUsername === 'monetka_man' || tgUsername === 'xllbloodxii' || user.username.toLowerCase() === 'admin') {
-      user.role = 'Создатель';
+    // Заголовки авторизации для всех API-запросов
+    function authHeaders(extra = {}) {
+      return {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': tgInitData,
+        ...extra
+      };
     }
 
     document.getElementById('welcome-user-name').innerText = user.username;
-    
+
     if (localStorage.getItem('raper_welcomed_v1')) {
         document.getElementById('welcome-screen').classList.add('hidden');
     }
@@ -401,15 +421,26 @@
         }, 700);
     }
 
-    document.getElementById('user-name').innerText = user.username;
-    
-    const headerRoleEl = document.getElementById('user-role');
-    headerRoleEl.innerText = user.role;
-    if (user.role === 'Создатель') {
+    // Обновление UI после получения роли с сервера
+    function applyUserRole() {
+      document.getElementById('user-name').innerText = user.username;
+      const headerRoleEl = document.getElementById('user-role');
+      headerRoleEl.innerText = user.isAdmin ? 'Создатель' : 'Пользователь';
+      if (user.isAdmin) {
         headerRoleEl.classList.remove('text-gray-500');
         headerRoleEl.classList.add('text-red-500', 'font-bold');
         document.getElementById('btn-add-release').classList.remove('hidden');
+      } else {
+        headerRoleEl.classList.add('text-gray-500');
+        headerRoleEl.classList.remove('text-red-500', 'font-bold');
+        document.getElementById('btn-add-release').classList.add('hidden');
+      }
+      if (user.isBlocked) {
+        showToast('Ваш аккаунт заблокирован. Только чтение.');
+      }
     }
+
+    document.getElementById('user-name').innerText = user.username;
 
     let releases = [], likedSet = new Set(), reviews = [], activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
     let pendingReviewDelete = null;
@@ -578,34 +609,47 @@
       const nameEl = document.getElementById('profile-name');
       if(nameEl) {
         const userReviews = reviews.filter(r => r.author === profileUsername);
-        nameEl.innerText = profileUsername;
+        nameEl.innerText = escapeHtml(profileUsername);
 
         const isMe = profileUsername === user.username;
+        // Роль: для себя — с сервера, для чужих — обычный
         let role = isMe ? user.role : 'Пользователь';
-        if (!isMe) {
-            const lower = profileUsername.replace('@', '').toLowerCase();
-            if (lower === 'monetka_man' || lower === 'xllbloodxii' || lower === 'admin') {
-                role = 'Создатель';
-            }
-        }
 
         const pRole = document.getElementById('profile-role');
         pRole.innerText = role;
-        if (role === 'Создатель') {
+        if (isMe && user.isAdmin) {
             pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
         } else {
             pRole.className = "px-3 py-1 bg-white/10 border border-white/20 text-white rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
         }
 
+        // Проверяем блокировку профиля
+        const profileCleanUsername = profileUsername.replace(/^@/, '').toLowerCase();
+        const isProfileBlocked = blockedUsers.includes(profileCleanUsername);
+        if (isProfileBlocked) {
+            pRole.innerText = 'Заблокирован';
+            pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
+        }
+
         document.getElementById('profile-reviews-count').innerText = userReviews.length;
         document.getElementById('profile-likes-count').innerText = isMe ? likedSet.size : '?';
+
+        // Админ-функции: блокировка + удаление всех рецензий
+        const adminActions = document.getElementById('profile-admin-actions');
+        if (user.isAdmin && !isMe) {
+            adminActions.classList.remove('hidden');
+            const blockBtn = document.getElementById('profile-block-text');
+            blockBtn.innerText = isProfileBlocked ? 'Разблокировать' : 'Заблокировать';
+        } else {
+            adminActions.classList.add('hidden');
+        }
 
         const revContainer = document.getElementById('profile-user-reviews');
         if (userReviews.length > 0) {
           revContainer.innerHTML = userReviews.map(r => {
             const rel = releases.find(release => release.id === r.relId);
             const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
-            const canDelete = isMe && r.author === user.username;
+            const canDelete = (isMe && r.author === user.username) || user.isAdmin;
             return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${r.relId}')">
               <div class="flex justify-between items-center mb-2 gap-2">
                 <span class="text-[13px] font-bold text-gray-300 truncate pr-2">${relName}</span>
@@ -630,6 +674,44 @@
       }
     }
 
+    // --- АДМИН-ФУНКЦИИ: блокировка и удаление ---
+    async function toggleBlockUser() {
+      if (!activeProfileUsername || !user.isAdmin) return;
+      const cleanName = activeProfileUsername.replace(/^@/, '').toLowerCase();
+      const isCurrentlyBlocked = blockedUsers.includes(cleanName);
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/block`, {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ username: cleanName, blocked: !isCurrentlyBlocked })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        if (isCurrentlyBlocked) {
+          blockedUsers = blockedUsers.filter(u => u !== cleanName);
+          showToast(`@${cleanName} разблокирован`);
+        } else {
+          blockedUsers.push(cleanName);
+          showToast(`@${cleanName} заблокирован`);
+        }
+        openProfileModal(activeProfileUsername);
+      } catch(e) { showToast('Ошибка: ' + e.message); }
+    }
+
+    async function deleteAllReviewsByUser() {
+      if (!activeProfileUsername || !user.isAdmin) return;
+      const cleanName = activeProfileUsername.replace(/^@/, '').toLowerCase();
+      if (!confirm(`Удалить ВСЕ рецензии @${cleanName}?`)) return;
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/reviews/by-author/${encodeURIComponent(cleanName)}`, {
+          method: 'DELETE', headers: authHeaders()
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        reviews = reviews.filter(r => (r.authorUsername || r.author.replace('@','').toLowerCase()) !== cleanName);
+        showToast(`Удалено ${data.deleted} рецензий`);
+        openProfileModal(activeProfileUsername);
+      } catch(e) { showToast('Ошибка: ' + e.message); }
+    }
+
     function openAddModal() { openModal('modal-add'); document.getElementById('input-link').value = ''; document.getElementById('btn-add-text').innerText = 'Распознать и добавить'; }
     
     function selectRating(val) { 
@@ -638,22 +720,34 @@
       document.getElementById(`rate-${val}`).classList.add('active'); 
     }
 
-    // Загрузка данных с Render с защитой от таймаута (увеличено до 60 сек для бесплатного тарифа)
+    // Загрузка данных с Render — роль приходит с СЕРВЕРА
     async function fetchDB() {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000); 
-            
-            const res = await fetch(`${BACKEND_URL}/api/data?username=${encodeURIComponent(user.username)}`, {
-                signal: controller.signal
+            const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+            const res = await fetch(`${BACKEND_URL}/api/data`, {
+                signal: controller.signal,
+                headers: authHeaders()
             });
             clearTimeout(timeoutId);
-            
+
             if(!res.ok) throw new Error('HTTP ' + res.status);
             const data = await res.json();
             releases = data.releases || [];
             reviews = data.reviews || [];
             likedSet = new Set(data.likes || []);
+            blockedUsers = data.blockedUsers || [];
+
+            // Роль определяется СЕРВЕРОМ
+            if (data.currentUser) {
+                user.username = data.currentUser.displayName || user.username;
+                user.isAdmin = !!data.currentUser.isAdmin;
+                user.isBlocked = !!data.currentUser.isBlocked;
+                user.isAuthenticated = !!data.currentUser.isAuthenticated;
+                user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
+            }
+            applyUserRole();
         } catch(e) {
             if (e.name === 'AbortError') {
                 console.error("Сервер Render не успел проснуться за 60 секунд.");
@@ -708,7 +802,7 @@
       } catch(e) {
         // 2. Если oEmbed не помог (редкие сайты) - используем ИИ бэкенд
         try {
-            const res = await fetch(`${BACKEND_URL}/api/parse_link`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ link }) });
+            const res = await fetch(`${BACKEND_URL}/api/parse_link`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ link }) });
             if (!res.ok) throw new Error('Backend Fail');
             const data = await res.json();
             
@@ -756,7 +850,7 @@
           // СОХРАНЯЕМ В БД И ДОБАВЛЯЕМ В ЛЕНТУ МГНОВЕННО
           try {
               btnText.innerText = 'Сохранение...';
-              const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
+              const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(newRel) });
               if (!saveRes.ok) throw new Error('DB Save Error');
               
               releases.unshift(newRel);
@@ -804,7 +898,7 @@
       
       // Отправка в БД Render (с обработкой ошибок)
       try {
-        const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
+        const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(newRel) });
         if (!saveRes.ok) throw new Error('HTTP ' + saveRes.status);
       } catch(e) {
         console.error('Ошибка сохранения релиза:', e);
@@ -832,8 +926,8 @@
       // Отправка в БД Render (лайки — можно fire-and-forget, но логируем)
       fetch(`${BACKEND_URL}/api/likes`, {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ releaseId: id, username: user.username, isLike: isLiking })
+          headers: authHeaders(),
+          body: JSON.stringify({ releaseId: id, isLike: isLiking })
       }).then(res => { if (!res.ok) console.error('Like save error:', res.status); })
        .catch(e => console.error('Like network error:', e));
       
@@ -882,7 +976,7 @@
       reviewPublishBlocked = !!existingReviewForActiveRelease;
 
       const delBtn = document.getElementById('rel-delete-btn');
-      if (user.role === 'Создатель') {
+      if (user.isAdmin) {
         delBtn.classList.remove('hidden');
         delBtn.classList.add('flex');
         delBtn.onclick = () => openConfirmDelete(id);
@@ -921,7 +1015,7 @@
       if (!pendingReviewDelete) return;
 
       try {
-        const res = await fetch(`${BACKEND_URL}/api/reviews/${pendingReviewDelete}`, { method: 'DELETE' });
+        const res = await fetch(`${BACKEND_URL}/api/reviews/${pendingReviewDelete}`, { method: 'DELETE', headers: authHeaders() });
         if (!res.ok) throw new Error('HTTP ' + res.status);
       } catch(e) {
         console.error('Ошибка удаления рецензии:', e);
@@ -957,7 +1051,7 @@
       if (!releaseToDelete) return;
       
       // Отправка в БД Render
-      fetch(`${BACKEND_URL}/api/releases/${releaseToDelete}`, { method: 'DELETE' }).catch(e => console.error(e));
+      fetch(`${BACKEND_URL}/api/releases/${releaseToDelete}`, { method: 'DELETE', headers: authHeaders() }).catch(e => console.error(e));
       
       releases = releases.filter(r => r.id !== releaseToDelete);
       if (likedSet.has(releaseToDelete)) likedSet.delete(releaseToDelete);
@@ -996,7 +1090,7 @@
       };
 
       try {
-        const res = await fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRev) });
+        const res = await fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(newRev) });
         if (!res.ok) throw new Error('HTTP ' + res.status);
       } catch(e) {
         console.error('Ошибка сохранения рецензии:', e);
@@ -1024,7 +1118,7 @@
       container.innerHTML = relReviews.map((r, i) => {
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
         const criteria = r.criteria ? ` · ${formatCriteria(r.criteria)}` : '';
-        const canDelete = r.author === user.username;
+        const canDelete = r.author === user.username || user.isAdmin;
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
           <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${escapeHtml(r.author)}')">${escapeHtml(r.author)}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${r.id}', '${r.relId}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${objective}</span></div>`;
