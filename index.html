@@ -732,8 +732,44 @@
       document.getElementById(`rate-${val}`).classList.add('active'); 
     }
 
-    // Загрузка данных с Render — роль приходит с СЕРВЕРА
+    // --- КЭШИРОВАНИЕ: мгновенный старт из localStorage ---
+    const CACHE_KEY = 'xxii_cache_v2';
+
+    function saveCache(data) {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch(e) {}
+    }
+
+    function loadCache() {
+      try { return JSON.parse(localStorage.getItem(CACHE_KEY)); } catch(e) { return null; }
+    }
+
+    function applyData(data) {
+      releases = data.releases || [];
+      reviews = data.reviews || [];
+      likedSet = new Set(data.likes || []);
+      blockedUsers = data.blockedUsers || [];
+      adminUsernames = data.adminUsernames || [];
+      if (data.currentUser) {
+        user.username = data.currentUser.displayName || user.username;
+        user.isAdmin = !!data.currentUser.isAdmin;
+        user.isBlocked = !!data.currentUser.isBlocked;
+        user.isAuthenticated = !!data.currentUser.isAuthenticated;
+        user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
+      }
+      applyUserRole();
+      renderReleases();
+      switchTab('home');
+    }
+
+    // Загрузка: кэш мгновенно → сервер фоном
     async function fetchDB() {
+        // 1. Мгновенно показываем кэш
+        const cached = loadCache();
+        if (cached) {
+          applyData(cached);
+        }
+
+        // 2. Загружаем свежие данные с сервера
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -746,31 +782,18 @@
 
             if(!res.ok) throw new Error('HTTP ' + res.status);
             const data = await res.json();
-            releases = data.releases || [];
-            reviews = data.reviews || [];
-            likedSet = new Set(data.likes || []);
-            blockedUsers = data.blockedUsers || [];
-            adminUsernames = data.adminUsernames || [];
 
-            // Роль определяется СЕРВЕРОМ
-            if (data.currentUser) {
-                user.username = data.currentUser.displayName || user.username;
-                user.isAdmin = !!data.currentUser.isAdmin;
-                user.isBlocked = !!data.currentUser.isBlocked;
-                user.isAuthenticated = !!data.currentUser.isAuthenticated;
-                user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
-            }
-            applyUserRole();
+            // Сохраняем в кэш и обновляем UI
+            saveCache(data);
+            applyData(data);
         } catch(e) {
             if (e.name === 'AbortError') {
                 console.error("Сервер Render не успел проснуться за 60 секунд.");
             } else {
                 console.error("Ошибка загрузки БД:", e.message || e);
             }
-            showToast("Работаем в оффлайн-режиме (сервер недоступен)");
+            if (!cached) showToast("Работаем в оффлайн-режиме (сервер недоступен)");
         }
-        renderReleases();
-        switchTab('home');
     }
 
     // --- НОВАЯ УМНАЯ ЛОГИКА РАСПОЗНАВАНИЯ ---
