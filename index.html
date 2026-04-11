@@ -583,8 +583,8 @@
 
       if (val.length > 0) {
         showGenreDropdown();
-        renderGenreDropdown(val);
       } else {
+        hideGenreDropdown();
         // Пустой ввод — сброс фильтра
         if (activeGenreFilter) {
           activeGenreFilter = '';
@@ -592,7 +592,6 @@
           renderReleases();
           updateResetBtn();
         }
-        renderGenreDropdown('');
       }
     }
 
