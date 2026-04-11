@@ -423,6 +423,12 @@
     const REVIEW_MIN_LENGTH = 30;
     const REVIEW_MAX_LENGTH = 3000;
 
+    // --- XSS-защита: экранирование HTML в пользовательских данных ---
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
     function getCriteriaAverage(criteria = {}) {
       const values = criteriaConfig.map(({ key }) => typeof criteria[key] === 'number' ? criteria[key] : 5);
       return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
@@ -598,7 +604,7 @@
         if (userReviews.length > 0) {
           revContainer.innerHTML = userReviews.map(r => {
             const rel = releases.find(release => release.id === r.relId);
-            const relName = rel ? rel.name : 'Удаленный релиз';
+            const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
             const canDelete = isMe && r.author === user.username;
             return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${r.relId}')">
               <div class="flex justify-between items-center mb-2 gap-2">
@@ -608,8 +614,8 @@
                   ${canDelete ? `<button onclick="openConfirmReviewDelete('${r.id}', '${r.relId}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}
                 </div>
               </div>
-              <p class="text-[13px] text-gray-200 leading-relaxed mb-2">${r.text}</p>
-              <span class="text-[10px] text-gray-500 font-medium">${r.date}</span>
+              <p class="text-[13px] text-gray-200 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
+              <span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}</span>
             </div>`;
           }).join('');
         } else {
@@ -796,8 +802,15 @@
       
       const newRel = { id: Date.now().toString(), name: title, artist: artist, img: cover, link: currentPendingLink, timestamp: Date.now() };
       
-      // Отправка в БД Render
-      fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) }).catch(e => console.error(e));
+      // Отправка в БД Render (с обработкой ошибок)
+      try {
+        const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRel) });
+        if (!saveRes.ok) throw new Error('HTTP ' + saveRes.status);
+      } catch(e) {
+        console.error('Ошибка сохранения релиза:', e);
+        showToast('Ошибка сохранения — попробуйте позже');
+        return;
+      }
       
       releases.unshift(newRel);
       renderReleases(); closeModal('modal-add'); showToast('Релиз сохранен!');
@@ -816,12 +829,13 @@
       if (isLiking) likedSet.add(id);
       else likedSet.delete(id);
       
-      // Отправка в БД Render
+      // Отправка в БД Render (лайки — можно fire-and-forget, но логируем)
       fetch(`${BACKEND_URL}/api/likes`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ releaseId: id, username: user.username, isLike: isLiking })
-      }).catch(e => console.error(e));
+      }).then(res => { if (!res.ok) console.error('Like save error:', res.status); })
+       .catch(e => console.error('Like network error:', e));
       
       renderReleases();
       if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
@@ -838,7 +852,7 @@
               <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-red-500 text-red-500':'text-white'}"></i>
             </button>
           </div>
-          <div class="px-1"><div class="text-[13px] font-bold text-white truncate">${r.name}</div><div class="text-[11px] text-gray-500 truncate">${r.artist}</div></div>
+          <div class="px-1"><div class="text-[13px] font-bold text-white truncate">${escapeHtml(r.name)}</div><div class="text-[11px] text-gray-500 truncate">${escapeHtml(r.artist)}</div></div>
         </div>`;
     }
 
@@ -903,10 +917,17 @@
       openModal('modal-confirm-review-delete');
     }
 
-    function executeDeleteReview() {
+    async function executeDeleteReview() {
       if (!pendingReviewDelete) return;
 
-      fetch(`${BACKEND_URL}/api/reviews/${pendingReviewDelete}`, { method: 'DELETE' }).catch(e => console.error(e));
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/reviews/${pendingReviewDelete}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+      } catch(e) {
+        console.error('Ошибка удаления рецензии:', e);
+        showToast('Ошибка удаления — попробуйте позже');
+        return;
+      }
 
       reviews = reviews.filter(r => r.id !== pendingReviewDelete);
       if (activeReleaseId && pendingReviewTargetReleaseId === activeReleaseId) {
@@ -951,7 +972,7 @@
       releaseToDelete = null;
     }
 
-    function addReview() {
+    async function addReview() {
       if (reviewPublishBlocked) return showToast('На этот трек уже есть ваша рецензия');
       const t = document.getElementById('rev-text').value.trim();
       if (!t) return showToast('Напишите текст');
@@ -974,7 +995,14 @@
         timestamp: Date.now()
       };
 
-      fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRev) }).catch(e => console.error(e));
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(newRev) });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+      } catch(e) {
+        console.error('Ошибка сохранения рецензии:', e);
+        showToast('Ошибка сохранения — попробуйте позже');
+        return;
+      }
 
       reviews.unshift(newRev);
       existingReviewForActiveRelease = newRev;
@@ -998,8 +1026,8 @@
         const criteria = r.criteria ? ` · ${formatCriteria(r.criteria)}` : '';
         const canDelete = r.author === user.username;
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
-          <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${r.author}')">${r.author}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${r.id}', '${r.relId}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
-          <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${r.text}</p><span class="text-[10px] text-gray-500 font-medium">${r.date}${criteria} · объективно ${objective}</span></div>`;
+          <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${escapeHtml(r.author)}')">${escapeHtml(r.author)}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${r.id}', '${r.relId}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
+          <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${objective}</span></div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
       lucide.createIcons();
     }
