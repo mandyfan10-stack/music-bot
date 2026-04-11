@@ -993,6 +993,8 @@
                 parsedArtist = data.artist; 
                 parsedName = data.name; 
                 parsedCover = data.img || '';
+                // Жанр от бэкенда
+                if (data.genre) selectedGenreForAdd = data.genre;
                 isSuccess = true;
             } else {
                 throw new Error('AI Parse Fail');
@@ -1004,13 +1006,14 @@
             document.getElementById('manual-step-alert').innerText = 'Данные недоступны. Введите вручную:';
             document.getElementById('manual-step-alert').className = 'text-[12px] text-amber-400 bg-amber-400/10 p-3 rounded-xl mb-2 text-center';
             currentPendingLink = link;
+            renderAddGenreSelector('manual-genre-selector');
             btnText.innerText = 'Распознать и добавить';
             return showToast('Не удалось считать. Введите вручную.');
         }
       }
 
       if (isSuccess) {
-          // Пытаемся найти качественную квадратную обложку 1:1 и точное название в iTunes
+          // Пытаемся найти качественную квадратную обложку 1:1 в iTunes
           try {
               btnText.innerText = 'Поиск обложки...';
               const query = encodeURIComponent(`${parsedArtist} ${parsedName}`).replace(/%20/g, '+');
@@ -1019,7 +1022,6 @@
               
               if (itunesData.results && itunesData.results.length > 0) {
                   const track = itunesData.results[0];
-                  // Заменяем превьюшку из YouTube на HD-обложку альбома
                   parsedCover = track.artworkUrl100.replace('100x100bb', '600x600bb');
                   parsedArtist = track.artistName;
                   parsedName = track.trackName;
@@ -1028,24 +1030,24 @@
               console.log("iTunes search error:", e);
           }
           
-          const newRel = { id: Date.now().toString(), name: parsedName, artist: parsedArtist, img: parsedCover, link: link, genre: selectedGenreForAdd, timestamp: Date.now() };
-          
-          // СОХРАНЯЕМ В БД И ДОБАВЛЯЕМ В ЛЕНТУ МГНОВЕННО
-          try {
-              btnText.innerText = 'Сохранение...';
-              const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(newRel) });
-              if (!saveRes.ok) throw new Error('DB Save Error');
-              
-              releases.unshift(newRel);
-              renderReleases(); 
-              closeModal('modal-add'); 
-              showToast('Релиз успешно добавлен!');
-          } catch(e) {
-              showToast('Ошибка сохранения: ' + e.message); 
-              console.error(e);
-          } finally {
-              btnText.innerText = 'Распознать и добавить'; 
+          // Показываем форму подтверждения с жанром (вместо прямого сохранения)
+          currentPendingLink = link;
+          document.getElementById('manual-artist').value = parsedArtist;
+          document.getElementById('manual-title').value = parsedName;
+          if (parsedCover) {
+              manualCoverBase64 = parsedCover;
+              document.getElementById('manual-cover-preview').innerHTML = `<img src="${parsedCover}" class="w-full h-full object-cover"><div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
           }
+          renderAddGenreSelector('manual-genre-selector');
+          
+          document.getElementById('add-form-step-1').classList.add('hidden');
+          document.getElementById('add-form-step-manual').classList.remove('hidden');
+          document.getElementById('manual-step-alert').innerText = selectedGenreForAdd 
+            ? `✓ Распознано! Жанр: ${selectedGenreForAdd}. Проверьте и сохраните.` 
+            : '✓ Распознано! Выберите жанр и сохраните.';
+          document.getElementById('manual-step-alert').className = 'text-[12px] text-green-400 bg-green-400/10 p-3 rounded-xl mb-2 text-center';
+          btnText.innerText = 'Распознать и добавить';
+          lucide.createIcons();
       }
     }
 
