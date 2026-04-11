@@ -160,13 +160,20 @@
 
     /* Фильтры */
     .sort-btn { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: #d1d5db; }
-    .sort-btn.active, #filter-bar .sort-btn[style*="bg-white"] { background: white; color: black; border-color: white; }
-    #genre-chips { -ms-overflow-style: none; scrollbar-width: none; }
-    #genre-chips::-webkit-scrollbar { display: none; }
-    #filter-bar .flex { flex-wrap: nowrap; overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
-    #filter-bar .flex::-webkit-scrollbar { display: none; }
+    .sort-btn.active { background: white; color: black; border-color: white; }
+    #filter-bar .flex:not(.relative *) { flex-wrap: nowrap; overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
+    #filter-bar .flex:not(.relative *):-webkit-scrollbar { display: none; }
+
+    /* Поиск жанра */
+    #genre-dropdown { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+    #genre-dropdown button:active { background: rgba(239,68,68,0.1); }
+    #genre-search::placeholder { color: rgba(156,163,175,0.6); }
 
     body.light-theme .sort-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #374151; }
+    body.light-theme .sort-btn.active { background: black; color: white; border-color: black; }
+    body.light-theme #genre-search { color: #111; }
+    body.light-theme #genre-dropdown { background: rgba(255,255,255,0.95); }
+    body.light-theme #genre-dropdown button { color: #111; }
   </style>
 </head>
 <body class="antialiased h-screen flex flex-col">
@@ -221,11 +228,36 @@
         </button>
       </div>
 
-      <!-- ФИЛЬТРЫ -->
+      <!-- ПОИСК ПО ЖАНРУ + СОРТИРОВКА -->
       <div id="filter-bar" class="mb-5 space-y-3">
-        <!-- Жанры -->
-        <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-1" id="genre-chips"></div>
-        <!-- Сортировка + сброс -->
+        <!-- Поисковая строка -->
+        <div class="relative">
+          <div class="relative flex items-center">
+            <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute left-3.5 pointer-events-none"></i>
+            <input id="genre-search" type="text" placeholder="Поиск по жанру..." autocomplete="off"
+              class="w-full glass-input rounded-2xl pl-10 pr-10 py-3 text-[13px] text-white outline-none focus:ring-1 ring-red-500/30 transition-all"
+              oninput="onGenreSearchInput()" onfocus="showGenreDropdown()">
+            <button id="genre-search-clear" class="hidden absolute right-3 p-1 rounded-full hover:bg-white/10 transition-colors" onclick="clearGenreSearch()">
+              <i data-lucide="x" class="w-4 h-4 text-gray-400"></i>
+            </button>
+          </div>
+          <!-- Дропдаун автодополнения -->
+          <div id="genre-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 glass rounded-2xl border border-white/10 overflow-hidden z-30 shadow-2xl">
+            <div id="genre-dropdown-list" class="max-h-[200px] overflow-y-auto hide-scrollbar"></div>
+          </div>
+        </div>
+        <!-- Активный фильтр -->
+        <div id="active-genre-badge" class="hidden flex items-center gap-2">
+          <span class="px-3 py-1.5 bg-red-500 text-white text-[11px] font-bold rounded-xl flex items-center gap-1.5">
+            <i data-lucide="music" class="w-3 h-3"></i>
+            <span id="active-genre-name"></span>
+            <button onclick="clearGenreSearch()" class="ml-1 hover:bg-white/20 rounded-full p-0.5 transition-colors">
+              <i data-lucide="x" class="w-3 h-3"></i>
+            </button>
+          </span>
+          <span id="active-genre-count" class="text-[11px] text-gray-500"></span>
+        </div>
+        <!-- Сортировка -->
         <div class="flex items-center gap-2">
           <button onclick="setSortMode('new')" id="sort-new" class="sort-btn active btn-press px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all">Новинки</button>
           <button onclick="setSortMode('rating-desc')" id="sort-rating-desc" class="sort-btn btn-press px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all">Рейтинг ↓</button>
@@ -520,21 +552,12 @@
     let manualCoverBase64 = null;
     let releaseToDelete = null;
 
-    // --- ЖАНРЫ И ФИЛЬТРЫ ---
+    // --- ПОИСК ПО ЖАНРУ ---
     const GENRES = ['Рэп', 'Хип-хоп', 'Трэп', 'R&B', 'Поп', 'Рок', 'Электронная', 'Джаз', 'Метал', 'Другое'];
-    let activeGenres = new Set();
-    let sortMode = 'new'; // 'new' | 'rating-desc' | 'rating-asc' | 'reviews'
+    let activeGenreFilter = ''; // текущий активный жанр
+    let sortMode = 'new';
     let selectedGenreForAdd = '';
-
-    function renderGenreChips() {
-      const container = document.getElementById('genre-chips');
-      container.innerHTML = GENRES.map(g => {
-        const active = activeGenres.has(g);
-        return `<button onclick="toggleGenre('${g}')" class="btn-press whitespace-nowrap px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-          active ? 'bg-red-500 border-red-500 text-white' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
-        }">${escapeHtml(g)}</button>`;
-      }).join('');
-    }
+    let genreDropdownOpen = false;
 
     function renderAddGenreSelector(containerId) {
       const container = document.getElementById(containerId);
@@ -552,13 +575,120 @@
       renderAddGenreSelector('manual-genre-selector');
     }
 
-    function toggleGenre(genre) {
-      if (activeGenres.has(genre)) activeGenres.delete(genre);
-      else activeGenres.add(genre);
-      renderGenreChips();
+    function onGenreSearchInput() {
+      const input = document.getElementById('genre-search');
+      const val = input.value.trim();
+      const clearBtn = document.getElementById('genre-search-clear');
+      clearBtn.classList.toggle('hidden', !val);
+
+      if (val.length > 0) {
+        showGenreDropdown();
+        renderGenreDropdown(val);
+      } else {
+        // Пустой ввод — сброс фильтра
+        if (activeGenreFilter) {
+          activeGenreFilter = '';
+          updateGenreBadge();
+          renderReleases();
+          updateResetBtn();
+        }
+        renderGenreDropdown('');
+      }
+    }
+
+    function renderGenreDropdown(query) {
+      const list = document.getElementById('genre-dropdown-list');
+      const low = query.toLowerCase();
+
+      // Считаем релизы по каждому жанру
+      const genreCounts = {};
+      releases.forEach(r => {
+        const g = r.genre || '';
+        if (g) genreCounts[g] = (genreCounts[g] || 0) + 1;
+      });
+
+      // Фильтруем жанры
+      let matched = GENRES.filter(g => {
+        if (!low) return true;
+        return g.toLowerCase().includes(low);
+      });
+
+      if (matched.length === 0) {
+        list.innerHTML = `<div class="px-4 py-3 text-[12px] text-gray-500 text-center">Жанр «${escapeHtml(query)}» не найден</div>`;
+        return;
+      }
+
+      list.innerHTML = matched.map(g => {
+        const count = genreCounts[g] || 0;
+        const isActive = activeGenreFilter === g;
+        return `<button onclick="selectGenreFilter('${g}')" class="w-full text-left px-4 py-2.5 flex items-center justify-between transition-colors ${
+          isActive ? 'bg-red-500/10 text-red-400' : 'text-white hover:bg-white/5'
+        }">
+          <span class="text-[13px] font-medium">${escapeHtml(g)}</span>
+          <span class="text-[11px] text-gray-500">${count} релиз${count === 1 ? '' : count > 1 && count < 5 ? 'а' : 'ов'}</span>
+        </button>`;
+      }).join('');
+    }
+
+    function selectGenreFilter(genre) {
+      const input = document.getElementById('genre-search');
+      if (activeGenreFilter === genre) {
+        // Снять фильтр
+        activeGenreFilter = '';
+        input.value = '';
+      } else {
+        activeGenreFilter = genre;
+        input.value = '';
+      }
+      hideGenreDropdown();
+      updateGenreBadge();
       renderReleases();
       updateResetBtn();
+      document.getElementById('genre-search-clear').classList.add('hidden');
     }
+
+    function clearGenreSearch() {
+      const input = document.getElementById('genre-search');
+      input.value = '';
+      activeGenreFilter = '';
+      hideGenreDropdown();
+      updateGenreBadge();
+      renderReleases();
+      updateResetBtn();
+      document.getElementById('genre-search-clear').classList.add('hidden');
+    }
+
+    function showGenreDropdown() {
+      const dd = document.getElementById('genre-dropdown');
+      dd.classList.remove('hidden');
+      genreDropdownOpen = true;
+      renderGenreDropdown(document.getElementById('genre-search').value.trim());
+    }
+
+    function hideGenreDropdown() {
+      document.getElementById('genre-dropdown').classList.add('hidden');
+      genreDropdownOpen = false;
+    }
+
+    function updateGenreBadge() {
+      const badge = document.getElementById('active-genre-badge');
+      if (activeGenreFilter) {
+        badge.classList.remove('hidden');
+        document.getElementById('active-genre-name').innerText = activeGenreFilter;
+        const count = releases.filter(r => (r.genre || '') === activeGenreFilter).length;
+        document.getElementById('active-genre-count').innerText = `${count} релиз${count === 1 ? '' : count > 1 && count < 5 ? 'а' : 'ов'}`;
+        lucide.createIcons();
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    // Закрываем дропдаун при клике вне
+    document.addEventListener('click', function(e) {
+      if (genreDropdownOpen && !e.target.closest('#filter-bar .relative')) {
+        hideGenreDropdown();
+      }
+    });
 
     function setSortMode(mode) {
       sortMode = mode;
@@ -576,16 +706,18 @@
     }
 
     function resetFilters() {
-      activeGenres.clear();
+      activeGenreFilter = '';
       sortMode = 'new';
-      renderGenreChips();
+      document.getElementById('genre-search').value = '';
+      document.getElementById('genre-search-clear').classList.add('hidden');
+      updateGenreBadge();
       setSortMode('new');
       renderReleases();
     }
 
     function updateResetBtn() {
       const btn = document.getElementById('btn-reset-filters');
-      const hasFilters = activeGenres.size > 0 || sortMode !== 'new';
+      const hasFilters = activeGenreFilter || sortMode !== 'new';
       btn.classList.toggle('hidden', !hasFilters);
     }
 
@@ -598,9 +730,9 @@
     function getFilteredReleases() {
       let filtered = [...releases];
 
-      // Фильтр по жанрам
-      if (activeGenres.size > 0) {
-        filtered = filtered.filter(r => activeGenres.has(r.genre || ''));
+      // Фильтр по жанру
+      if (activeGenreFilter) {
+        filtered = filtered.filter(r => (r.genre || '') === activeGenreFilter);
       }
 
       // Сортировка
