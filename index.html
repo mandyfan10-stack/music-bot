@@ -659,10 +659,15 @@
     }
 
     function showGenreDropdown() {
+      const val = document.getElementById('genre-search').value.trim();
+      if (val.length === 0) {
+        hideGenreDropdown();
+        return;
+      }
       const dd = document.getElementById('genre-dropdown');
       dd.classList.remove('hidden');
       genreDropdownOpen = true;
-      renderGenreDropdown(document.getElementById('genre-search').value.trim());
+      renderGenreDropdown(val);
     }
 
     function hideGenreDropdown() {
