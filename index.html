@@ -528,7 +528,6 @@
     let existingReviewForActiveRelease = null;
     let activeProfileUsername = null;
     let activeProfileUserReviews = [];
-    let activeReleaseReviews = [];
     const REVIEW_MIN_LENGTH = 30;
     const REVIEW_MAX_LENGTH = 3000;
 
@@ -1465,7 +1464,6 @@
 
     function renderReviews() {
       const container = document.getElementById('reviews-container'); const relReviews = reviews.filter(r => r.relId === activeReleaseId);
-      activeReleaseReviews = relReviews;
       container.innerHTML = relReviews.map((r, i) => {
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
         const criteria = r.criteria ? ` · ${formatCriteria(r.criteria)}` : '';
