@@ -1172,7 +1172,7 @@
           document.getElementById('manual-title').value = parsedName;
           if (parsedCover) {
               manualCoverBase64 = parsedCover;
-              document.getElementById('manual-cover-preview').innerHTML = `<img src="${parsedCover}" class="w-full h-full object-cover"><div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
+              document.getElementById('manual-cover-preview').innerHTML = `<img src="${escapeHtml(parsedCover)}" class="w-full h-full object-cover"><div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
           }
           renderAddGenreSelector('manual-genre-selector');
           
