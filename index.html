@@ -740,22 +740,41 @@
       }
 
       // Сортировка
-      switch (sortMode) {
-        case 'rating-desc':
-          filtered.sort((a, b) => getAvgRating(b.id) - getAvgRating(a.id));
-          break;
-        case 'rating-asc':
-          filtered.sort((a, b) => getAvgRating(a.id) - getAvgRating(b.id));
-          break;
-        case 'reviews':
-          filtered.sort((a, b) => {
-            const countA = reviews.filter(r => r.relId === a.id).length;
-            const countB = reviews.filter(r => r.relId === b.id).length;
-            return countB - countA;
-          });
-          break;
-        default: // 'new'
-          filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      if (sortMode !== 'new') {
+        const statsMap = new Map();
+        for (const release of filtered) {
+          statsMap.set(release.id, { count: 0, sum: 0 });
+        }
+        for (const r of reviews) {
+          const stat = statsMap.get(r.relId);
+          if (stat) {
+            stat.count++;
+            stat.sum += (r.rating || 0);
+          }
+        }
+
+        const getAvg = (id) => {
+          const stat = statsMap.get(id);
+          return stat && stat.count > 0 ? stat.sum / stat.count : 0;
+        };
+        const getCount = (id) => {
+          const stat = statsMap.get(id);
+          return stat ? stat.count : 0;
+        };
+
+        switch (sortMode) {
+          case 'rating-desc':
+            filtered.sort((a, b) => getAvg(b.id) - getAvg(a.id));
+            break;
+          case 'rating-asc':
+            filtered.sort((a, b) => getAvg(a.id) - getAvg(b.id));
+            break;
+          case 'reviews':
+            filtered.sort((a, b) => getCount(b.id) - getCount(a.id));
+            break;
+        }
+      } else {
+        filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
       }
 
       return filtered;
