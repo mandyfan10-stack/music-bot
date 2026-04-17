@@ -1,0 +1,12 @@
+{
+  "name": "testing-improvement",
+  "version": "1.0.0",
+  "description": "Testing gap for getCriteriaAverage",
+  "main": "index.html",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}
