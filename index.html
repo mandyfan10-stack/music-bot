@@ -538,6 +538,12 @@
       return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
+    // Вспомогательная функция для очистки имени пользователя
+    function cleanUsername(username) {
+      if (!username) return '';
+      return username.replace(/^@/, '').toLowerCase();
+    }
+
     function getCriteriaAverage(criteria = {}) {
       const values = criteriaConfig.map(({ key }) => typeof criteria[key] === 'number' ? criteria[key] : 5);
       return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
@@ -900,7 +906,7 @@
 
         const isMe = profileUsername === user.username;
         // Проверяем, является ли этот пользователь админом (из серверного списка)
-        const profileCleanName = profileUsername.replace(/^@/, '').toLowerCase();
+        const profileCleanName = cleanUsername(profileUsername);
         const isProfileAdmin = adminUsernames.includes(profileCleanName);
         let role = isProfileAdmin ? 'Создатель' : 'Пользователь';
 
@@ -913,7 +919,7 @@
         }
 
         // Проверяем блокировку профиля
-        const profileCleanUsername = profileUsername.replace(/^@/, '').toLowerCase();
+        const profileCleanUsername = cleanUsername(profileUsername);
         const isProfileBlocked = blockedUsers.includes(profileCleanUsername);
         if (isProfileBlocked) {
             pRole.innerText = 'Заблокирован';
@@ -955,7 +961,7 @@
           revContainer.innerHTML = `<div class="text-center py-6 text-[13px] text-gray-500">${isMe ? 'Вы еще не написали' : 'Пользователь еще не написал'} ни одной рецензии</div>`;
         }
 
-        const safeName = profileUsername.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
+        const safeName = cleanUsername(profileUsername).substring(0, 2).toUpperCase() || 'XX';
         document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
 
         openModal('modal-profile');
@@ -966,7 +972,7 @@
     // --- АДМИН-ФУНКЦИИ: блокировка и удаление ---
     async function toggleBlockUser() {
       if (!activeProfileUsername || !user.isAdmin) return;
-      const cleanName = activeProfileUsername.replace(/^@/, '').toLowerCase();
+      const cleanName = cleanUsername(activeProfileUsername);
       const isCurrentlyBlocked = blockedUsers.includes(cleanName);
       try {
         const res = await fetch(`${BACKEND_URL}/api/block`, {
@@ -987,7 +993,7 @@
 
     async function deleteAllReviewsByUser() {
       if (!activeProfileUsername || !user.isAdmin) return;
-      const cleanName = activeProfileUsername.replace(/^@/, '').toLowerCase();
+      const cleanName = cleanUsername(activeProfileUsername);
       if (!confirm(`Удалить ВСЕ рецензии @${cleanName}?`)) return;
       try {
         const res = await fetch(`${BACKEND_URL}/api/reviews/by-author/${encodeURIComponent(cleanName)}`, {
@@ -995,7 +1001,7 @@
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
-        reviews = reviews.filter(r => (r.authorUsername || r.author.replace('@','').toLowerCase()) !== cleanName);
+        reviews = reviews.filter(r => (r.authorUsername || cleanUsername(r.author)) !== cleanName);
         showToast(`Удалено ${data.deleted} рецензий`);
         openProfileModal(activeProfileUsername);
       } catch(e) { showToast('Ошибка: ' + e.message); }
