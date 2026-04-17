@@ -935,8 +935,9 @@
 
         const revContainer = document.getElementById('profile-user-reviews');
         if (userReviews.length > 0) {
+          const releasesMap = new Map(releases.map(release => [release.id, release]));
           revContainer.innerHTML = userReviews.map(r => {
-            const rel = releases.find(release => release.id === r.relId);
+            const rel = releasesMap.get(r.relId);
             const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
             const canDelete = (isMe && r.author === user.username) || user.isAdmin;
             return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${r.relId}')">
