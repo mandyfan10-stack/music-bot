@@ -747,13 +747,19 @@
         case 'rating-asc':
           filtered.sort((a, b) => getAvgRating(a.id) - getAvgRating(b.id));
           break;
-        case 'reviews':
+        case 'reviews': {
+          const reviewCounts = {};
+          for (let i = 0; i < reviews.length; i++) {
+            const relId = reviews[i].relId;
+            reviewCounts[relId] = (reviewCounts[relId] || 0) + 1;
+          }
           filtered.sort((a, b) => {
-            const countA = reviews.filter(r => r.relId === a.id).length;
-            const countB = reviews.filter(r => r.relId === b.id).length;
+            const countA = reviewCounts[a.id] || 0;
+            const countB = reviewCounts[b.id] || 0;
             return countB - countA;
           });
           break;
+        }
         default: // 'new'
           filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
       }
