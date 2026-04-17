@@ -890,73 +890,85 @@
       }, 450);
     }
 
+    function renderProfileRole(profileUsername) {
+      const pRole = document.getElementById('profile-role');
+      const profileCleanName = profileUsername.replace(/^@/, '').toLowerCase();
+
+      const isProfileAdmin = adminUsernames.includes(profileCleanName);
+      pRole.innerText = isProfileAdmin ? 'Создатель' : 'Пользователь';
+      if (isProfileAdmin) {
+          pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
+      } else {
+          pRole.className = "px-3 py-1 bg-white/10 border border-white/20 text-white rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
+      }
+
+      const isProfileBlocked = blockedUsers.includes(profileCleanName);
+      if (isProfileBlocked) {
+          pRole.innerText = 'Заблокирован';
+          pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
+      }
+      return isProfileBlocked;
+    }
+
+    function renderProfileAdminActions(isMe, isProfileBlocked) {
+      const adminActions = document.getElementById('profile-admin-actions');
+      if (user.isAdmin && !isMe) {
+          adminActions.classList.remove('hidden');
+          const blockBtn = document.getElementById('profile-block-text');
+          blockBtn.innerText = isProfileBlocked ? 'Разблокировать' : 'Заблокировать';
+      } else {
+          adminActions.classList.add('hidden');
+      }
+    }
+
+    function renderProfileReviews(userReviews, isMe) {
+      const revContainer = document.getElementById('profile-user-reviews');
+      if (userReviews.length > 0) {
+        revContainer.innerHTML = userReviews.map(r => {
+          const rel = releases.find(release => release.id === r.relId);
+          const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
+          const canDelete = (isMe && r.author === user.username) || user.isAdmin;
+          return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${r.relId}')">
+            <div class="flex justify-between items-center mb-2 gap-2">
+              <span class="text-[13px] font-bold text-gray-300 truncate pr-2">${relName}</span>
+              <div class="flex items-center gap-2 shrink-0">
+                <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px]">${r.rating}</div>
+                ${canDelete ? `<button onclick="openConfirmReviewDelete('${r.id}', '${r.relId}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}
+              </div>
+            </div>
+            <p class="text-[13px] text-gray-200 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
+            <span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}</span>
+          </div>`;
+        }).join('');
+      } else {
+        revContainer.innerHTML = `<div class="text-center py-6 text-[13px] text-gray-500">${isMe ? 'Вы еще не написали' : 'Пользователь еще не написал'} ни одной рецензии</div>`;
+      }
+    }
+
+    function renderProfileAvatar(profileUsername) {
+      const safeName = profileUsername.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
+      document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
+    }
+
     function openProfileModal(targetUser = null) {
       activeProfileUsername = typeof targetUser === 'string' ? targetUser : user.username;
       const profileUsername = activeProfileUsername;
       const nameEl = document.getElementById('profile-name');
+
       if(nameEl) {
-        const userReviews = reviews.filter(r => r.author === profileUsername);
         nameEl.innerText = escapeHtml(profileUsername);
 
         const isMe = profileUsername === user.username;
-        // Проверяем, является ли этот пользователь админом (из серверного списка)
-        const profileCleanName = profileUsername.replace(/^@/, '').toLowerCase();
-        const isProfileAdmin = adminUsernames.includes(profileCleanName);
-        let role = isProfileAdmin ? 'Создатель' : 'Пользователь';
+        const userReviews = reviews.filter(r => r.author === profileUsername);
 
-        const pRole = document.getElementById('profile-role');
-        pRole.innerText = role;
-        if (isProfileAdmin) {
-            pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
-        } else {
-            pRole.className = "px-3 py-1 bg-white/10 border border-white/20 text-white rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
-        }
-
-        // Проверяем блокировку профиля
-        const profileCleanUsername = profileUsername.replace(/^@/, '').toLowerCase();
-        const isProfileBlocked = blockedUsers.includes(profileCleanUsername);
-        if (isProfileBlocked) {
-            pRole.innerText = 'Заблокирован';
-            pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
-        }
+        const isProfileBlocked = renderProfileRole(profileUsername);
 
         document.getElementById('profile-reviews-count').innerText = userReviews.length;
         document.getElementById('profile-likes-count').innerText = isMe ? likedSet.size : '?';
 
-        // Админ-функции: блокировка + удаление всех рецензий
-        const adminActions = document.getElementById('profile-admin-actions');
-        if (user.isAdmin && !isMe) {
-            adminActions.classList.remove('hidden');
-            const blockBtn = document.getElementById('profile-block-text');
-            blockBtn.innerText = isProfileBlocked ? 'Разблокировать' : 'Заблокировать';
-        } else {
-            adminActions.classList.add('hidden');
-        }
-
-        const revContainer = document.getElementById('profile-user-reviews');
-        if (userReviews.length > 0) {
-          revContainer.innerHTML = userReviews.map(r => {
-            const rel = releases.find(release => release.id === r.relId);
-            const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
-            const canDelete = (isMe && r.author === user.username) || user.isAdmin;
-            return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${r.relId}')">
-              <div class="flex justify-between items-center mb-2 gap-2">
-                <span class="text-[13px] font-bold text-gray-300 truncate pr-2">${relName}</span>
-                <div class="flex items-center gap-2 shrink-0">
-                  <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px]">${r.rating}</div>
-                  ${canDelete ? `<button onclick="openConfirmReviewDelete('${r.id}', '${r.relId}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}
-                </div>
-              </div>
-              <p class="text-[13px] text-gray-200 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
-              <span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}</span>
-            </div>`;
-          }).join('');
-        } else {
-          revContainer.innerHTML = `<div class="text-center py-6 text-[13px] text-gray-500">${isMe ? 'Вы еще не написали' : 'Пользователь еще не написал'} ни одной рецензии</div>`;
-        }
-
-        const safeName = profileUsername.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
-        document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
+        renderProfileAdminActions(isMe, isProfileBlocked);
+        renderProfileReviews(userReviews, isMe);
+        renderProfileAvatar(profileUsername);
 
         openModal('modal-profile');
         lucide.createIcons();
