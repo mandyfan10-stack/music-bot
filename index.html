@@ -1313,7 +1313,18 @@
 
       document.getElementById('rel-title').innerText = rel.name;
       document.getElementById('rel-artist').innerText = rel.artist;
-      document.getElementById('rel-play-btn').onclick = () => window.open(rel.link, '_blank');
+      document.getElementById('rel-play-btn').onclick = () => {
+        try {
+          const url = new URL(rel.link);
+          if (url.protocol === 'http:' || url.protocol === 'https:') {
+            window.open(url.href, '_blank');
+          } else {
+            console.error('Blocked potentially unsafe URL:', rel.link);
+          }
+        } catch (e) {
+          console.error('Invalid URL:', rel.link);
+        }
+      };
 
       existingReviewForActiveRelease = getExistingReviewForRelease(id);
       reviewPublishBlocked = !!existingReviewForActiveRelease;
