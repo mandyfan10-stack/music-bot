@@ -520,16 +520,24 @@
 
     document.getElementById('user-name').innerText = user.username;
 
-    let releases = [], likedSet = new Set(), reviews = [], reviewsByRelId = new Map(), activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let releases = [], likedSet = new Set(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
 
     function updateReviewsMap() {
       reviewsByRelId.clear();
+      avgRatingByRelId.clear();
       reviews.forEach(r => {
         if (!reviewsByRelId.has(r.relId)) {
           reviewsByRelId.set(r.relId, []);
         }
         reviewsByRelId.get(r.relId).push(r);
       });
+      // ⚡ Bolt: Precalculate average ratings to avoid O(N) recalculations during render/sort loops
+      for (const [relId, rvs] of reviewsByRelId.entries()) {
+        if (rvs.length > 0) {
+          const avg = rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length;
+          avgRatingByRelId.set(relId, avg);
+        }
+      }
     }
     let pendingReviewDelete = null;
     let pendingReviewTargetReleaseId = null;
@@ -764,9 +772,8 @@
     }
 
     function getAvgRating(releaseId) {
-      const rvs = reviewsByRelId.get(releaseId) || [];
-      if (rvs.length === 0) return 0;
-      return rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length;
+      // ⚡ Bolt: O(1) lookup for precalculated average rating
+      return avgRatingByRelId.get(releaseId) || 0;
     }
 
     function getFilteredReleases() {
@@ -1300,8 +1307,9 @@
       const fb = getFallbackImg(r.name);
       const delay = index * 50;
       // Средний рейтинг релиза
-      const relReviews = reviewsByRelId.get(r.id) || [];
-      const avgRating = relReviews.length > 0 ? (relReviews.reduce((s, rv) => s + (rv.rating || 0), 0) / relReviews.length).toFixed(1) : null;
+      // ⚡ Bolt: O(1) lookup for precalculated average rating instead of inline reduce
+      const rawAvg = avgRatingByRelId.get(r.id);
+      const avgRating = rawAvg !== undefined ? rawAvg.toFixed(1) : null;
       const ratingBadge = avgRating ? `<div class="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
       return `<div onclick="openRelease('${escapeJsHtml(r.id)}')" class="card-enter flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative" style="animation-delay: ${delay}ms">
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
