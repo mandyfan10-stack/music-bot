@@ -520,7 +520,17 @@
 
     document.getElementById('user-name').innerText = user.username;
 
-    let releases = [], likedSet = new Set(), reviews = [], activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let releases = [], likedSet = new Set(), reviews = [], reviewsByRelId = new Map(), activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+
+    function updateReviewsMap() {
+      reviewsByRelId.clear();
+      reviews.forEach(r => {
+        if (!reviewsByRelId.has(r.relId)) {
+          reviewsByRelId.set(r.relId, []);
+        }
+        reviewsByRelId.get(r.relId).push(r);
+      });
+    }
     let pendingReviewDelete = null;
     let pendingReviewTargetReleaseId = null;
     let reviewDeleteMode = false;
@@ -532,6 +542,11 @@
     const REVIEW_MIN_LENGTH = 30;
     const REVIEW_MAX_LENGTH = 3000;
 
+    function cleanUsername(username) {
+      if (!username) return '';
+      return String(username).replace(/^@/, '').toLowerCase();
+    }
+
     // --- XSS-защита: экранирование HTML в пользовательских данных ---
     function escapeHtml(str) {
       if (!str) return '';
@@ -541,6 +556,24 @@
     function escapeJs(str) {
       if (!str) return '';
       return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+
+    function escapeJsHtml(str) {
+      return escapeHtml(escapeJs(str));
+    }
+
+    function openSafeUrl(urlStr) {
+      if (!urlStr) return;
+      try {
+        const url = new URL(urlStr);
+        if (url.protocol === 'http:' || url.protocol === 'https:') {
+          window.open(url.href, '_blank');
+        } else {
+          console.warn('Небезопасный URL:', urlStr);
+        }
+      } catch (e) {
+        console.warn('Некорректный URL:', urlStr);
+      }
     }
 
     function getCriteriaAverage(criteria = {}) {
@@ -731,7 +764,7 @@
     }
 
     function getAvgRating(releaseId) {
-      const rvs = reviews.filter(r => r.relId === releaseId);
+      const rvs = reviewsByRelId.get(releaseId) || [];
       if (rvs.length === 0) return 0;
       return rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length;
     }
@@ -754,8 +787,8 @@
           break;
         case 'reviews':
           filtered.sort((a, b) => {
-            const countA = reviews.filter(r => r.relId === a.id).length;
-            const countB = reviews.filter(r => r.relId === b.id).length;
+            const countA = (reviewsByRelId.get(a.id) || []).length;
+            const countB = (reviewsByRelId.get(b.id) || []).length;
             return countB - countA;
           });
           break;
@@ -905,7 +938,7 @@
 
         const isMe = profileUsername === user.username;
         // Проверяем, является ли этот пользователь админом (из серверного списка)
-        const profileCleanName = profileUsername.replace(/^@/, '').toLowerCase();
+        const profileCleanName = cleanUsername(profileUsername);
         const isProfileAdmin = adminUsernames.includes(profileCleanName);
         let role = isProfileAdmin ? 'Создатель' : 'Пользователь';
 
@@ -918,8 +951,7 @@
         }
 
         // Проверяем блокировку профиля
-        const profileCleanUsername = profileUsername.replace(/^@/, '').toLowerCase();
-        const isProfileBlocked = blockedUsers.includes(profileCleanUsername);
+        const isProfileBlocked = blockedUsers.includes(profileCleanName);
         if (isProfileBlocked) {
             pRole.innerText = 'Заблокирован';
             pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
@@ -944,12 +976,12 @@
             const rel = releases.find(release => release.id === r.relId);
             const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
             const canDelete = (isMe && r.author === user.username) || user.isAdmin;
-            return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${escapeHtml(escapeJs(r.relId))}')">
+            return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${escapeJsHtml(r.relId)}')">
               <div class="flex justify-between items-center mb-2 gap-2">
                 <span class="text-[13px] font-bold text-gray-300 truncate pr-2">${relName}</span>
                 <div class="flex items-center gap-2 shrink-0">
                   <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px]">${r.rating}</div>
-                  ${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeHtml(escapeJs(r.id))}', '${escapeHtml(escapeJs(r.relId))}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}
+                  ${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeJsHtml(r.id)}', '${escapeJsHtml(r.relId)}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}
                 </div>
               </div>
               <p class="text-[13px] text-gray-200 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
@@ -961,7 +993,7 @@
         }
 
         const safeName = profileUsername.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
-        document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
+        document.getElementById('profile-avatar').src = escapeHtml(`https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`);
 
         openModal('modal-profile');
         lucide.createIcons();
@@ -971,7 +1003,7 @@
     // --- АДМИН-ФУНКЦИИ: блокировка и удаление ---
     async function toggleBlockUser() {
       if (!activeProfileUsername || !user.isAdmin) return;
-      const cleanName = activeProfileUsername.replace(/^@/, '').toLowerCase();
+      const cleanName = cleanUsername(activeProfileUsername);
       const isCurrentlyBlocked = blockedUsers.includes(cleanName);
       try {
         const res = await fetch(`${BACKEND_URL}/api/block`, {
@@ -992,7 +1024,7 @@
 
     async function deleteAllReviewsByUser() {
       if (!activeProfileUsername || !user.isAdmin) return;
-      const cleanName = activeProfileUsername.replace(/^@/, '').toLowerCase();
+      const cleanName = cleanUsername(activeProfileUsername);
       if (!confirm(`Удалить ВСЕ рецензии @${cleanName}?`)) return;
       try {
         const res = await fetch(`${BACKEND_URL}/api/reviews/by-author/${encodeURIComponent(cleanName)}`, {
@@ -1000,7 +1032,8 @@
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
-        reviews = reviews.filter(r => (r.authorUsername || r.author.replace('@','').toLowerCase()) !== cleanName);
+        reviews = reviews.filter(r => cleanUsername(r.authorUsername || r.author) !== cleanName);
+        updateReviewsMap();
         showToast(`Удалено ${data.deleted} рецензий`);
         openProfileModal(activeProfileUsername);
       } catch(e) { showToast('Ошибка: ' + e.message); }
@@ -1034,6 +1067,7 @@
     function applyData(data) {
       releases = data.releases || [];
       reviews = data.reviews || [];
+      updateReviewsMap();
       likedSet = new Set(data.likes || []);
       blockedUsers = data.blockedUsers || [];
       adminUsernames = data.adminUsernames || [];
@@ -1266,14 +1300,14 @@
       const fb = getFallbackImg(r.name);
       const delay = index * 50;
       // Средний рейтинг релиза
-      const relReviews = reviews.filter(rv => rv.relId === r.id);
+      const relReviews = reviewsByRelId.get(r.id) || [];
       const avgRating = relReviews.length > 0 ? (relReviews.reduce((s, rv) => s + (rv.rating || 0), 0) / relReviews.length).toFixed(1) : null;
       const ratingBadge = avgRating ? `<div class="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
-      return `<div onclick="openRelease('${escapeHtml(escapeJs(r.id))}')" class="card-enter flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative" style="animation-delay: ${delay}ms">
+      return `<div onclick="openRelease('${escapeJsHtml(r.id)}')" class="card-enter flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative" style="animation-delay: ${delay}ms">
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
-            <img src="${r.img || fb}" onerror="this.src='${fb}'" class="w-full h-full object-cover">
+            <img src="${escapeHtml(r.img) || fb}" onerror="this.src='${fb}'" class="w-full h-full object-cover">
             ${ratingBadge}
-          <button onclick="toggleLikeAPI(event, '${escapeHtml(escapeJs(r.id))}')" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
+          <button onclick="toggleLikeAPI(event, '${escapeJsHtml(r.id)}')" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
               <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-red-500 text-red-500':'text-white'}"></i>
             </button>
           </div>
@@ -1318,7 +1352,7 @@
 
       document.getElementById('rel-title').innerText = rel.name;
       document.getElementById('rel-artist').innerText = rel.artist;
-      document.getElementById('rel-play-btn').onclick = () => window.open(rel.link, '_blank');
+      document.getElementById('rel-play-btn').onclick = () => openSafeUrl(rel.link);
 
       existingReviewForActiveRelease = getExistingReviewForRelease(id);
       reviewPublishBlocked = !!existingReviewForActiveRelease;
@@ -1372,6 +1406,7 @@
       }
 
       reviews = reviews.filter(r => r.id !== pendingReviewDelete);
+      updateReviewsMap();
       if (activeReleaseId && pendingReviewTargetReleaseId === activeReleaseId) {
         renderReviews();
       }
@@ -1410,6 +1445,7 @@
       releases = releases.filter(r => r.id !== releaseToDelete);
       if (likedSet.has(releaseToDelete)) likedSet.delete(releaseToDelete);
       reviews = reviews.filter(r => r.relId !== releaseToDelete);
+      updateReviewsMap();
       
       renderReleases();
       if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
@@ -1455,6 +1491,7 @@
       }
 
       reviews.unshift(newRev);
+      updateReviewsMap();
       existingReviewForActiveRelease = newRev;
       reviewPublishBlocked = true;
       document.getElementById('rev-text').value = '';
@@ -1469,14 +1506,14 @@
     }
 
     function renderReviews() {
-      const container = document.getElementById('reviews-container'); const relReviews = reviews.filter(r => r.relId === activeReleaseId);
+      const container = document.getElementById('reviews-container'); const relReviews = reviewsByRelId.get(activeReleaseId) || [];
       activeReleaseReviews = relReviews;
       container.innerHTML = relReviews.map((r, i) => {
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
         const criteria = r.criteria ? ` · ${formatCriteria(r.criteria)}` : '';
         const canDelete = r.author === user.username || user.isAdmin;
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
-          <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${escapeHtml(escapeJs(r.author))}')">${escapeHtml(r.author)}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeHtml(escapeJs(r.id))}', '${escapeHtml(escapeJs(r.relId))}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
+          <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${escapeJsHtml(r.author)}')">${escapeHtml(r.author)}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeJsHtml(r.id)}', '${escapeJsHtml(r.relId)}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${objective}</span></div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
       lucide.createIcons();
