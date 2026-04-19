@@ -565,7 +565,7 @@
       try {
         const url = new URL(urlStr);
         if (url.protocol === 'http:' || url.protocol === 'https:') {
-          window.open(url.href, '_blank');
+          window.open(url.href, '_blank', 'noopener,noreferrer');
         } else {
           console.warn('Небезопасный URL:', urlStr);
         }
