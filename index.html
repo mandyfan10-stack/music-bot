@@ -857,16 +857,13 @@
       if(current) current.classList.remove('fade-in');
       void document.body.offsetWidth; 
       
-      document.getElementById('screen-home').classList.add('hidden');
-      document.getElementById('screen-likes').classList.add('hidden');
-      document.getElementById('screen-settings').classList.add('hidden');
-      document.getElementById('screen-loading').classList.add('hidden');
+      document.querySelectorAll('main > div[id^="screen-"]').forEach(screen => screen.classList.add('hidden'));
       
       next.classList.remove('hidden');
       next.classList.add('fade-in');
 
-      ['home', 'likes', 'settings'].forEach(id => {
-        const btn = document.getElementById('tab-' + id);
+      document.querySelectorAll('nav > button[id^="tab-"]').forEach(btn => {
+        const id = btn.id.replace('tab-', '');
         const icon = btn.querySelector('svg') || btn.querySelector('i');
         if (id === tabId) { 
           btn.className = `flex flex-col items-center gap-1 text-red-500 btn-press transition-colors`; 
