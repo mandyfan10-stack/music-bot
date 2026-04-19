@@ -708,7 +708,8 @@
       if (activeGenreFilter) {
         badge.classList.remove('hidden');
         document.getElementById('active-genre-name').innerText = activeGenreFilter;
-        const count = releases.filter(r => (r.genre || 'Другое') === activeGenreFilter).length;
+        // ⚡ Bolt: Replace O(N) array filtering with O(1) dictionary lookup
+        const count = genreCounts[activeGenreFilter] || 0;
         document.getElementById('active-genre-count').innerText = `${count} релиз${count === 1 ? '' : count > 1 && count < 5 ? 'а' : 'ов'}`;
         lucide.createIcons();
       } else {
@@ -1290,9 +1291,9 @@
       const isLiked = likedSet.has(r.id);
       const fb = getFallbackImg(r.name);
       const delay = index * 50;
-      // Средний рейтинг релиза
-      const relReviews = reviewsByRelId.get(r.id) || [];
-      const avgRating = relReviews.length > 0 ? (relReviews.reduce((s, rv) => s + (rv.rating || 0), 0) / relReviews.length).toFixed(1) : null;
+      // ⚡ Bolt: Replace O(N) .reduce() array scan inside render loop with O(1) map lookup
+      const cachedAvg = avgRatingByRelId.get(r.id);
+      const avgRating = cachedAvg ? cachedAvg.toFixed(1) : null;
       const ratingBadge = avgRating ? `<div class="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
       return `<div onclick="openRelease('${escapeJsHtml(r.id)}')" class="card-enter flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative" style="animation-delay: ${delay}ms">
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
