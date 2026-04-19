@@ -521,7 +521,15 @@
 
     document.getElementById('user-name').innerText = user.username;
 
-    let releases = [], likedSet = new Set(), reviews = [], reviewsByRelId = new Map(), activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let releases = [], likedSet = new Set(), reviews = [], reviewsByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+
+    function updateGenreCounts() {
+      genreCounts = {};
+      releases.forEach(r => {
+        const g = r.genre || 'Другое';
+        genreCounts[g] = (genreCounts[g] || 0) + 1;
+      });
+    }
 
     function updateReviewsMap() {
       reviewsByRelId.clear();
@@ -618,13 +626,6 @@
     function renderGenreDropdown(query) {
       const list = document.getElementById('genre-dropdown-list');
       const low = query.toLowerCase();
-
-      // Считаем релизы по каждому жанру
-      const genreCounts = {};
-      releases.forEach(r => {
-        const g = r.genre || 'Другое';
-        genreCounts[g] = (genreCounts[g] || 0) + 1;
-      });
 
       // Фильтруем жанры
       let matched = GENRES.filter(g => {
@@ -1030,6 +1031,7 @@
       releases = data.releases || [];
       reviews = data.reviews || [];
       updateReviewsMap();
+      updateGenreCounts();
       likedSet = new Set(data.likes || []);
       blockedUsers = data.blockedUsers || [];
       adminUsernames = data.adminUsernames || [];
@@ -1229,6 +1231,7 @@
       }
       
       releases.unshift(newRel);
+      updateGenreCounts();
       renderReleases(); closeModal('modal-add'); showToast('Релиз сохранен!');
       document.getElementById('manual-artist').value = ''; document.getElementById('manual-title').value = '';
     }
@@ -1408,6 +1411,7 @@
       if (likedSet.has(releaseToDelete)) likedSet.delete(releaseToDelete);
       reviews = reviews.filter(r => r.relId !== releaseToDelete);
       updateReviewsMap();
+      updateGenreCounts();
       
       renderReleases();
       if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
