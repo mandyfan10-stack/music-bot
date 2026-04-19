@@ -26,3 +26,10 @@ test('cleanUsername: should only remove the first @ if it is at the start', () =
   assert.strictEqual(cleanUsername('user@domain'), 'user@domain');
   assert.strictEqual(cleanUsername('@@user'), '@user');
 });
+
+const { escapeHtml } = require('../src/utils.js');
+
+test('escapeHtml: should escape HTML special characters', () => {
+    assert.strictEqual(escapeHtml('10/10/10<script>alert(1)</script>'), '10/10/10&lt;script&gt;alert(1)&lt;/script&gt;');
+    assert.strictEqual(escapeHtml('10/10/"onclick="alert(1)"'), '10/10/&quot;onclick=&quot;alert(1)&quot;');
+});

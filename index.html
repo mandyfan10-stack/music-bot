@@ -1499,7 +1499,7 @@
       activeReleaseReviews = relReviews;
       container.innerHTML = relReviews.map((r, i) => {
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
-        const criteria = r.criteria ? ` · ${formatCriteria(r.criteria)}` : '';
+        const criteria = r.criteria ? ` · ${escapeHtml(formatCriteria(r.criteria))}` : \'\';
         const canDelete = r.author === user.username || user.isAdmin;
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
           <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${escapeJsHtml(r.author)}')">${escapeHtml(r.author)}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeJsHtml(r.id)}', '${escapeJsHtml(r.relId)}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
