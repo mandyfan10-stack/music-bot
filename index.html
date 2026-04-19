@@ -457,6 +457,7 @@
     tg.expand();
 
     const BACKEND_URL = "https://music-backend-qjvk.onrender.com";
+    const EMPTY_STATE_HTML = `<div class="w-full text-center py-20 opacity-50 text-sm">Список пуст</div>`;
 
     // Telegram initData — подписанная строка для серверной проверки
     const tgInitData = tg.initData || '';
@@ -1327,7 +1328,7 @@
 
     function renderLikes() {
       const grid = document.getElementById('likes-grid'); const likedArr = releases.filter(r => likedSet.has(r.id));
-      grid.innerHTML = likedArr.length ? likedArr.map((r, i) => renderReleaseCard(r, i)).join('') : `<div class="w-full text-center py-20 opacity-50 text-sm">Список пуст</div>`;
+      grid.innerHTML = likedArr.length ? likedArr.map((r, i) => renderReleaseCard(r, i)).join('') : EMPTY_STATE_HTML;
       lucide.createIcons();
     }
 
