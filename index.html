@@ -522,7 +522,7 @@
 
     document.getElementById('user-name').innerText = user.username;
 
-    let releases = [], likedSet = new Set(), reviews = [], reviewsByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let releases = [], likedSet = new Set(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
 
     function updateGenreCounts() {
       genreCounts = {};
@@ -534,11 +534,19 @@
 
     function updateReviewsMap() {
       reviewsByRelId.clear();
+      avgRatingByRelId.clear();
       reviews.forEach(r => {
         if (!reviewsByRelId.has(r.relId)) {
           reviewsByRelId.set(r.relId, []);
         }
         reviewsByRelId.get(r.relId).push(r);
+      });
+      reviewsByRelId.forEach((rvs, relId) => {
+        let avg = 0;
+        if (rvs.length > 0) {
+          avg = rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length;
+        }
+        avgRatingByRelId.set(relId, avg);
       });
     }
     let pendingReviewDelete = null;
@@ -747,9 +755,7 @@
     }
 
     function getAvgRating(releaseId) {
-      const rvs = reviewsByRelId.get(releaseId) || [];
-      if (rvs.length === 0) return 0;
-      return rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length;
+      return avgRatingByRelId.get(releaseId) || 0;
     }
 
     function getFilteredReleases() {
@@ -1496,7 +1502,7 @@
       activeReleaseReviews = relReviews;
       container.innerHTML = relReviews.map((r, i) => {
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
-        const criteria = r.criteria ? ` · ${escapeHtml(formatCriteria(r.criteria))}` : \'\';
+        const criteria = r.criteria ? ` · ${escapeHtml(formatCriteria(r.criteria))}` : '';
         const canDelete = r.author === user.username || user.isAdmin;
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
           <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${escapeJsHtml(r.author)}')">${escapeHtml(r.author)}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeJsHtml(r.id)}', '${escapeJsHtml(r.relId)}'); event.stopPropagation();" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
