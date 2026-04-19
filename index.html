@@ -111,44 +111,6 @@
     /* ========================================= */
     /* СВЕТЛАЯ ТЕМА (Полная инверсия стилей)     */
     /* ========================================= */
-    body.light-theme { --bg-color: #f2f2f7; color: #000; }
-    
-    body.light-theme .text-white { color: #000 !important; }
-    body.light-theme .bg-red-600 { color: #fff !important; }
-    body.light-theme .bg-red-600 .text-white { color: #fff !important; }
-    body.light-theme .bg-gradient-to-br .text-white,
-    body.light-theme .bg-gradient-to-br .text-gray-300 { color: #fff !important; }
-    
-    body.light-theme .text-gray-200 { color: #1c1c1e !important; }
-    body.light-theme .text-gray-300 { color: #3a3a3c !important; }
-    body.light-theme .text-gray-400 { color: #8e8e93 !important; }
-    body.light-theme .text-gray-500 { color: #8e8e93 !important; }
-    body.light-theme .text-amber-400 { color: #d97706 !important; }
-    
-    body.light-theme .glass { background: rgba(255, 255, 255, 0.85); border-color: rgba(0, 0, 0, 0.08); box-shadow: 0 4px 24px rgba(0,0,0,0.04); }
-    body.light-theme .glass-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); color: #000; }
-    body.light-theme .glass-input::placeholder { color: #8e8e93; }
-    
-    body.light-theme .bg-white\/5 { background-color: rgba(0,0,0,0.04) !important; }
-    body.light-theme .bg-white\/10 { background-color: rgba(0,0,0,0.08) !important; }
-    body.light-theme .border-white\/10 { border-color: rgba(0,0,0,0.08) !important; }
-    body.light-theme .border-white\/5 { border-color: rgba(0,0,0,0.04) !important; }
-    
-    body.light-theme .bg-\[\#1c1c1e\] { background-color: #fff !important; border-color: rgba(0,0,0,0.08) !important; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
-    body.light-theme .bg-black\/20 { background-color: rgba(0,0,0,0.05) !important; }
-    
-    body.light-theme .bg-black\/40 { background-color: rgba(255,255,255,0.9) !important; box-shadow: 0 2px 10px rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.05) !important; }
-    body.light-theme .bg-black\/40 i:not(.text-red-500) { stroke: #000; } 
-    
-    body.light-theme .bg-white.text-black { background-color: #000 !important; color: #fff !important; }
-    body.light-theme .bg-white.text-black i { fill: #fff !important; stroke: #fff !important; }
-    body.light-theme .fill-black { fill: #fff !important; }
-    
-    body.light-theme .rating-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #000; }
-    body.light-theme .rating-btn.active { background: #000; color: #fff; border-color: #000; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-    
-    body.light-theme .modal-overlay { background: rgba(0,0,0,0.25); }
-    body.light-theme #toast { background: rgba(255,255,255,0.95); color: #000; border-color: rgba(0,0,0,0.1); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
 
     /* Перенос длинных слов на мобильных */
     .modal-container, #reviews-container, #profile-user-reviews, #releases-grid, #likes-grid {
@@ -170,11 +132,6 @@
     #genre-dropdown button:active { background: rgba(239,68,68,0.1); }
     #genre-search::placeholder { color: rgba(156,163,175,0.6); }
 
-    body.light-theme .sort-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #374151; }
-    body.light-theme .sort-btn.active { background: black; color: white; border-color: black; }
-    body.light-theme #genre-search { color: #111; }
-    body.light-theme #genre-dropdown { background: rgba(255,255,255,0.95); }
-    body.light-theme #genre-dropdown button { color: #111; }
   </style>
 </head>
 <body class="antialiased h-screen flex flex-col">
@@ -293,13 +250,7 @@
         <div class="p-2.5 bg-red-500/10 text-red-500 rounded-2xl"><i data-lucide="settings" class="w-6 h-6"></i></div>
         <h2 class="text-2xl font-semibold tracking-tight text-white">Настройки</h2>
       </div>
-      <div class="glass border border-white/5 p-6 rounded-[2rem]">
-        <h3 class="text-[14px] font-medium text-gray-200 mb-4">Тема оформления</h3>
-        <div class="flex justify-start gap-4" id="theme-selector">
-          <button onclick="changeTheme('#000000', this)" class="theme-btn btn-press w-12 h-12 rounded-full bg-[#000000] border-2 border-white scale-110 shadow-inner flex items-center justify-center transition-all"><i data-lucide="check" class="w-6 h-6 text-white"></i></button>
-          <button onclick="changeTheme('#f2f2f7', this)" class="theme-btn btn-press w-12 h-12 rounded-full bg-[#f2f2f7] border-2 border-white/10 shadow-inner flex items-center justify-center transition-all"></button>
-        </div>
-      </div>
+
     </div>
   </main>
 
@@ -558,7 +509,6 @@
     let activeReleaseReviews = [];
     const REVIEW_MIN_LENGTH = 30;
     const REVIEW_MAX_LENGTH = 3000;
-
 
     function openSafeUrl(urlStr) {
       if (!urlStr) return;
@@ -1536,44 +1486,14 @@
       }
     }
 
-    function changeTheme(hex, btnRef) { 
-      document.documentElement.style.setProperty('--bg-color', hex); 
-      
-      const isLight = hex === '#f2f2f7';
-      if(isLight) document.body.classList.add('light-theme');
-      else document.body.classList.remove('light-theme');
 
-      // Сохраняем выбор темы
-      localStorage.setItem('xxii_theme', hex);
-
-      document.querySelectorAll('.theme-btn').forEach(btn => {
-        btn.classList.remove('border-white', 'border-black', 'scale-110');
-        btn.classList.add('border-white/10');
-        btn.innerHTML = ''; 
-      }); 
-
-      btnRef.classList.remove('border-white/10');
-      btnRef.classList.add('scale-110');
-      btnRef.classList.add(isLight ? 'border-black' : 'border-white');
-      
-      btnRef.innerHTML = `<i data-lucide="check" class="w-6 h-6 ${isLight ? 'text-black' : 'text-white'}"></i>`;
-      lucide.createIcons();
-    }
 
     lucide.createIcons();
     selectRating(10);
     resetReviewInputs();
     setSortMode('new');
 
-    // Восстановление темы из localStorage
-    (function restoreTheme() {
-      const saved = localStorage.getItem('xxii_theme');
-      if (saved && saved !== '#000000') {
-        const btns = document.querySelectorAll('.theme-btn');
-        const target = saved === '#f2f2f7' ? btns[1] : btns[0];
-        if (target) changeTheme(saved, target);
-      }
-    })();
+
 
     // Запуск синхронизации с БД Render
     fetchDB();
