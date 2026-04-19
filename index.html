@@ -1081,21 +1081,7 @@
         }
     }
 
-    // --- НОВАЯ УМНАЯ ЛОГИКА РАСПОЗНАВАНИЯ ---
-    async function handleAddRelease() {
-      const link = document.getElementById('input-link').value.trim();
-      if (!link) return showToast('Введите ссылку');
-      
-      const btnText = document.getElementById('btn-add-text');
-      btnText.innerText = 'Анализ ссылки...';
-
-      let parsedArtist = 'Артист'; 
-      let parsedName = 'Неизвестный релиз'; 
-      let parsedCover = '';
-      let isSuccess = false;
-
-      try {
-        // 1. СНАЧАЛА используем oEmbed (Идеально и безошибочно читает YouTube, Spotify и т.д.)
+    async function fetchOEmbedData(link) {
         const embedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(link)}`);
         const embedData = await embedRes.json();
         
@@ -1106,6 +1092,7 @@
             // Очищаем мусор из названия (Official Video, Audio и т.д.)
             title = title.replace(/(\(Official.*?\)|\[Official.*?\]|\(Lyric.*?\)|\[Lyric.*?\]|\(Audio\)|\[Audio\]|ft\..*?|feat\..*?)/gi, '').trim();
             
+            let parsedArtist, parsedName;
             if (title.includes(' - ')) {
                 const parts = title.split(' - ');
                 parsedArtist = parts[0].trim();
@@ -1115,28 +1102,67 @@
                 parsedName = title;
             }
             
-            parsedCover = embedData.thumbnail_url || '';
-            isSuccess = true;
-        } else {
-            throw new Error('noembed failed');
+            return { artist: parsedArtist, name: parsedName, cover: embedData.thumbnail_url || '' };
         }
+        throw new Error('noembed failed');
+    }
+
+    async function fetchBackendParseData(link) {
+        const res = await fetch(`${BACKEND_URL}/api/parse_link`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ link }) });
+        if (!res.ok) throw new Error('Backend Fail');
+        const data = await res.json();
+
+        if (data.name && data.name !== 'Релиз' && data.name !== 'YouTube') {
+            return { artist: data.artist, name: data.name, cover: data.img || '', genre: data.genre || null };
+        }
+        throw new Error('AI Parse Fail');
+    }
+
+    async function fetchItunesData(artist, name) {
+        const query = encodeURIComponent(`${artist} ${name}`).replace(/%20/g, '+');
+        const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=1`);
+        const itunesData = await itunesRes.json();
+
+        if (itunesData.results && itunesData.results.length > 0) {
+            const track = itunesData.results[0];
+            return {
+                cover: track.artworkUrl100.replace('100x100bb', '600x600bb'),
+                artist: track.artistName,
+                name: track.trackName
+            };
+        }
+        return null;
+    }
+
+    // --- НОВАЯ УМНАЯ ЛОГИКА РАСПОЗНАВАНИЯ ---
+    async function handleAddRelease() {
+      const link = document.getElementById('input-link').value.trim();
+      if (!link) return showToast('Введите ссылку');
+
+      const btnText = document.getElementById('btn-add-text');
+      btnText.innerText = 'Анализ ссылки...';
+
+      let parsedArtist = 'Артист';
+      let parsedName = 'Неизвестный релиз';
+      let parsedCover = '';
+      let isSuccess = false;
+
+      try {
+        // 1. СНАЧАЛА используем oEmbed (Идеально и безошибочно читает YouTube, Spotify и т.д.)
+        const data = await fetchOEmbedData(link);
+        parsedArtist = data.artist;
+        parsedName = data.name;
+        parsedCover = data.cover;
+        isSuccess = true;
       } catch(e) {
         // 2. Если oEmbed не помог (редкие сайты) - используем ИИ бэкенд
         try {
-            const res = await fetch(`${BACKEND_URL}/api/parse_link`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ link }) });
-            if (!res.ok) throw new Error('Backend Fail');
-            const data = await res.json();
-            
-            if (data.name && data.name !== 'Релиз' && data.name !== 'YouTube') {
-                parsedArtist = data.artist; 
-                parsedName = data.name; 
-                parsedCover = data.img || '';
-                // Жанр от бэкенда
-                if (data.genre) selectedGenreForAdd = data.genre;
-                isSuccess = true;
-            } else {
-                throw new Error('AI Parse Fail');
-            }
+            const data = await fetchBackendParseData(link);
+            parsedArtist = data.artist;
+            parsedName = data.name;
+            parsedCover = data.cover;
+            if (data.genre) selectedGenreForAdd = data.genre;
+            isSuccess = true;
         } catch (err) {
             // 3. Если всё сломалось - ФОЛЛБЕК НА РУЧНОЙ ВВОД
             document.getElementById('add-form-step-1').classList.add('hidden');
@@ -1154,15 +1180,12 @@
           // Пытаемся найти качественную квадратную обложку 1:1 в iTunes
           try {
               btnText.innerText = 'Поиск обложки...';
-              const query = encodeURIComponent(`${parsedArtist} ${parsedName}`).replace(/%20/g, '+');
-              const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=1`);
-              const itunesData = await itunesRes.json();
+              const itunesData = await fetchItunesData(parsedArtist, parsedName);
               
-              if (itunesData.results && itunesData.results.length > 0) {
-                  const track = itunesData.results[0];
-                  parsedCover = track.artworkUrl100.replace('100x100bb', '600x600bb');
-                  parsedArtist = track.artistName;
-                  parsedName = track.trackName;
+              if (itunesData) {
+                  parsedCover = itunesData.cover;
+                  parsedArtist = itunesData.artist;
+                  parsedName = itunesData.name;
               }
           } catch(e) {
               console.log("iTunes search error:", e);
