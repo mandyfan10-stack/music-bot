@@ -368,7 +368,7 @@
         <div class="bg-white/5 border border-white/10 rounded-[1.5rem] p-5">
            <div class="flex flex-wrap gap-2 justify-center mb-3" id="rating-buttons-container"></div>
            <div class="flex flex-wrap gap-2 justify-center mb-4" id="criteria-buttons-container"></div>
-           <textarea id="rev-text" placeholder="Мнение о саунде..." class="w-full h-24 bg-black/20 border border-white/5 rounded-xl outline-none p-3 text-[13px] text-white resize-none mb-4 transition-all focus:border-red-500/30"></textarea>
+           <textarea id="rev-text" aria-label="Текст рецензии" placeholder="Мнение о саунде..." class="w-full h-24 bg-black/20 border border-white/5 rounded-xl outline-none p-3 text-[13px] text-white resize-none mb-4 transition-all focus:border-red-500/30"></textarea>
            <button onclick="addReview()" class="btn-press w-full py-3 bg-white/10 text-white text-[13px] font-bold rounded-xl border border-white/10">Опубликовать</button>
         </div>
         <div id="reviews-container" class="mt-8 space-y-3"></div>
@@ -795,6 +795,7 @@
         btn.className = 'rating-btn btn-press';
         btn.id = `rate-${i}`;
         btn.innerText = i;
+        btn.setAttribute('aria-label', `Оценка ${i} из 10`);
         btn.onclick = () => selectRating(i);
         ratingContainer.appendChild(btn);
     }
@@ -820,10 +821,12 @@
       const minus = document.createElement('button');
       minus.className = 'rating-btn btn-press !w-7 !h-7 !rounded-full';
       minus.innerText = '−';
+      minus.setAttribute('aria-label', `Уменьшить оценку по критерию ${label}`);
       minus.onclick = () => setCriterion(key, -1);
       const plus = document.createElement('button');
       plus.className = 'rating-btn btn-press !w-7 !h-7 !rounded-full';
       plus.innerText = '+';
+      plus.setAttribute('aria-label', `Увеличить оценку по критерию ${label}`);
       plus.onclick = () => setCriterion(key, 1);
       wrap.appendChild(minus);
       wrap.appendChild(plus);
