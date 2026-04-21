@@ -1297,7 +1297,7 @@
       const ratingBadge = avgRating ? `<div class="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
       return `<div onclick="openRelease('${escapeJsHtml(r.id)}')" class="card-enter flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative" style="animation-delay: ${delay}ms">
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
-            <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" onerror="this.src='${fb}'" class="w-full h-full object-cover">
+            <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" onerror="this.src='${escapeJsHtml(fb)}'" class="w-full h-full object-cover">
             ${ratingBadge}
           <button onclick="toggleLikeAPI(event, '${escapeJsHtml(r.id)}')" aria-label="Нравится" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
               <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-red-500 text-red-500':'text-white'}"></i>
