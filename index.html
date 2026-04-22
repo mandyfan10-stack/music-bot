@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://music-backend-qjvk.onrender.com https://noembed.com https://itunes.apple.com https://ui-avatars.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>XXII SOUND - TG App</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@1.8.0" integrity="sha384-+8nbzwDAyu5kAjqtR/XKxIgPHQD2TflvbZgeDZn5t3JP+OOogNH1jXnfel8ZAgzS" crossorigin="anonymous"></script>
@@ -600,7 +602,7 @@
       if (!container) return;
       container.innerHTML = GENRES.map(g => {
         const active = selectedGenreForAdd === g;
-        return `<button type="button" onclick="selectGenreForAdd('${g}')" class="btn-press px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
+        return `<button type="button" onclick="selectGenreForAdd('${escapeJsHtml(g)}')" class="btn-press px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
           active ? 'bg-red-500 border-red-500 text-white' : 'bg-white/5 border-white/10 text-gray-300'
         }">${escapeHtml(g)}</button>`;
       }).join('');
@@ -649,7 +651,7 @@
       list.innerHTML = matched.map(g => {
         const count = genreCounts[g] || 0;
         const isActive = activeGenreFilter === g;
-        return `<button onclick="selectGenreFilter('${g}')" class="w-full text-left px-4 py-2.5 flex items-center justify-between transition-colors ${
+        return `<button onclick="selectGenreFilter('${escapeJsHtml(g)}')" class="w-full text-left px-4 py-2.5 flex items-center justify-between transition-colors ${
           isActive ? 'bg-red-500/10 text-red-400' : 'text-white hover:bg-white/5'
         }">
           <span class="text-[13px] font-medium">${escapeHtml(g)}</span>
@@ -1024,13 +1026,35 @@
 
     // --- КЭШИРОВАНИЕ: мгновенный старт из localStorage ---
     const CACHE_KEY = 'xxii_cache_v2';
+    const CACHE_TTL_MS = 15 * 60 * 1000;
 
     function saveCache(data) {
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch(e) {}
+      try {
+        const payload = {
+          savedAt: Date.now(),
+          data
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+      } catch(e) {}
     }
 
     function loadCache() {
-      try { return JSON.parse(localStorage.getItem(CACHE_KEY)); } catch(e) { return null; }
+      try {
+        const raw = JSON.parse(localStorage.getItem(CACHE_KEY));
+        if (!raw) return null;
+
+        // Обратная совместимость со старым форматом без метаданных.
+        if (Array.isArray(raw.releases) || Array.isArray(raw.reviews)) {
+          return raw;
+        }
+
+        if (!raw.savedAt || !raw.data) return null;
+        if (Date.now() - raw.savedAt > CACHE_TTL_MS) return null;
+
+        return raw.data;
+      } catch(e) {
+        return null;
+      }
     }
 
     function applyData(data) {
@@ -1505,11 +1529,12 @@
       activeReleaseReviews = relReviews;
       container.innerHTML = relReviews.map((r, i) => {
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
+        const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0;
         const criteria = r.criteria ? ` · ${escapeHtml(formatCriteria(r.criteria))}` : '';
         const canDelete = r.author === user.username || user.isAdmin;
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
-          <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${escapeJsHtml(r.author)}')">${escapeHtml(r.author)}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${r.rating}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeJsHtml(r.id)}', '${escapeJsHtml(r.relId)}'); event.stopPropagation();" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
-          <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${objective}</span></div>`;
+          <div class="flex justify-between items-center mb-2 gap-2"><span class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors" onclick="openProfileModal('${escapeJsHtml(r.author)}')">${escapeHtml(r.author)}</span><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeJsHtml(r.id)}', '${escapeJsHtml(r.relId)}'); event.stopPropagation();" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
+          <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span></div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
       lucide.createIcons();
     }
@@ -1523,11 +1548,12 @@
           const rel = releasesById.get(r.relId);
           const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
           const canDelete = (isMe && r.author === user.username) || user.isAdmin;
+          const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0;
           return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors" onclick="openRelease('${escapeJsHtml(r.relId)}')">
             <div class="flex justify-between items-center mb-2 gap-2">
               <span class="text-[13px] font-bold text-gray-300 truncate pr-2">${relName}</span>
               <div class="flex items-center gap-2 shrink-0">
-                <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px]">${r.rating}</div>
+                <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px]">${escapeHtml(rating)}</div>
                 ${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeJsHtml(r.id)}', '${escapeJsHtml(r.relId)}'); event.stopPropagation();" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}
               </div>
             </div>
@@ -1584,4 +1610,3 @@
   </script>
 </body>
 </html>
-
