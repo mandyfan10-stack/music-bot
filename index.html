@@ -820,10 +820,12 @@
       const minus = document.createElement('button');
       minus.className = 'rating-btn btn-press !w-7 !h-7 !rounded-full';
       minus.innerText = '−';
+      minus.setAttribute('aria-label', 'Уменьшить оценку для ' + label);
       minus.onclick = () => setCriterion(key, -1);
       const plus = document.createElement('button');
       plus.className = 'rating-btn btn-press !w-7 !h-7 !rounded-full';
       plus.innerText = '+';
+      plus.setAttribute('aria-label', 'Увеличить оценку для ' + label);
       plus.onclick = () => setCriterion(key, 1);
       wrap.appendChild(minus);
       wrap.appendChild(plus);
