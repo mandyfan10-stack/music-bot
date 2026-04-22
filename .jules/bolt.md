@@ -5,3 +5,7 @@
 ## 2024-05-25 - Redundant Array Computations in Rendering userReviews
 **Learning:** The application was calling `releases.find` inside `userReviews.map()`, causing an O(N*M) time complexity during the rendering of user reviews in a profile.
 **Action:** Always verify if O(N) array operations inside loops can be replaced with O(1) lookups by precomputing a Map before the loop to reduce time complexity to O(N + M).
+
+## 2024-05-25 - Redundant DOM Recreations in Interactive Handlers
+**Learning:** Calling full UI rendering functions (like `renderReleases()`) inside simple interactive event handlers (like toggling a "like") forces the browser to rebuild the entire DOM grid (O(N) operations), re-fetch images, and re-initialize icons, causing severe performance degradation for large datasets.
+**Action:** When updating a localized interactive state (like an icon toggle), prefer targeted DOM updates using `e.currentTarget` or `document.querySelectorAll()` to achieve O(1) performance instead of triggering global state sync re-renders.

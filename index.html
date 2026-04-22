@@ -1309,8 +1309,24 @@
       }).then(res => { if (!res.ok) console.error('Like save error:', res.status); })
        .catch(e => console.error('Like network error:', e));
       
-      renderReleases();
-      if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
+      // ⚡ Bolt: Replace O(N) full DOM re-renders with targeted O(1) DOM updates
+      const safeId = escapeJsHtml(id);
+      document.querySelectorAll(`button[onclick*="toggleLikeAPI(event, '${safeId}')"]`).forEach(btn => {
+        const icon = btn.querySelector('svg') || btn.querySelector('i');
+        if (icon) {
+          if (isLiking) {
+            icon.classList.add('fill-red-500', 'text-red-500');
+            icon.classList.remove('text-white');
+          } else {
+            icon.classList.remove('fill-red-500', 'text-red-500');
+            icon.classList.add('text-white');
+          }
+        }
+      });
+
+      if (!document.getElementById('screen-likes').classList.contains('hidden')) {
+        renderLikes();
+      }
     }
 
     function renderReleaseCard(r, index) {
