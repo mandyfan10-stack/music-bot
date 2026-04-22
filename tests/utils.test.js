@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { cleanUsername } = require('../src/utils.js');
+const { cleanUsername, escapeHtml, escapeJs, escapeJsHtml } = require('../src/utils.js');
 
 test('cleanUsername: should remove leading @ and convert to lowercase', () => {
   assert.strictEqual(cleanUsername('@User'), 'user');
@@ -26,8 +26,6 @@ test('cleanUsername: should only remove the first @ if it is at the start', () =
   assert.strictEqual(cleanUsername('user@domain'), 'user@domain');
   assert.strictEqual(cleanUsername('@@user'), '@user');
 });
-
-const { escapeHtml } = require('../src/utils.js');
 
 test('escapeHtml: should escape HTML special characters', () => {
     assert.strictEqual(escapeHtml('10/10/10<script>alert(1)</script>'), '10/10/10&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -57,5 +55,21 @@ test('escapeHtml: should escape a complex mix of characters', () => {
     assert.strictEqual(
         escapeHtml('Text with & < > " and \''),
         'Text with &amp; &lt; &gt; &quot; and &#39;'
+    );
+});
+
+test('escapeJs: should escape quotes and backslashes', () => {
+    assert.strictEqual(escapeJs(`a'b\"c\\d`), `a\\'b\\\"c\\\\d`);
+});
+
+test('escapeJs: should return empty string for nullish values', () => {
+    assert.strictEqual(escapeJs(null), '');
+    assert.strictEqual(escapeJs(undefined), '');
+});
+
+test('escapeJsHtml: should combine JS and HTML escaping safely', () => {
+    assert.strictEqual(
+        escapeJsHtml(`'"><script>alert(1)</script>`),
+        `\\&#39;\\&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;`
     );
 });
