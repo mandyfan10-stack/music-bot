@@ -178,6 +178,42 @@
     body.light-theme #genre-dropdown { background: rgba(255,255,255,0.95); }
     body.light-theme #genre-dropdown button { color: #111; }
 
+    /* Статус актуальности/синхронизации (объединенный конфликт-резолв блок) */
+    .freshness-board {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #9ca3af;
+    }
+    .freshness-board.ok {
+      color: #86efac;
+      border-color: rgba(34,197,94,0.35);
+      background: rgba(34,197,94,0.1);
+    }
+    .freshness-board.warn {
+      color: #fda4af;
+      border-color: rgba(244,63,94,0.35);
+      background: rgba(244,63,94,0.1);
+    }
+    body.light-theme .freshness-board {
+      background: rgba(0,0,0,0.04);
+      border-color: rgba(0,0,0,0.08);
+      color: #4b5563;
+    }
+
+    .sync-pill { border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: #9ca3af; }
+    .sync-pill.ok { color: #86efac; border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+    .sync-pill.warn { color: #fda4af; border-color: rgba(244,63,94,0.35); background: rgba(244,63,94,0.08); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+
 
     .freshness-board {
       background: rgba(255,255,255,0.04);
