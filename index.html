@@ -177,6 +177,29 @@
     body.light-theme #genre-search { color: #111; }
     body.light-theme #genre-dropdown { background: rgba(255,255,255,0.95); }
     body.light-theme #genre-dropdown button { color: #111; }
+
+
+    .freshness-board {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #9ca3af;
+    }
+    .freshness-board.ok {
+      color: #86efac;
+      border-color: rgba(34,197,94,0.35);
+      background: rgba(34,197,94,0.1);
+    }
+    .freshness-board.warn {
+      color: #fda4af;
+      border-color: rgba(244,63,94,0.35);
+      background: rgba(244,63,94,0.1);
+    }
+    body.light-theme .freshness-board {
+      background: rgba(0,0,0,0.04);
+      border-color: rgba(0,0,0,0.08);
+      color: #4b5563;
+    }
+
   </style>
 </head>
 <body class="antialiased h-screen flex flex-col">
@@ -229,6 +252,11 @@
         <button id="btn-add-release" onclick="openAddModal()" class="hidden btn-press px-4 py-2 bg-white/10 border border-white/10 text-white text-[12px] font-semibold rounded-full flex items-center gap-2">
           <i data-lucide="plus" class="w-3.5 h-3.5 text-red-500"></i> Новый релиз
         </button>
+      </div>
+
+      <div id="data-freshness-board" class="freshness-board mb-4 rounded-2xl px-3 py-2 text-[11px] font-semibold flex items-center gap-2">
+        <span class="w-1.5 h-1.5 rounded-full bg-current opacity-80"></span>
+        <span id="data-freshness-text">Проверяем актуальность данных...</span>
       </div>
 
       <!-- ПОИСК ПО ЖАНРУ + СОРТИРОВКА -->
@@ -486,6 +514,16 @@
         'X-Telegram-Init-Data': tgInitData,
         ...extra
       };
+    }
+
+    function setDataFreshness(text, tone = 'idle') {
+      const board = document.getElementById('data-freshness-board');
+      const label = document.getElementById('data-freshness-text');
+      if (!board || !label) return;
+      label.innerText = text;
+      board.classList.remove('ok', 'warn');
+      if (tone === 'ok') board.classList.add('ok');
+      if (tone === 'warn') board.classList.add('warn');
     }
 
     document.getElementById('welcome-user-name').innerText = user.username;
@@ -965,7 +1003,7 @@
         renderUserReviews(userReviews, profileUsername);
 
         const safeName = profileUsername.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
-        document.getElementById('profile-avatar').src = escapeHtml(`https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`);
+        document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
 
         openModal('modal-profile');
         lucide.createIcons();
@@ -1045,7 +1083,9 @@
         if (!raw) return null;
 
         // Обратная совместимость со старым форматом без метаданных.
+        // Мигрируем legacy-структуру в формат с TTL, чтобы исключить вечный stale-cache.
         if (Array.isArray(raw.releases) || Array.isArray(raw.reviews)) {
+          saveCache(raw);
           return raw;
         }
 
@@ -1080,10 +1120,13 @@
 
     // Загрузка: кэш мгновенно → сервер фоном
     async function fetchDB() {
+        setDataFreshness('Синхронизируем библиотеку...', 'idle');
+
         // 1. Мгновенно показываем кэш
         const cached = loadCache();
         if (cached) {
           applyData(cached);
+          setDataFreshness('Показаны данные из кэша', 'ok');
         }
 
         // 2. Загружаем свежие данные с сервера
@@ -1103,12 +1146,14 @@
             // Сохраняем в кэш и обновляем UI
             saveCache(data);
             applyData(data);
+            setDataFreshness('Данные актуальны', 'ok');
         } catch(e) {
             if (e.name === 'AbortError') {
                 console.error("Сервер Render не успел проснуться за 60 секунд.");
             } else {
                 console.error("Ошибка загрузки БД:", e.message || e);
             }
+            setDataFreshness(cached ? 'Оффлайн: показываем кэш' : 'Нет соединения с сервером', 'warn');
             if (!cached) showToast("Работаем в оффлайн-режиме (сервер недоступен)");
         }
     }

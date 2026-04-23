@@ -1,4 +1,4 @@
-# Code Audit Report (2026-04-22)
+# Code Audit Report (2026-04-23)
 
 ## Scope
 - `index.html`
@@ -6,70 +6,92 @@
 - `tests/utils.test.js`
 
 ## Method
-- Manual static review for security, reliability, maintainability, and UX risks.
-- Basic test execution: `node --test`.
+- Manual static review (security, reliability, maintainability, performance).
+- Pattern search for risky constructs (`onclick`, `innerHTML`, `localStorage`, `fetch`, CSP directives).
+- Test execution: `node --test`.
 
 ## Findings
 
-### 1) Missing Content Security Policy (CSP)
+### 1) URL escaping bug for avatar image source
+**Severity:** High  
+**Area:** Correctness / reliability  
+**Evidence:** In profile modal, the code writes an already-safe URL into `img.src` after `escapeHtml(...)`. This transforms `&` into `&amp;`, but for JS property assignment that entity decoding does not happen.  
+**Where:** `index.html` (profile avatar assignment).
+
+**Risk:** Query params may be corrupted (`&amp;...`), causing wrong avatar rendering and hard-to-debug behavior depending on provider parsing.
+
+**Recommendation:** For DOM property assignment (`element.src`), avoid HTML escaping and assign URL string directly. Keep `encodeURIComponent` for user-provided fragments.
+
+---
+
+### 2) CSP allows `unsafe-inline` scripts and extensive inline handlers
 **Severity:** High  
 **Area:** Front-end security hardening  
-**Evidence:** No CSP `<meta http-equiv="Content-Security-Policy">` present in `index.html`.  
-**Risk:** Any XSS bug that slips through escaping has a much larger blast radius because inline scripts/events and third-party script execution are unrestricted.
+**Evidence:** CSP uses `script-src ... 'unsafe-inline'`; page includes many inline `onclick="..."` handlers and dynamic HTML with inline handler attributes.
 
-### 2) Third-party scripts loaded without Subresource Integrity (SRI)
-**Severity:** High  
-**Area:** Supply-chain security  
-**Evidence:** External script includes for Tailwind CDN and Telegram/Lucide where SRI is not consistently applied.  
-**Risk:** If CDN content is tampered with, malicious JavaScript can run in user sessions.
+**Risk:** Any XSS regression gets significantly higher impact because inline script execution is explicitly allowed.
 
-### 3) Inline event handlers are used throughout the page
+**Recommendation:** Gradually migrate to `addEventListener` and remove inline handler strings; then tighten CSP by removing `'unsafe-inline'` from `script-src`.
+
+---
+
+### 3) Templated `innerHTML` remains a concentrated XSS risk surface
 **Severity:** Medium  
-**Area:** Security + maintainability  
-**Evidence:** Multiple `onclick="..."` attributes in markup and templated HTML.
-**Risk:** Makes CSP adoption harder (`unsafe-inline` often required) and increases DOM XSS exposure if escaping regresses.
+**Area:** Security / maintainability  
+**Evidence:** Multiple render paths build large HTML strings via `innerHTML`.
 
-### 4) Single-file architecture (HTML + CSS + large JS block)
+**Risk:** Current escaping helpers reduce risk, but any future missed escaping in one field can become a DOM XSS.
+
+**Recommendation:** For user content fields, prefer DOM APIs (`createElement`, `textContent`, `setAttribute`) in critical paths (reviews, release cards, profile reviews). Keep `innerHTML` only for static fragments.
+
+---
+
+### 4) External dependencies are not uniformly integrity-pinned
 **Severity:** Medium  
-**Area:** Maintainability / change risk  
-**Evidence:** Main logic is embedded directly in one large script block inside `index.html`.
-**Risk:** Harder code review, slower onboarding, and increased chance of regressions from unrelated edits.
+**Area:** Supply-chain risk  
+**Evidence:** `lucide` has SRI, but Tailwind CDN and Telegram script are loaded from third-party domains without integrity pinning.
 
-### 5) Client-side cache has no freshness policy
+**Risk:** Compromised CDN/asset chain can inject malicious code.
+
+**Recommendation:** Prefer self-hosting critical JS/CSS, or use version pinning + SRI for all possible third-party assets.
+
+---
+
+### 5) Cache backward-compat path can return non-expiring stale data
 **Severity:** Medium  
 **Area:** Data consistency / UX  
-**Evidence:** `localStorage` cache (`xxii_cache_v2`) is loaded eagerly and reused without TTL metadata.
-**Risk:** Users can see stale data for long periods if backend calls fail intermittently.
+**Evidence:** TTL exists for new cache format (`savedAt`), but legacy-format fallback returns data without expiry checks.
 
-### 6) Tests cover utility helpers only
+**Risk:** Users migrating from old cache format may see stale data until cache is overwritten by successful network fetch.
+
+**Recommendation:** In legacy branch, add migration wrapper with synthetic timestamp and/or one-time invalidation.
+
+---
+
+### 6) Test coverage is focused on utility helpers only
 **Severity:** Medium  
-**Area:** Test coverage gap  
-**Evidence:** `tests/utils.test.js` validates utility escaping/normalization only; core app flows (fetch, role handling, add/review/delete workflows) are untested.
-**Risk:** High chance of shipping regressions in primary user journeys.
+**Area:** Quality assurance  
+**Evidence:** `tests/utils.test.js` covers escape/normalization functions; main UI logic and state transitions in `index.html` are untested.
 
-### 7) Positive controls found
-**Severity:** Informational  
-**Evidence:**
-- Potentially unsafe links are filtered in `openSafeUrl` by protocol allowlist (`http/https`).
-- Output escaping helpers exist (`escapeHtml`, `escapeJs`, `escapeJsHtml`) and are used in many templated render paths.
-- Telegram init data is passed to backend via header, supporting server-side auth validation.
+**Risk:** Regressions in sorting/filtering/review workflows will likely bypass CI.
 
-## Prioritized Recommendations
-1. Add CSP and remove inline handlers incrementally (move to `addEventListener`).
-2. Pin and protect external dependencies:
-   - Prefer self-hosted critical JS/CSS bundles.
-   - Use SRI+`crossorigin` for all CDN assets where possible.
-3. Split front-end code into modules (`ui`, `api`, `state`, `render`) and keep HTML mostly declarative.
-4. Add cache TTL/versioning and stale-data indicator in UI.
-5. Expand automated tests:
-   - Unit tests for filtering/sorting and escaping edge cases.
-   - Integration tests for API error handling and role-based behavior.
-6. Add linting + formatting + CI checks (e.g., ESLint + Prettier + Node test in CI).
+**Recommendation:** Extract pure functions (filter/sort/criteria/cache helpers) into `src/` modules and add Node tests for those units.
 
-## Quick Wins (1-2 days)
-- Introduce ESLint config and run in CI.
-- Add TTL to cache object (`savedAt`) with fallback refresh logic.
-- Add at least 5-8 unit tests for rating/filter logic.
+---
+
+## Optimization opportunities (without functional changes)
+1. **Reduce repeated icon re-initialization cost**: batch `lucide.createIcons()` calls after grouped DOM updates.
+2. **Avoid full rerenders where possible**: in likes/filter actions, update affected card state instead of replacing entire grid HTML.
+3. **Memoize repeated derived data**: `releasesById` map can be built once per data refresh, not per `renderUserReviews` call.
+4. **Move to delegated event handling**: improves performance and reduces HTML string size by removing repeated inline handler attributes.
+
+## Positive controls observed
+- URL opening is protocol-restricted (`http/https`) in `openSafeUrl`.
+- Escaping helpers exist and are covered by tests.
+- Cache TTL mechanism is present in the new format.
+
+## Executed checks
+- `node --test` ✅ (13/13 passed)
 
 ## Notes
-This audit is based on the repository snapshot reviewed on **2026-04-22** and does not include backend source code.
+This audit is based on the repository snapshot reviewed on **2026-04-23** (UTC) and excludes backend source code.
