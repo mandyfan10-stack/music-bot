@@ -177,6 +177,21 @@
     body.light-theme #genre-search { color: #111; }
     body.light-theme #genre-dropdown { background: rgba(255,255,255,0.95); }
     body.light-theme #genre-dropdown button { color: #111; }
+
+
+    .sync-pill { border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: #9ca3af; }
+    .sync-pill.ok { color: #86efac; border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+    .sync-pill.warn { color: #fda4af; border-color: rgba(244,63,94,0.35); background: rgba(244,63,94,0.08); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
   </style>
 </head>
 <body class="antialiased h-screen flex flex-col">
@@ -204,6 +219,7 @@
     <div class="flex items-center gap-3">
       <div class="logo-container"><span class="logo-text">XXII</span></div>
       <span class="font-bold tracking-tight text-xl text-white uppercase" style="font-family: 'Poiret One', sans-serif; letter-spacing: 1px;">Sound</span>
+      <span id="sync-status" class="sync-pill text-[10px] font-semibold px-2 py-1 rounded-full max-w-[120px] truncate inline-block align-middle">Синхронизация...</span>
     </div>
     <button id="user-profile" aria-label="Профиль пользователя" onclick="openProfileModal()" class="flex items-center gap-2 bg-white/5 border border-white/5 rounded-full pl-1.5 pr-3 py-1 backdrop-blur-md cursor-pointer btn-press transition-colors hover:bg-white/10 text-left">
       <div class="w-7 h-7 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center border border-white/10">
@@ -455,7 +471,12 @@
   </div>
 
   <script>
-    const tg = window.Telegram.WebApp;
+    const tg = window.Telegram?.WebApp || {
+      expand: () => {},
+      initData: '',
+      initDataUnsafe: {},
+      HapticFeedback: null
+    };
     tg.expand();
 
     const BACKEND_URL = "https://music-backend-qjvk.onrender.com";
@@ -487,6 +508,25 @@
         ...extra
       };
     }
+
+    function tgHaptic(style = 'light') {
+      try {
+        tg?.HapticFeedback?.impactOccurred(style);
+      } catch (_) {}
+    }
+
+    function setSyncStatus(text, mode = 'idle') {
+      const el = document.getElementById('sync-status');
+      if (!el) return;
+      el.innerText = text;
+      el.classList.remove('ok', 'warn');
+      if (mode === 'ok') el.classList.add('ok');
+      if (mode === 'warn') el.classList.add('warn');
+    }
+
+    document.addEventListener('click', (event) => {
+      if (event.target.closest('.btn-press')) tgHaptic('light');
+    });
 
     document.getElementById('welcome-user-name').innerText = user.username;
 
@@ -965,7 +1005,7 @@
         renderUserReviews(userReviews, profileUsername);
 
         const safeName = profileUsername.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
-        document.getElementById('profile-avatar').src = escapeHtml(`https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`);
+        document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
 
         openModal('modal-profile');
         lucide.createIcons();
@@ -1045,7 +1085,9 @@
         if (!raw) return null;
 
         // Обратная совместимость со старым форматом без метаданных.
+        // Мигрируем legacy-структуру в формат с TTL, чтобы исключить вечный stale-cache.
         if (Array.isArray(raw.releases) || Array.isArray(raw.reviews)) {
+          saveCache(raw);
           return raw;
         }
 
@@ -1080,10 +1122,13 @@
 
     // Загрузка: кэш мгновенно → сервер фоном
     async function fetchDB() {
+        setSyncStatus('Синхронизация...', 'idle');
+
         // 1. Мгновенно показываем кэш
         const cached = loadCache();
         if (cached) {
           applyData(cached);
+          setSyncStatus('Данные из кэша', 'ok');
         }
 
         // 2. Загружаем свежие данные с сервера
@@ -1103,12 +1148,14 @@
             // Сохраняем в кэш и обновляем UI
             saveCache(data);
             applyData(data);
+            setSyncStatus('Всё актуально', 'ok');
         } catch(e) {
             if (e.name === 'AbortError') {
                 console.error("Сервер Render не успел проснуться за 60 секунд.");
             } else {
                 console.error("Ошибка загрузки БД:", e.message || e);
             }
+            setSyncStatus(cached ? 'Оффлайн (кэш)' : 'Нет соединения', 'warn');
             if (!cached) showToast("Работаем в оффлайн-режиме (сервер недоступен)");
         }
     }
