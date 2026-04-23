@@ -1,7 +1,7 @@
-## 2024-04-19 - Missing Accessibility Attributes Pattern
-**Learning:** The application heavily utilizes Lucide icons for icon-only buttons and relies on placeholders for form inputs across its single-page architecture, leading to a systemic pattern of missing `aria-label` attributes on interactive elements and `alt` attributes on images.
-**Action:** When working on UI components in `index.html` (both static and dynamically rendered), systematically enforce the addition of `aria-label` to all icon-only buttons and form inputs lacking visible labels, and ensure `alt` attributes on all images.
+## 2026-04-22 - Semantic Tags for Interactive Elements
+**Learning:** Using `<div>` elements with `onclick` handlers, common in custom UI components (like profile buttons or image upload previews), breaks native keyboard accessibility and screen reader support.
+**Action:** Always prefer semantic tags like `<button>` over `<div>` for interactive elements to ensure out-of-the-box keyboard navigation (Enter/Space) and focus states, combined with `aria-label` attributes where visual text is missing.
 
-## 2026-04-21 - Added aria-label to rating +/- buttons
-**Learning:** Dynamically created buttons with text content like '-' and '+' (or minus/plus symbols) need explicit `aria-label` attributes because their text content is ambiguous to screen readers. In this app, criteria ratings were missing this context.
-**Action:** Always add descriptive `aria-label` when creating icon-only or symbol-only interactive elements using `document.createElement()`.
+## 2026-04-22 - Dynamic Element Accessibility
+**Learning:** Elements generated dynamically via JavaScript (like the 1-10 rating scale buttons created with `document.createElement`) often lack intrinsic context for screen readers if their content is purely numerical.
+**Action:** When dynamically generating UI controls via DOM manipulation, ensure `.setAttribute('aria-label', ...)` is called to provide clear, descriptive context for assistive technologies.
