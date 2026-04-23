@@ -1271,7 +1271,7 @@
           document.getElementById('manual-title').value = parsedName;
           if (parsedCover) {
               manualCoverBase64 = parsedCover;
-              document.getElementById('manual-cover-preview').innerHTML = `<img src="${parsedCover}" alt="Превью обложки" class="w-full h-full object-cover"><div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
+              document.getElementById('manual-cover-preview').innerHTML = `<img src="${escapeHtml(parsedCover)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
           }
           renderAddGenreSelector('manual-genre-selector');
           
@@ -1293,7 +1293,7 @@
       reader.onload = function(e) {
           manualCoverBase64 = e.target.result;
           const previewZone = document.getElementById('manual-cover-preview');
-          previewZone.innerHTML = `<img src="${manualCoverBase64}" alt="Превью обложки" class="w-full h-full object-cover"><div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
+          previewZone.innerHTML = `<img src="${escapeHtml(manualCoverBase64)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
           lucide.createIcons();
       }
       reader.readAsDataURL(file);
