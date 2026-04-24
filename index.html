@@ -1460,7 +1460,9 @@
     }
 
     function getExistingReviewForRelease(releaseId) {
-      return reviews.find(r => r.relId === releaseId && r.author === user.username) || null;
+      const relReviews = reviewsByRelId.get(releaseId);
+      if (!relReviews) return null;
+      return relReviews.find(r => r.author === user.username) || null;
     }
 
     function openConfirmReviewDelete(reviewId, releaseId) {

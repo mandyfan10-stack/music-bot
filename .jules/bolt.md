@@ -9,3 +9,7 @@
 ## 2024-05-25 - Redundant DOM Recreations in Interactive Handlers
 **Learning:** Calling full UI rendering functions (like `renderReleases()`) inside simple interactive event handlers (like toggling a "like") forces the browser to rebuild the entire DOM grid (O(N) operations), re-fetch images, and re-initialize icons, causing severe performance degradation for large datasets.
 **Action:** When updating a localized interactive state (like an icon toggle), prefer targeted DOM updates using `e.currentTarget` or `document.querySelectorAll()` to achieve O(1) performance instead of triggering global state sync re-renders.
+
+## 2024-05-26 - Redundant Array Scanning in Duplicate Checking
+**Learning:** Checking for duplicate reviews or finding a user's review for a specific release was previously done by iterating over the global `reviews` array using `reviews.find(...)` which triggers an O(N) operation over all reviews.
+**Action:** Always utilize the existing global maps, like `reviewsByRelId`, which index relevant items by relational IDs, enabling lookup and scans that are restricted to just the targeted subset (effectively O(1) in the broader dataset).
