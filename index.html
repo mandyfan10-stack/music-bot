@@ -386,8 +386,11 @@
         <div class="bg-white/5 border border-white/10 rounded-[1.5rem] p-5">
            <div class="flex flex-wrap gap-2 justify-center mb-3" id="rating-buttons-container"></div>
            <div class="flex flex-wrap gap-2 justify-center mb-4" id="criteria-buttons-container"></div>
-           <textarea id="rev-text" aria-label="Мнение о саунде" placeholder="Мнение о саунде..." class="w-full h-24 bg-black/20 border border-white/5 rounded-xl outline-none p-3 text-[13px] text-white resize-none mb-4 transition-all focus:border-red-500/30"></textarea>
-           <button onclick="addReview()" class="btn-press w-full py-3 bg-white/10 text-white text-[13px] font-bold rounded-xl border border-white/10">Опубликовать</button>
+           <div class="relative w-full mb-4">
+             <textarea id="rev-text" oninput="updateReviewCharCount()" aria-label="Мнение о саунде" placeholder="Мнение о саунде..." class="w-full h-24 bg-black/20 border border-white/5 rounded-xl outline-none p-3 pb-7 text-[13px] text-white resize-none transition-all focus:border-red-500/30"></textarea>
+             <span id="rev-char-count" class="absolute bottom-2 right-3 text-[10px] text-gray-500 font-medium">0 / 3000</span>
+           </div>
+           <button id="btn-submit-review" onclick="addReview()" class="btn-press w-full py-3 bg-white/10 text-white text-[13px] font-bold rounded-xl border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed">Опубликовать</button>
         </div>
         <div id="reviews-container" class="mt-8 space-y-3"></div>
       </div>
@@ -886,6 +889,38 @@
       });
       const text = document.getElementById('rev-text');
       if (text) text.value = '';
+      updateReviewCharCount();
+    }
+
+    function updateReviewCharCount() {
+      const textarea = document.getElementById('rev-text');
+      const counter = document.getElementById('rev-char-count');
+      const submitBtn = document.getElementById('btn-submit-review');
+      if (!textarea || !counter || !submitBtn) return;
+
+      const rawLen = textarea.value.length;
+      const len = textarea.value.trim().length;
+      counter.innerText = `${rawLen} / ${REVIEW_MAX_LENGTH}`;
+
+      const isInvalidLength = len > 0 && (len < REVIEW_MIN_LENGTH || len > REVIEW_MAX_LENGTH);
+      if (isInvalidLength) {
+        counter.classList.add('text-red-400');
+        counter.classList.remove('text-gray-500');
+      } else {
+        counter.classList.remove('text-red-400');
+        counter.classList.add('text-gray-500');
+      }
+
+      if (reviewPublishBlocked) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Рецензия уже опубликована';
+      } else if (isInvalidLength || len === 0) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Опубликовать';
+      } else {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Опубликовать';
+      }
     }
 
     function showToast(msg) {
@@ -1445,13 +1480,6 @@
       }
 
       resetReviewInputs(); renderReviews(); openModal('modal-release');
-      const submitBtn = document.querySelector('#modal-release button[onclick="addReview()"]');
-      if (submitBtn) {
-        submitBtn.innerText = reviewPublishBlocked ? 'Рецензия уже опубликована' : 'Опубликовать';
-        submitBtn.disabled = reviewPublishBlocked;
-        submitBtn.classList.toggle('opacity-50', reviewPublishBlocked);
-        submitBtn.classList.toggle('cursor-not-allowed', reviewPublishBlocked);
-      }
     }
 
     function openConfirmDelete(id) {
@@ -1501,12 +1529,7 @@
       reviewDeleteMode = false;
       reviewPublishBlocked = false;
       existingReviewForActiveRelease = null;
-      const submitBtn = document.querySelector('#modal-release button[onclick="addReview()"]');
-      if (submitBtn) {
-        submitBtn.innerText = 'Опубликовать';
-        submitBtn.disabled = false;
-        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-      }
+      updateReviewCharCount();
     }
 
     async function executeDeleteRelease() {
@@ -1576,12 +1599,7 @@
       reviewPublishBlocked = true;
       document.getElementById('rev-text').value = '';
       renderReviews();
-      const submitBtn = document.querySelector('#modal-release button[onclick="addReview()"]');
-      if (submitBtn) {
-        submitBtn.innerText = 'Рецензия уже опубликована';
-        submitBtn.disabled = true;
-        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-      }
+      updateReviewCharCount();
       showToast('Опубликовано!');
     }
 
