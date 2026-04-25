@@ -13,3 +13,7 @@
 ## 2024-05-26 - Redundant Array Scanning in Duplicate Checking
 **Learning:** Checking for duplicate reviews or finding a user's review for a specific release was previously done by iterating over the global `reviews` array using `reviews.find(...)` which triggers an O(N) operation over all reviews.
 **Action:** Always utilize the existing global maps, like `reviewsByRelId`, which index relevant items by relational IDs, enabling lookup and scans that are restricted to just the targeted subset (effectively O(1) in the broader dataset).
+
+## 2024-05-27 - Full Recalculations During State Mutations
+**Learning:** The application was recalculating full O(N) Maps (like `avgRatingByRelId`, `genreCounts`, `reviewsByRelId`) from scratch on every single add/delete mutation. This causes expensive overhead on every action. Using incremental cache updates for these maps prevents this performance degradation as lists grow.
+**Action:** When mutating state (add/delete), update the relevant caches/Maps incrementally for the specific item rather than clearing and completely rebuilding the maps from the entire array.

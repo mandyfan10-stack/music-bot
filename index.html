@@ -563,7 +563,7 @@
 
     document.getElementById('user-name').innerText = user.username;
 
-    let releases = [], likedSet = new Set(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
 
     function updateGenreCounts() {
       genreCounts = {};
@@ -1133,6 +1133,8 @@
 
     function applyData(data) {
       releases = data.releases || [];
+      // ⚡ Bolt: Precompute Map for O(1) lookups
+      releasesById = new Map(releases.map(r => [r.id, r]));
       reviews = data.reviews || [];
       updateReviewsMap();
       updateGenreCounts();
@@ -1363,7 +1365,10 @@
       }
       
       releases.unshift(newRel);
-      updateGenreCounts();
+      // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculations
+      releasesById.set(newRel.id, newRel);
+      const g = newRel.genre || 'Другое';
+      genreCounts[g] = (genreCounts[g] || 0) + 1;
       renderReleases(); closeModal('modal-add'); showToast('Релиз сохранен!');
       document.getElementById('manual-artist').value = ''; document.getElementById('manual-title').value = '';
     }
@@ -1458,7 +1463,8 @@
     }
 
     function openRelease(id) {
-      const rel = releases.find(r => r.id === id); if (!rel) return; activeReleaseId = id;
+      // ⚡ Bolt: Use O(1) map lookup instead of O(N) array search
+      const rel = releasesById.get(id); if (!rel) return; activeReleaseId = id;
       const fb = getFallbackImg(rel.name);
       document.getElementById('rel-img').src = rel.img || fb;
       document.getElementById('rel-img').onerror = function() { this.src = fb; };
@@ -1545,11 +1551,23 @@
         return;
       }
       
+      // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculations
+      const relToDeleteObj = releasesById.get(releaseToDelete);
+      if (relToDeleteObj) {
+        const g = relToDeleteObj.genre || 'Другое';
+        if (genreCounts[g]) {
+          genreCounts[g]--;
+          if (genreCounts[g] === 0) delete genreCounts[g];
+        }
+      }
+
       releases = releases.filter(r => r.id !== releaseToDelete);
+      releasesById.delete(releaseToDelete);
       if (likedSet.has(releaseToDelete)) likedSet.delete(releaseToDelete);
       reviews = reviews.filter(r => r.relId !== releaseToDelete);
-      updateReviewsMap();
-      updateGenreCounts();
+
+      reviewsByRelId.delete(releaseToDelete);
+      avgRatingByRelId.delete(releaseToDelete);
       
       renderReleases();
       if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
@@ -1595,7 +1613,13 @@
       }
 
       reviews.unshift(newRev);
-      updateReviewsMap();
+      // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculations
+      if (!reviewsByRelId.has(activeReleaseId)) reviewsByRelId.set(activeReleaseId, []);
+      reviewsByRelId.get(activeReleaseId).push(newRev);
+      const rvs = reviewsByRelId.get(activeReleaseId);
+      const avg = rvs.length > 0 ? rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length : 0;
+      avgRatingByRelId.set(activeReleaseId, avg);
+
       existingReviewForActiveRelease = newRev;
       reviewPublishBlocked = true;
       document.getElementById('rev-text').value = '';
@@ -1623,7 +1647,7 @@
       const revContainer = document.getElementById('profile-user-reviews');
       const isMe = profileUsername === user.username;
       if (userReviews.length > 0) {
-        const releasesById = new Map(releases.map(r => [r.id, r]));
+        // ⚡ Bolt: Use global releasesById for O(1) lookups
         revContainer.innerHTML = userReviews.map(r => {
           const rel = releasesById.get(r.relId);
           const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
