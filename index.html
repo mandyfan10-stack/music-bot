@@ -1457,7 +1457,9 @@
     }
 
     function renderLikes() {
-      const grid = document.getElementById('likes-grid'); const likedArr = releases.filter(r => likedSet.has(r.id));
+      const grid = document.getElementById('likes-grid');
+      // ⚡ Bolt: O(K) lookup mapping liked IDs directly instead of O(N) array filtering
+      const likedArr = Array.from(likedSet).map(id => releasesById.get(id)).filter(Boolean);
       grid.innerHTML = likedArr.length ? likedArr.map((r, i) => renderReleaseCard(r, i)).join('') : EMPTY_STATE_HTML;
       lucide.createIcons();
     }
