@@ -38,6 +38,27 @@
     .fade-in { animation: fadeIn 0.5s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
     .fade-out { animation: fadeOut 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
 
+    .tab-screen {
+      transform: translate3d(0, 0, 0);
+      will-change: opacity, transform;
+    }
+    .tab-screen-entering {
+      position: relative;
+      z-index: 2;
+      pointer-events: none;
+    }
+    .tab-screen-exiting {
+      position: absolute;
+      inset: 0 0 auto 0;
+      width: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .tab-enter-forward { animation: tabEnterForward 0.38s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+    .tab-exit-forward { animation: tabExitForward 0.32s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+    .tab-enter-backward { animation: tabEnterBackward 0.38s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+    .tab-exit-backward { animation: tabExitBackward 0.32s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+
     .card-enter {
       opacity: 0;
       transform: translateY(30px) scale(0.9);
@@ -48,7 +69,24 @@
     @keyframes slideDown { 0% { transform: translateY(0); } 100% { transform: translateY(100%); } }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+    @keyframes tabEnterForward { from { opacity: 0; transform: translate3d(28px, 0, 0) scale(0.985); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+    @keyframes tabExitForward { from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; transform: translate3d(-18px, 0, 0) scale(0.995); } }
+    @keyframes tabEnterBackward { from { opacity: 0; transform: translate3d(-28px, 0, 0) scale(0.985); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+    @keyframes tabExitBackward { from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; transform: translate3d(18px, 0, 0) scale(0.995); } }
     @keyframes cardPop { to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes pressRipple {
+      from { opacity: 0.28; transform: translate(-50%, -50%) scale(0); }
+      to { opacity: 0; transform: translate(-50%, -50%) scale(2.9); }
+    }
+    @keyframes syncPulse {
+      0%, 100% { opacity: 0.42; transform: scale(1); }
+      50% { opacity: 0.95; transform: scale(1.28); }
+    }
+    @keyframes syncSweep {
+      0% { transform: translateX(-130%) skewX(-18deg); opacity: 0; }
+      22% { opacity: 0.85; }
+      58%, 100% { transform: translateX(165%) skewX(-18deg); opacity: 0; }
+    }
 
     /* ========================================= */
     /* WELCOME SCREEN (Шахматный фон исправлен)  */
@@ -107,9 +145,61 @@
     .rating-btn { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.4s cubic-bezier(0.32, 0.72, 0, 1); }
     .rating-btn.active { background: white; color: black; transform: scale(1.2); box-shadow: 0 0 20px rgba(255, 255, 255, 0.4); border-color: white; }
     
-    .btn-press { transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s, box-shadow 0.2s; outline: none; }
-    .btn-press:active { transform: scale(0.92); opacity: 0.8; }
-    .btn-press:focus-visible { box-shadow: 0 0 0 2px var(--accent-red); outline: none; }
+    .btn-press {
+      position: relative;
+      overflow: hidden;
+      transform: translate3d(0, 0, 0) scale(1);
+      transition:
+        transform 0.42s cubic-bezier(0.18, 0.9, 0.22, 1),
+        opacity 0.32s ease,
+        box-shadow 0.42s cubic-bezier(0.18, 0.9, 0.22, 1),
+        background-color 0.32s ease,
+        border-color 0.32s ease,
+        color 0.32s ease;
+      outline: none;
+      touch-action: manipulation;
+      will-change: transform;
+    }
+    .btn-press::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.18), transparent 62%);
+      opacity: 0;
+      transform: scale(0.92);
+      transition: opacity 0.34s ease, transform 0.42s cubic-bezier(0.18, 0.9, 0.22, 1);
+      pointer-events: none;
+    }
+    .btn-press:hover::before { opacity: 0.55; transform: scale(1); }
+    .btn-press:active { transform: translate3d(0, 1px, 0) scale(0.965); opacity: 0.96; }
+    .btn-press:active::before { opacity: 0.82; transform: scale(1.04); transition-duration: 0.12s; }
+    .btn-press:focus-visible { box-shadow: 0 0 0 2px var(--accent-red), 0 0 0 7px rgba(255, 0, 0, 0.12); outline: none; }
+    .btn-press[disabled],
+    .btn-press.disabled\:cursor-not-allowed:disabled {
+      transform: none;
+      box-shadow: none;
+    }
+    nav .btn-press {
+      border-radius: 18px;
+      padding: 6px 12px;
+      margin: -6px -12px;
+    }
+    nav .btn-press:focus-visible {
+      box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.48), 0 10px 26px rgba(255, 0, 0, 0.08);
+    }
+    .press-ripple {
+      position: absolute;
+      width: 84px;
+      height: 84px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(255,255,255,0.42), rgba(255,255,255,0.16) 45%, transparent 68%);
+      left: var(--press-x, 50%);
+      top: var(--press-y, 50%);
+      transform: translate(-50%, -50%) scale(0);
+      pointer-events: none;
+      animation: pressRipple 0.72s cubic-bezier(0.18, 0.9, 0.22, 1) forwards;
+      z-index: 1;
+    }
 
     /* ========================================= */
     /* СВЕТЛАЯ ТЕМА (Полная инверсия стилей)     */
@@ -152,6 +242,15 @@
     
     body.light-theme .modal-overlay { background: rgba(0,0,0,0.25); }
     body.light-theme #toast { background: rgba(255,255,255,0.95); color: #000; border-color: rgba(0,0,0,0.1); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+    body.light-theme #welcome-screen .text-white { color: #fff !important; }
+    body.light-theme #welcome-screen .text-gray-300 { color: #d1d5db !important; }
+    body.light-theme .rating-badge { background: rgba(0,0,0,0.72) !important; color: #fff !important; }
+    body.light-theme .rating-badge .text-amber-400 { color: #f59e0b !important; fill: #f59e0b !important; }
+    body.light-theme .media-edit-overlay,
+    body.light-theme .media-edit-overlay i { color: #fff !important; stroke: #fff !important; }
+    body.light-theme #criteria-buttons-container .text-gray-400 { color: #52525b !important; }
+    body.light-theme #rev-text { background: rgba(255,255,255,0.65) !important; border-color: rgba(0,0,0,0.1) !important; color: #111827 !important; }
+    body.light-theme #rev-text::placeholder { color: #6b7280 !important; }
 
     /* Перенос длинных слов на мобильных */
     .modal-container, #reviews-container, #profile-user-reviews, #releases-grid, #likes-grid {
@@ -165,8 +264,9 @@
     /* Фильтры */
     .sort-btn { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: #d1d5db; }
     .sort-btn.active { background: white; color: black; border-color: white; }
-    #filter-bar .flex:not(.relative *) { flex-wrap: nowrap; overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; }
-    #filter-bar .flex:not(.relative *):-webkit-scrollbar { display: none; }
+    #sort-controls { flex-wrap: nowrap; overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none; padding-bottom: 2px; }
+    #sort-controls::-webkit-scrollbar { display: none; }
+    #sort-controls > button { flex-shrink: 0; }
 
     /* Поиск жанра */
     #genre-dropdown { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
@@ -180,9 +280,61 @@
     body.light-theme #genre-dropdown button { color: #111; }
 
 
-    .sync-pill { border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: #9ca3af; }
-    .sync-pill.ok { color: #86efac; border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
-    .sync-pill.warn { color: #fda4af; border-color: rgba(244,63,94,0.35); background: rgba(244,63,94,0.08); }
+    .sync-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 26px;
+      max-width: 138px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.035));
+      color: #c7ccd6;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 28px rgba(0,0,0,0.12);
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      transition:
+        color 0.45s ease,
+        background 0.45s ease,
+        border-color 0.45s ease,
+        box-shadow 0.45s ease,
+        transform 0.45s cubic-bezier(0.18, 0.9, 0.22, 1);
+    }
+    .sync-pill::after {
+      content: "";
+      position: absolute;
+      inset: -20% auto -20% 0;
+      width: 44%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      animation: syncSweep 2.8s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .sync-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+      background: #9ca3af;
+      box-shadow: 0 0 0 4px rgba(156,163,175,0.12), 0 0 14px rgba(156,163,175,0.25);
+      transition: background 0.45s ease, box-shadow 0.45s ease;
+    }
+    .sync-text {
+      position: relative;
+      z-index: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sync-pill.syncing .sync-dot { animation: syncPulse 1.25s ease-in-out infinite; background: #fbbf24; box-shadow: 0 0 0 4px rgba(251,191,36,0.14), 0 0 18px rgba(251,191,36,0.36); }
+    .sync-pill.ok { color: #a7f3d0; border-color: rgba(52,211,153,0.34); background: linear-gradient(135deg, rgba(16,185,129,0.16), rgba(34,197,94,0.055)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 8px 28px rgba(16,185,129,0.12); }
+    .sync-pill.ok .sync-dot { background: #34d399; box-shadow: 0 0 0 4px rgba(52,211,153,0.14), 0 0 18px rgba(52,211,153,0.42); }
+    .sync-pill.warn { color: #fda4af; border-color: rgba(244,63,94,0.35); background: linear-gradient(135deg, rgba(244,63,94,0.14), rgba(244,63,94,0.055)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 8px 28px rgba(244,63,94,0.1); }
+    .sync-pill.warn .sync-dot { background: #fb7185; box-shadow: 0 0 0 4px rgba(251,113,133,0.14), 0 0 18px rgba(251,113,133,0.38); }
+    body.light-theme .sync-pill { border-color: rgba(0,0,0,0.08); background: linear-gradient(135deg, rgba(255,255,255,0.88), rgba(255,255,255,0.56)); color: #64748b; box-shadow: inset 0 1px 0 rgba(255,255,255,0.86), 0 8px 24px rgba(15,23,42,0.06); }
+    body.light-theme .sync-pill.ok { color: #059669; border-color: rgba(16,185,129,0.24); background: linear-gradient(135deg, rgba(236,253,245,0.98), rgba(209,250,229,0.68)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.92), 0 8px 24px rgba(16,185,129,0.1); }
+    body.light-theme .sync-pill.warn { color: #e11d48; border-color: rgba(225,29,72,0.24); background: linear-gradient(135deg, rgba(255,241,242,0.98), rgba(255,228,230,0.68)); }
 
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -216,18 +368,21 @@
     <span id="toast-msg"></span>
   </div>
 
-  <header class="pt-6 pb-4 px-6 flex items-center justify-between z-10 bg-transparent sticky top-0">
-    <div class="flex items-center gap-3">
-      <div class="logo-container"><span class="logo-text">XXII</span></div>
-      <span class="font-bold tracking-tight text-xl text-white uppercase" style="font-family: 'Poiret One', sans-serif; letter-spacing: 1px;">Sound</span>
-      <span id="sync-status" class="sync-pill text-[10px] font-semibold px-2 py-1 rounded-full">Синхронизация...</span>
+  <header class="pt-6 pb-4 px-6 flex items-center justify-between gap-3 z-10 bg-transparent sticky top-0">
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="logo-container shrink-0"><span class="logo-text">XXII</span></div>
+      <span class="font-bold tracking-tight text-xl text-white uppercase shrink-0" style="font-family: 'Poiret One', sans-serif; letter-spacing: 1px;">Sound</span>
+      <span id="sync-status" class="sync-pill syncing text-[10px] font-semibold px-2.5 py-1 rounded-full" aria-live="polite">
+        <span class="sync-dot" aria-hidden="true"></span>
+        <span class="sync-text">Синхронизация...</span>
+      </span>
     </div>
-    <button id="user-profile" aria-label="Профиль пользователя" onclick="openProfileModal()" class="flex items-center gap-2 bg-white/5 border border-white/5 rounded-full pl-1.5 pr-3 py-1 backdrop-blur-md cursor-pointer btn-press transition-colors hover:bg-white/10 text-left">
+    <button id="user-profile" aria-label="Профиль пользователя" onclick="openProfileModal()" class="flex items-center gap-2 bg-white/5 border border-white/5 rounded-full pl-1.5 pr-3 py-1 backdrop-blur-md cursor-pointer btn-press transition-colors hover:bg-white/10 text-left shrink-0 max-w-[42vw]">
       <div class="w-7 h-7 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center border border-white/10">
          <i data-lucide="user" class="w-3.5 h-3.5 text-gray-300"></i>
       </div>
-      <div class="flex flex-col">
-        <span id="user-name" class="text-[12px] font-medium text-white leading-tight">Гость</span>
+      <div class="flex flex-col min-w-0">
+        <span id="user-name" class="text-[12px] font-medium text-white leading-tight truncate">Гость</span>
         <span id="user-role" class="text-[9px] text-gray-500 transition-colors">Пользователь</span>
       </div>
     </button>
@@ -240,7 +395,7 @@
         <p class="text-sm text-gray-400">Синхронизация...</p>
     </div>
 
-    <div id="screen-home" class="px-6 fade-in hidden">
+    <div id="screen-home" class="tab-screen px-6 hidden">
       <div class="flex justify-between items-end mb-4">
         <h2 class="text-2xl font-semibold tracking-tight text-white">Слушать сейчас</h2>
         <button id="btn-add-release" onclick="openAddModal()" class="hidden btn-press px-4 py-2 bg-white/10 border border-white/10 text-white text-[12px] font-semibold rounded-full flex items-center gap-2">
@@ -278,7 +433,7 @@
           <span id="active-genre-count" class="text-[11px] text-gray-500"></span>
         </div>
         <!-- Сортировка -->
-        <div class="flex items-center gap-2">
+        <div id="sort-controls" class="flex items-center gap-2">
           <button onclick="setSortMode('new')" id="sort-new" class="sort-btn active btn-press px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all">Новинки</button>
           <button onclick="setSortMode('rating-desc')" id="sort-rating-desc" class="sort-btn btn-press px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all">Рейтинг ↓</button>
           <button onclick="setSortMode('rating-asc')" id="sort-rating-asc" class="sort-btn btn-press px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all">Рейтинг ↑</button>
@@ -287,7 +442,7 @@
         </div>
       </div>
 
-      <div id="releases-grid" class="flex flex-wrap gap-4"></div>
+      <div id="releases-grid" class="grid grid-cols-2 gap-4"></div>
       <div id="empty-state" class="flex flex-col items-center justify-center py-20 opacity-50 hidden">
         <i data-lucide="compass" class="w-12 h-12 text-gray-500 mb-4" stroke-width="1"></i>
         <p class="text-gray-400 text-[14px]">Медиатека пока пуста.</p>
@@ -299,15 +454,15 @@
       </div>
     </div>
 
-    <div id="screen-likes" class="px-6 fade-in hidden">
+    <div id="screen-likes" class="tab-screen px-6 hidden">
       <div class="flex items-center gap-3 mb-6">
         <div class="p-2.5 bg-red-500/10 text-red-500 rounded-2xl"><i data-lucide="heart" class="w-6 h-6 fill-red-500"></i></div>
         <h2 class="text-2xl font-semibold tracking-tight text-white">Лайки</h2>
       </div>
-      <div id="likes-grid" class="flex flex-wrap gap-4"></div>
+      <div id="likes-grid" class="grid grid-cols-2 gap-4"></div>
     </div>
 
-    <div id="screen-settings" class="px-6 fade-in hidden">
+    <div id="screen-settings" class="tab-screen px-6 hidden">
       <div class="flex items-center gap-3 mb-8">
         <div class="p-2.5 bg-red-500/10 text-red-500 rounded-2xl"><i data-lucide="settings" class="w-6 h-6"></i></div>
         <h2 class="text-2xl font-semibold tracking-tight text-white">Настройки</h2>
@@ -330,7 +485,7 @@
 
   <div id="modal-add" class="fixed inset-0 z-50 hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" onclick="closeModal('modal-add')"></div>
-    <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container">
+    <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container max-h-[92vh] overflow-y-auto hide-scrollbar">
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6"></div>
       
       <div class="flex flex-col items-center mb-6 text-center">
@@ -475,11 +630,16 @@
   </div>
 
   <script>
-    const tg = window.Telegram.WebApp;
-    tg.expand();
+    const tg = window.Telegram?.WebApp || {
+      initData: '',
+      initDataUnsafe: {},
+      expand() {},
+      HapticFeedback: { impactOccurred() {} }
+    };
+    tg.expand?.();
 
     const BACKEND_URL = "https://music-backend-qjvk.onrender.com";
-    const EMPTY_STATE_HTML = `<div class="w-full text-center py-20 opacity-50 text-sm">Список пуст</div>`;
+    const EMPTY_STATE_HTML = `<div class="col-span-2 text-center py-20 opacity-50 text-sm">Список пуст</div>`;
 
     // Telegram initData — подписанная строка для серверной проверки
     const tgInitData = tg.initData || '';
@@ -510,6 +670,8 @@
 
     function tgHaptic(style = 'light') {
       try {
+        const version = Number.parseFloat(tg?.version || '0');
+        if (!version || version < 6.1) return;
         tg?.HapticFeedback?.impactOccurred(style);
       } catch (_) {}
     }
@@ -517,11 +679,27 @@
     function setSyncStatus(text, mode = 'idle') {
       const el = document.getElementById('sync-status');
       if (!el) return;
-      el.innerText = text;
-      el.classList.remove('ok', 'warn');
+      const textEl = el.querySelector('.sync-text');
+      if (textEl) textEl.textContent = text;
+      else el.textContent = text;
+      el.classList.remove('ok', 'warn', 'syncing');
+      if (mode === 'idle' || mode === 'syncing') el.classList.add('syncing');
       if (mode === 'ok') el.classList.add('ok');
       if (mode === 'warn') el.classList.add('warn');
     }
+
+    document.addEventListener('pointerdown', (event) => {
+      const btn = event.target.closest('.btn-press');
+      if (!btn || btn.disabled) return;
+      const rect = btn.getBoundingClientRect();
+      btn.style.setProperty('--press-x', `${event.clientX - rect.left}px`);
+      btn.style.setProperty('--press-y', `${event.clientY - rect.top}px`);
+
+      const ripple = document.createElement('span');
+      ripple.className = 'press-ripple';
+      btn.appendChild(ripple);
+      ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
+    });
 
     document.addEventListener('click', (event) => {
       if (event.target.closest('.btn-press')) tgHaptic('light');
@@ -658,7 +836,7 @@
       const clearBtn = document.getElementById('genre-search-clear');
       clearBtn.classList.toggle('hidden', !val);
 
-      if (val.length > 0) {
+      if (val.length > 0 || document.activeElement === input) {
         showGenreDropdown();
       } else {
         hideGenreDropdown();
@@ -672,7 +850,7 @@
       }
     }
 
-    function renderGenreDropdown(query) {
+    function renderGenreDropdown(query = '') {
       const list = document.getElementById('genre-dropdown-list');
       const low = query.toLowerCase();
 
@@ -729,10 +907,6 @@
 
     function showGenreDropdown() {
       const val = document.getElementById('genre-search').value.trim();
-      if (val.length === 0) {
-        hideGenreDropdown();
-        return;
-      }
       const dd = document.getElementById('genre-dropdown');
       dd.classList.remove('hidden');
       genreDropdownOpen = true;
@@ -768,11 +942,13 @@
     function setSortMode(mode) {
       sortMode = mode;
       document.querySelectorAll('.sort-btn').forEach(b => {
+        b.classList.remove('active');
         b.classList.remove('bg-white', 'text-black', 'border-white');
         b.classList.add('bg-white/5', 'border-white/10', 'text-gray-300');
       });
       const active = document.getElementById('sort-' + mode);
       if (active) {
+        active.classList.add('active');
         active.classList.add('bg-white', 'text-black', 'border-white');
         active.classList.remove('bg-white/5', 'border-white/10', 'text-gray-300');
       }
@@ -932,19 +1108,11 @@
       setTimeout(() => { t.classList.replace('opacity-100', 'opacity-0'); t.classList.replace('pointer-events-auto', 'pointer-events-none'); }, 2500);
     }
 
-    function switchTab(tabId) {
-      const current = document.querySelector('main > div.fade-in:not(.hidden)');
-      const next = document.getElementById('screen-' + tabId);
-      if (current === next) return;
+    const TAB_ORDER = ['home', 'likes', 'settings'];
+    let activeTabId = null;
+    let tabTransitionTimer = null;
 
-      if(current) current.classList.remove('fade-in');
-      void document.body.offsetWidth; 
-      
-      document.querySelectorAll('main > div[id^="screen-"]').forEach(screen => screen.classList.add('hidden'));
-      
-      next.classList.remove('hidden');
-      next.classList.add('fade-in');
-
+    function updateTabNav(tabId) {
       document.querySelectorAll('nav > button[id^="tab-"]').forEach(btn => {
         const id = btn.id.replace('tab-', '');
         const icon = btn.querySelector('svg') || btn.querySelector('i');
@@ -956,7 +1124,76 @@
           if(icon) icon.classList.remove('stroke-[2.5px]'); 
         }
       });
+    }
+
+    function cleanupTabTransition(screen) {
+      if (!screen) return;
+      screen.classList.remove(
+        'fade-in',
+        'tab-screen-entering',
+        'tab-screen-exiting',
+        'tab-enter-forward',
+        'tab-exit-forward',
+        'tab-enter-backward',
+        'tab-exit-backward'
+      );
+    }
+
+    function switchTab(tabId) {
+      const next = document.getElementById('screen-' + tabId);
+      if (!next) return;
       if (tabId === 'likes') renderLikes();
+
+      const screens = Array.from(document.querySelectorAll('main > div[id^="screen-"]'));
+      const current = activeTabId
+        ? document.getElementById('screen-' + activeTabId)
+        : document.querySelector('main > div[id^="screen-"]:not(.hidden)');
+
+      if (current === next && !next.classList.contains('hidden')) {
+        updateTabNav(tabId);
+        return;
+      }
+
+      if (tabTransitionTimer) {
+        clearTimeout(tabTransitionTimer);
+        tabTransitionTimer = null;
+      }
+
+      screens.forEach(screen => {
+        cleanupTabTransition(screen);
+        if (screen !== current && screen !== next) screen.classList.add('hidden');
+      });
+
+      const main = document.querySelector('main');
+      if (main) main.scrollTo({ top: 0, behavior: 'auto' });
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const previousIndex = TAB_ORDER.indexOf(activeTabId);
+      const nextIndex = TAB_ORDER.indexOf(tabId);
+      const direction = previousIndex !== -1 && nextIndex < previousIndex ? 'backward' : 'forward';
+
+      activeTabId = tabId;
+      updateTabNav(tabId);
+
+      if (!current || current === next || current.id === 'screen-loading' || prefersReducedMotion) {
+        screens.forEach(screen => screen.classList.toggle('hidden', screen !== next));
+        next.classList.remove('hidden');
+        return;
+      }
+
+      current.classList.remove('hidden');
+      next.classList.remove('hidden');
+      void next.offsetWidth;
+
+      current.classList.add('tab-screen-exiting', `tab-exit-${direction}`);
+      next.classList.add('tab-screen-entering', `tab-enter-${direction}`);
+
+      tabTransitionTimer = setTimeout(() => {
+        current.classList.add('hidden');
+        cleanupTabTransition(current);
+        cleanupTabTransition(next);
+        tabTransitionTimer = null;
+      }, 420);
     }
 
     function openModal(id) {
@@ -997,7 +1234,7 @@
       const nameEl = document.getElementById('profile-name');
       if(nameEl) {
         const userReviews = reviews.filter(r => r.author === profileUsername);
-        nameEl.innerText = escapeHtml(profileUsername);
+        nameEl.textContent = profileUsername;
 
         const isMe = profileUsername === user.username;
         // Проверяем, является ли этот пользователь админом (из серверного списка)
@@ -1115,11 +1352,10 @@
         const raw = JSON.parse(localStorage.getItem(CACHE_KEY));
         if (!raw) return null;
 
-        // Обратная совместимость со старым форматом без метаданных.
-        // Мигрируем legacy-структуру в формат с TTL, чтобы исключить вечный stale-cache.
+        // Старый формат не содержал timestamp, поэтому не показываем потенциально вечные stale-данные.
         if (Array.isArray(raw.releases) || Array.isArray(raw.reviews)) {
-          saveCache(raw);
-          return raw;
+          localStorage.removeItem(CACHE_KEY);
+          return null;
         }
 
         if (!raw.savedAt || !raw.data) return null;
@@ -1155,13 +1391,13 @@
 
     // Загрузка: кэш мгновенно → сервер фоном
     async function fetchDB() {
-        setSyncStatus('Синхронизация...', 'idle');
+        setSyncStatus('Загрузка релизов', 'syncing');
 
         // 1. Мгновенно показываем кэш
         const cached = loadCache();
         if (cached) {
           applyData(cached);
-          setSyncStatus('Данные из кэша', 'ok');
+          setSyncStatus('Обновляем релизы', 'syncing');
         }
 
         // 2. Загружаем свежие данные с сервера
@@ -1326,7 +1562,7 @@
           document.getElementById('manual-title').value = parsedName;
           if (parsedCover) {
               manualCoverBase64 = parsedCover;
-              document.getElementById('manual-cover-preview').innerHTML = `<img src="${escapeHtml(parsedCover)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
+              document.getElementById('manual-cover-preview').innerHTML = `<img src="${escapeHtml(parsedCover)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="media-edit-overlay absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
           }
           renderAddGenreSelector('manual-genre-selector');
           
@@ -1348,7 +1584,7 @@
       reader.onload = function(e) {
           manualCoverBase64 = e.target.result;
           const previewZone = document.getElementById('manual-cover-preview');
-          previewZone.innerHTML = `<img src="${escapeHtml(manualCoverBase64)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
+          previewZone.innerHTML = `<img src="${escapeHtml(manualCoverBase64)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="media-edit-overlay absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
           lucide.createIcons();
       }
       reader.readAsDataURL(file);
@@ -1411,8 +1647,8 @@
        .catch(e => console.error('Like network error:', e));
       
       // ⚡ Bolt: Replace O(N) full DOM re-renders with targeted O(1) DOM updates
-      const safeId = escapeJsHtml(id);
-      document.querySelectorAll(`button[onclick*="toggleLikeAPI(event, '${safeId}')"]`).forEach(btn => {
+      const safeId = escapeCssString(id);
+      document.querySelectorAll(`button[data-like-id="${safeId}"]`).forEach(btn => {
         const icon = btn.querySelector('svg') || btn.querySelector('i');
         if (icon) {
           if (isLiking) {
@@ -1437,12 +1673,12 @@
       // ⚡ Bolt: Replace O(N) .reduce() array scan inside render loop with O(1) map lookup
       const cachedAvg = avgRatingByRelId.get(r.id);
       const avgRating = cachedAvg ? cachedAvg.toFixed(1) : null;
-      const ratingBadge = avgRating ? `<div class="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
-      return `<div onclick="openRelease('${escapeJsHtml(r.id)}')" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); openRelease('${escapeJsHtml(r.id)}'); }" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="card-enter flex flex-col gap-2 w-[calc(50%-8px)] shrink-0 active:scale-95 transition-transform relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]" style="animation-delay: ${delay}ms">
+      const ratingBadge = avgRating ? `<div class="rating-badge absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
+      return `<div onclick="openRelease('${escapeJsHtml(r.id)}')" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); openRelease('${escapeJsHtml(r.id)}'); }" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="card-enter flex flex-col gap-2 w-full min-w-0 active:scale-95 transition-transform relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]" style="animation-delay: ${delay}ms">
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
             <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" onerror="this.src='${escapeJsHtml(fb)}'" class="w-full h-full object-cover">
             ${ratingBadge}
-          <button onclick="toggleLikeAPI(event, '${escapeJsHtml(r.id)}')" aria-label="Нравится" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
+          <button onclick="toggleLikeAPI(event, '${escapeJsHtml(r.id)}')" data-like-id="${escapeHtml(r.id)}" aria-label="Нравится" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
               <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-red-500 text-red-500':'text-white'}"></i>
             </button>
           </div>
