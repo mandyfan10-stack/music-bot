@@ -67,6 +67,29 @@ test('escapeJs: should return empty string for nullish values', () => {
     assert.strictEqual(escapeJs(undefined), '');
 });
 
+
+test('escapeJs: should escape all occurrences of quotes and backslashes', () => {
+    assert.strictEqual(escapeJs("'''"), "\\'\\'\\'");
+    assert.strictEqual(escapeJs('"""'), '\\"\\"\\"');
+    assert.strictEqual(escapeJs('a\\b\\c'), 'a\\\\b\\\\c');
+});
+
+test('escapeJs: should return empty string for empty string input', () => {
+    assert.strictEqual(escapeJs(''), '');
+});
+
+test('escapeJs: should convert non-strings to strings and escape them', () => {
+    assert.strictEqual(escapeJs(123), '123');
+    assert.strictEqual(escapeJs(true), 'true');
+});
+
+test('escapeJs: should escape a complex mix of characters', () => {
+    assert.strictEqual(
+        escapeJs(`Text with \\ and " and '`),
+        `Text with \\\\ and \\" and \\'`
+    );
+});
+
 test('escapeJsHtml: should combine JS and HTML escaping safely', () => {
     assert.strictEqual(
         escapeJsHtml(`'"><script>alert(1)</script>`),
