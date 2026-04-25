@@ -1230,20 +1230,37 @@
         throw new Error('AI Parse Fail');
     }
 
+    const itunesCache = new Map();
     async function fetchItunesData(artist, name) {
-        const query = encodeURIComponent(`${artist} ${name}`).replace(/%20/g, '+');
-        const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=1`);
-        const itunesData = await itunesRes.json();
-
-        if (itunesData.results && itunesData.results.length > 0) {
-            const track = itunesData.results[0];
-            return {
-                cover: track.artworkUrl100.replace('100x100bb', '600x600bb'),
-                artist: track.artistName,
-                name: track.trackName
-            };
+        const cacheKey = `${artist}|${name}`.toLowerCase();
+        if (itunesCache.has(cacheKey)) {
+            return itunesCache.get(cacheKey);
         }
-        return null;
+
+        const fetchPromise = (async () => {
+            try {
+                const query = encodeURIComponent(`${artist} ${name}`).replace(/%20/g, '+');
+                const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=1`);
+                const itunesData = await itunesRes.json();
+
+                if (itunesData.results && itunesData.results.length > 0) {
+                    const track = itunesData.results[0];
+                    return {
+                        cover: track.artworkUrl100.replace('100x100bb', '600x600bb'),
+                        artist: track.artistName,
+                        name: track.trackName
+                    };
+                }
+                return null;
+            } catch (error) {
+                // Remove from cache on failure so we can retry later
+                itunesCache.delete(cacheKey);
+                throw error;
+            }
+        })();
+
+        itunesCache.set(cacheKey, fetchPromise);
+        return fetchPromise;
     }
 
     // --- НОВАЯ УМНАЯ ЛОГИКА РАСПОЗНАВАНИЯ ---

@@ -17,3 +17,7 @@
 ## 2024-05-27 - Full Recalculations During State Mutations
 **Learning:** The application was recalculating full O(N) Maps (like `avgRatingByRelId`, `genreCounts`, `reviewsByRelId`) from scratch on every single add/delete mutation. This causes expensive overhead on every action. Using incremental cache updates for these maps prevents this performance degradation as lists grow.
 **Action:** When mutating state (add/delete), update the relevant caches/Maps incrementally for the specific item rather than clearing and completely rebuilding the maps from the entire array.
+
+## 2024-05-28 - Duplicate Inflight External API Requests
+**Learning:** Functions communicating with external APIs (like `fetchItunesData`) can generate duplicate inflight requests if identical requests are triggered concurrently before the first completes, causing excessive latency, bandwidth usage, and potential rate limits.
+**Action:** When adding memory cache (like `new Map()`) to deduplicate requests, cache the initial `Promise` rather than just the final result, and ensure failed promises are evicted so retries can occur.
