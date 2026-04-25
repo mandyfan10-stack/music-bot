@@ -977,12 +977,10 @@
     }
 
     function getFilteredReleases() {
-      let filtered = [...releases];
-
-      // Фильтр по жанру
-      if (activeGenreFilter) {
-        filtered = filtered.filter(r => (r.genre || 'Другое') === activeGenreFilter);
-      }
+      // ⚡ Bolt: Avoid redundant array clone if filtering since filter creates a new array anyway
+      let filtered = activeGenreFilter
+        ? releases.filter(r => (r.genre || 'Другое') === activeGenreFilter)
+        : [...releases];
 
       // Сортировка
       switch (sortMode) {
@@ -994,8 +992,9 @@
           break;
         case 'reviews':
           filtered.sort((a, b) => {
-            const countA = (reviewsByRelId.get(a.id) || []).length;
-            const countB = (reviewsByRelId.get(b.id) || []).length;
+            // ⚡ Bolt: Prevent array allocation on every miss inside sort loop via optional chaining
+            const countA = reviewsByRelId.get(a.id)?.length || 0;
+            const countB = reviewsByRelId.get(b.id)?.length || 0;
             return countB - countA;
           });
           break;
@@ -1773,7 +1772,16 @@
       }
 
       reviews = reviews.filter(r => r.id !== pendingReviewDelete);
-      updateReviewsMap();
+
+      // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculation
+      if (pendingReviewTargetReleaseId) {
+        const rvs = reviewsByRelId.get(pendingReviewTargetReleaseId) || [];
+        const updatedRvs = rvs.filter(r => r.id !== pendingReviewDelete);
+        reviewsByRelId.set(pendingReviewTargetReleaseId, updatedRvs);
+        const avg = updatedRvs.length > 0 ? updatedRvs.reduce((s, r) => s + (r.rating || 0), 0) / updatedRvs.length : 0;
+        avgRatingByRelId.set(pendingReviewTargetReleaseId, avg);
+      }
+
       if (activeReleaseId && pendingReviewTargetReleaseId === activeReleaseId) {
         renderReviews();
       }
