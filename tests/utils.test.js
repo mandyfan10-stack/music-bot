@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { cleanUsername, escapeHtml, escapeJs, escapeJsHtml } = require('../src/utils.js');
+const { cleanUsername, escapeHtml, escapeJs, escapeJsHtml, escapeCssString } = require('../src/utils.js');
 
 test('cleanUsername: should remove leading @ and convert to lowercase', () => {
   assert.strictEqual(cleanUsername('@User'), 'user');
@@ -95,4 +95,12 @@ test('escapeJsHtml: should combine JS and HTML escaping safely', () => {
         escapeJsHtml(`'"><script>alert(1)</script>`),
         `\\&#39;\\&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;`
     );
+});
+
+test('escapeCssString: should escape selector string delimiters', () => {
+    assert.strictEqual(escapeCssString('release"one\\two'), 'release\\"one\\\\two');
+});
+
+test('escapeCssString: should escape CSS line terminators', () => {
+    assert.strictEqual(escapeCssString('a\nb\rc\f'), 'a\\A b\\D c\\C ');
 });
