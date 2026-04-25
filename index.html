@@ -1196,13 +1196,24 @@
       }, 420);
     }
 
+    const activeModals = [];
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && activeModals.length > 0) {
+        closeModal(activeModals[activeModals.length - 1]);
+      }
+    });
+
     function openModal(id) {
       const m = document.getElementById(id); m.classList.remove('hidden');
       m.querySelector('.modal-overlay').classList.add('fade-in');
       m.querySelector('.modal-container').classList.add('slide-up-modal');
+      activeModals.push(id);
     }
 
     function closeModal(id) {
+      const idx = activeModals.indexOf(id);
+      if (idx !== -1) activeModals.splice(idx, 1);
       const m = document.getElementById(id); const c = m.querySelector('.modal-container'); const o = m.querySelector('.modal-overlay');
       c.classList.replace('slide-up-modal', 'slide-down-modal'); o.classList.replace('fade-in', 'fade-out');
       setTimeout(() => {
