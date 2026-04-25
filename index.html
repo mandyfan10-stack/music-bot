@@ -1764,7 +1764,8 @@
       if (!pendingReviewDelete) return;
 
       try {
-        const res = await fetch(`${BACKEND_URL}/api/reviews/${pendingReviewDelete}`, { method: 'DELETE', headers: authHeaders() });
+        // Sentinel: Wrap path parameter in encodeURIComponent to prevent path traversal
+        const res = await fetch(`${BACKEND_URL}/api/reviews/${encodeURIComponent(pendingReviewDelete)}`, { method: 'DELETE', headers: authHeaders() });
         if (!res.ok) throw new Error('HTTP ' + res.status);
       } catch(e) {
         console.error('Ошибка удаления рецензии:', e);
@@ -1796,7 +1797,8 @@
       if (!releaseToDelete) return;
       
       try {
-        const res = await fetch(`${BACKEND_URL}/api/releases/${releaseToDelete}`, { method: 'DELETE', headers: authHeaders() });
+        // Sentinel: Wrap path parameter in encodeURIComponent to prevent path traversal
+        const res = await fetch(`${BACKEND_URL}/api/releases/${encodeURIComponent(releaseToDelete)}`, { method: 'DELETE', headers: authHeaders() });
         if (!res.ok) throw new Error('HTTP ' + res.status);
       } catch(e) {
         console.error('Ошибка удаления релиза:', e);

@@ -8,6 +8,11 @@
 **Learning:** `encodeURIComponent` does not provide sufficient escaping for single quotes when the resulting string is embedded within a single-quoted JavaScript string inside an HTML attribute.
 **Prevention:** Always use `escapeJsHtml()` when interpolating variables into inline JavaScript handlers (like `onclick`, `onerror`, etc.) to properly escape JS special characters and prevent string breakout.
 
+## 2026-04-25 - Fix path traversal in delete API calls
+**Vulnerability:** Unsanitized IDs directly concatenated into fetch URLs for `DELETE /api/reviews/:id` and `DELETE /api/releases/:id` could allow an attacker to bypass intended paths (e.g. `../users/123`).
+**Learning:** Concatenating raw variables directly into API endpoint URLs is dangerous as it allows for path traversal vulnerabilities when the variable contains `/` or `..`.
+**Prevention:** Always use `encodeURIComponent()` to sanitize path parameters before appending them to URLs.
+
 ## 2025-02-23 - Prevent DOM XSS when injecting external API data via innerHTML
 **Vulnerability:** In `handleAddRelease()`, the application fetched data from external APIs (oEmbed, iTunes, etc.) and injected `parsedCover` directly into the DOM using `innerHTML` without escaping. An attacker could potentially return malicious payloads containing double quotes to break out of the `src` attribute context and inject executable code (DOM XSS).
 **Learning:** Even data from seemingly trusted or well-known APIs (like oEmbed or iTunes) must be treated as untrusted. Injecting external API data directly into `innerHTML` is dangerous.
