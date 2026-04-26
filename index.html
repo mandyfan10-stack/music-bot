@@ -720,6 +720,14 @@
       } catch (_) {}
     }
 
+    function getHapticTarget(event) {
+      const source = event.target instanceof Element ? event.target : null;
+      if (!source) return null;
+      const target = source.closest('button, [role="button"], .modal-overlay');
+      if (!target || target.disabled || target.getAttribute('aria-disabled') === 'true') return null;
+      return target;
+    }
+
     function setSyncStatus(text, mode = 'idle') {
       const el = document.getElementById('sync-status');
       if (!el) return;
@@ -746,7 +754,13 @@
     });
 
     document.addEventListener('click', (event) => {
-      if (event.target.closest('.btn-press')) tgHaptic('light');
+      if (getHapticTarget(event)) tgHaptic('light');
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+      const target = getHapticTarget(event);
+      if (target?.matches('[role="button"]')) tgHaptic('light');
     });
 
     document.getElementById('welcome-user-name').innerText = user.username;
