@@ -99,13 +99,20 @@
       background-size: 80px 80px;
       background-position: 0 0, 40px 40px;
     }
+
+    .welcome-card {
+      width: min(340px, calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
+      box-sizing: border-box;
+      min-width: 0;
+    }
     
     .welcome-logo {
       font-family: 'Playfair Display', serif; 
       color: var(--accent-red); 
-      font-size: 90px; 
+      font-size: clamp(64px, 21vw, 90px);
       font-weight: 900; 
-      letter-spacing: -4px; 
+      letter-spacing: -0.04em;
       line-height: 0.8; 
       display: inline-block;
       transform: scaleY(1.4); 
@@ -336,6 +343,43 @@
     body.light-theme .sync-pill.ok { color: #059669; border-color: rgba(16,185,129,0.24); background: linear-gradient(135deg, rgba(236,253,245,0.98), rgba(209,250,229,0.68)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.92), 0 8px 24px rgba(16,185,129,0.1); }
     body.light-theme .sync-pill.warn { color: #e11d48; border-color: rgba(225,29,72,0.24); background: linear-gradient(135deg, rgba(255,241,242,0.98), rgba(255,228,230,0.68)); }
 
+    @media (max-width: 420px) {
+      header { padding-left: 14px !important; padding-right: 14px !important; gap: 8px !important; }
+      main > .tab-screen { padding-left: 16px !important; padding-right: 16px !important; }
+      .logo-container { padding: 5px 10px; background-size: 14px 14px; background-position: 0 0, 7px 7px; }
+      .logo-text { font-size: 22px; letter-spacing: -1px; }
+      .brand-name { display: none; }
+      .sync-pill { max-width: 118px; min-height: 24px; gap: 5px; padding-left: 8px !important; padding-right: 8px !important; font-size: 9px !important; }
+      .sync-dot { width: 6px; height: 6px; }
+      #user-profile { max-width: 96px; padding-right: 8px !important; }
+      #user-profile .w-7 { width: 26px !important; height: 26px !important; }
+      #user-role { display: none; }
+      #releases-grid, #likes-grid { gap: 12px !important; }
+      #sort-controls {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px !important;
+        overflow: visible;
+        padding-bottom: 0;
+      }
+      #sort-controls > button {
+        width: 100%;
+        min-width: 0;
+        justify-content: center;
+        white-space: nowrap;
+      }
+      #btn-reset-filters {
+        grid-column: 1 / -1;
+        margin-left: 0 !important;
+      }
+      #welcome-screen > div {
+        width: calc(100vw - 28px) !important;
+        max-width: 340px !important;
+        min-width: 0;
+      }
+      .welcome-logo { font-size: clamp(58px, 18vw, 74px); margin-bottom: 14px; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         animation-duration: 0.01ms !important;
@@ -350,10 +394,10 @@
 <body class="antialiased h-screen flex flex-col">
 
   <div id="welcome-screen" class="fixed inset-0 z-[200] flex flex-col items-center justify-center welcome-bg transition-opacity duration-700">
-    <div class="bg-black/80 backdrop-blur-md border border-white/10 p-10 rounded-[3rem] text-center shadow-2xl w-[85%] max-w-sm relative overflow-hidden flex flex-col items-center">
+    <div class="welcome-card bg-black/80 backdrop-blur-md border border-white/10 p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] text-center shadow-2xl relative overflow-hidden flex flex-col items-center">
       <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-red-600/20 blur-[50px] rounded-full pointer-events-none"></div>
       <h1 class="welcome-logo relative z-10">XXII</h1>
-      <h2 class="text-4xl font-bold text-white tracking-[0.2em] mb-6 relative z-10 uppercase" style="font-family: 'Poiret One', sans-serif;">Sound</h2>
+      <h2 class="text-3xl sm:text-4xl font-bold text-white tracking-[0.2em] mb-6 relative z-10 uppercase" style="font-family: 'Poiret One', sans-serif;">Sound</h2>
       <p class="text-gray-300 mb-8 text-[14px] leading-relaxed relative z-10">
         Добро пожаловать, <span id="welcome-user-name" class="text-white font-bold"></span>!<br><br>
         Эксклюзивные релизы и звук, которого нет на других платформах.
@@ -371,7 +415,7 @@
   <header class="pt-6 pb-4 px-6 flex items-center justify-between gap-3 z-10 bg-transparent sticky top-0">
     <div class="flex items-center gap-3 min-w-0 flex-1">
       <div class="logo-container shrink-0"><span class="logo-text">XXII</span></div>
-      <span class="font-bold tracking-tight text-xl text-white uppercase shrink-0" style="font-family: 'Poiret One', sans-serif; letter-spacing: 1px;">Sound</span>
+      <span class="brand-name font-bold tracking-tight text-xl text-white uppercase shrink-0" style="font-family: 'Poiret One', sans-serif; letter-spacing: 1px;">Sound</span>
       <span id="sync-status" class="sync-pill syncing text-[10px] font-semibold px-2.5 py-1 rounded-full" aria-live="polite">
         <span class="sync-dot" aria-hidden="true"></span>
         <span class="sync-text">Синхронизация...</span>
