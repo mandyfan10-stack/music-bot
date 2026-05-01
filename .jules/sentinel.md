@@ -12,3 +12,8 @@
 **Vulnerability:** In `handleAddRelease()`, the application fetched data from external APIs (oEmbed, iTunes, etc.) and injected `parsedCover` directly into the DOM using `innerHTML` without escaping. An attacker could potentially return malicious payloads containing double quotes to break out of the `src` attribute context and inject executable code (DOM XSS).
 **Learning:** Even data from seemingly trusted or well-known APIs (like oEmbed or iTunes) must be treated as untrusted. Injecting external API data directly into `innerHTML` is dangerous.
 **Prevention:** Always sanitize/escape external data using `escapeHtml()` before injecting it into the DOM via `innerHTML`, even if the data originates from a "trusted" external source.
+
+## 2026-05-01 - Prevent path traversal in dynamically constructed API request URLs
+**Vulnerability:** In `executeDeleteReview()` and `executeDeleteRelease()`, `pendingReviewDelete` and `releaseToDelete` variables were injected directly into backend API request URL paths (e.g., `fetch(`${BACKEND_URL}/api/reviews/${pendingReviewDelete}`)`). This exposes the application to potential path traversal vulnerabilities if an attacker manages to set these ID variables to contain characters like `/` or `..`.
+**Learning:** Appending user-controlled or untrusted variables directly to backend API URL paths without URL-encoding can allow the path to be manipulated.
+**Prevention:** Always sanitize dynamically constructed API path parameters using `encodeURIComponent()` to ensure any potentially dangerous characters are safely encoded.
