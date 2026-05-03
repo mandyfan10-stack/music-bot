@@ -1035,11 +1035,14 @@
     }
 
     function getFilteredReleases() {
-      let filtered = [...releases];
+      // ⚡ Bolt: Avoid intermediate array copy before filter
+      let filtered;
 
       // Фильтр по жанру
       if (activeGenreFilter) {
-        filtered = filtered.filter(r => (r.genre || 'Другое') === activeGenreFilter);
+        filtered = releases.filter(r => (r.genre || 'Другое') === activeGenreFilter);
+      } else {
+        filtered = [...releases];
       }
 
       // Сортировка
@@ -1052,8 +1055,9 @@
           break;
         case 'reviews':
           filtered.sort((a, b) => {
-            const countA = (reviewsByRelId.get(a.id) || []).length;
-            const countB = (reviewsByRelId.get(b.id) || []).length;
+            // ⚡ Bolt: Use optional chaining to avoid allocating empty fallback arrays
+            const countA = reviewsByRelId.get(a.id)?.length || 0;
+            const countB = reviewsByRelId.get(b.id)?.length || 0;
             return countB - countA;
           });
           break;
