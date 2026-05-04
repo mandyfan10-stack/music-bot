@@ -799,7 +799,7 @@
 
     document.getElementById('user-name').innerText = user.username;
 
-    let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), reviewsByAuthor = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
 
     function updateGenreCounts() {
       genreCounts = {};
@@ -811,12 +811,18 @@
 
     function updateReviewsMap() {
       reviewsByRelId.clear();
+      reviewsByAuthor.clear();
       avgRatingByRelId.clear();
       reviews.forEach(r => {
         if (!reviewsByRelId.has(r.relId)) {
           reviewsByRelId.set(r.relId, []);
         }
         reviewsByRelId.get(r.relId).push(r);
+
+        if (!reviewsByAuthor.has(r.author)) {
+          reviewsByAuthor.set(r.author, []);
+        }
+        reviewsByAuthor.get(r.author).push(r);
       });
       reviewsByRelId.forEach((rvs, relId) => {
         let avg = 0;
@@ -1291,7 +1297,7 @@
       const profileUsername = activeProfileUsername;
       const nameEl = document.getElementById('profile-name');
       if(nameEl) {
-        const userReviews = reviews.filter(r => r.author === profileUsername);
+        const userReviews = reviewsByAuthor.get(profileUsername) || [];
         nameEl.textContent = profileUsername;
 
         const isMe = profileUsername === user.username;
@@ -1897,7 +1903,7 @@
       if (!t) return showToast('Напишите текст');
       if (t.length < REVIEW_MIN_LENGTH) return showToast(`Минимум ${REVIEW_MIN_LENGTH} символов`);
       if (t.length > REVIEW_MAX_LENGTH) return showToast(`Максимум ${REVIEW_MAX_LENGTH} символов`);
-      if (reviews.some(r => r.relId === activeReleaseId && r.author === user.username)) return showToast('На этот трек уже есть ваша рецензия');
+      if ((reviewsByRelId.get(activeReleaseId) || []).some(r => r.author === user.username)) return showToast('На этот трек уже есть ваша рецензия');
 
       const objectiveRating = getCriteriaAverage(selectedCriteria);
       const finalRating = Math.round((objectiveRating + selectedRating) / 2 * 10) / 10;
@@ -1927,6 +1933,10 @@
       // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculations
       if (!reviewsByRelId.has(activeReleaseId)) reviewsByRelId.set(activeReleaseId, []);
       reviewsByRelId.get(activeReleaseId).push(newRev);
+
+      if (!reviewsByAuthor.has(user.username)) reviewsByAuthor.set(user.username, []);
+      reviewsByAuthor.get(user.username).push(newRev);
+
       const rvs = reviewsByRelId.get(activeReleaseId);
       const avg = rvs.length > 0 ? rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length : 0;
       avgRatingByRelId.set(activeReleaseId, avg);

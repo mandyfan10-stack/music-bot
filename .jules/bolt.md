@@ -21,3 +21,7 @@
 ## 2024-05-28 - Duplicate Inflight External API Requests
 **Learning:** Functions communicating with external APIs (like `fetchItunesData`) can generate duplicate inflight requests if identical requests are triggered concurrently before the first completes, causing excessive latency, bandwidth usage, and potential rate limits.
 **Action:** When adding memory cache (like `new Map()`) to deduplicate requests, cache the initial `Promise` rather than just the final result, and ensure failed promises are evicted so retries can occur.
+
+## 2024-05-29 - O(N) Array Filter in User Profile Rendering
+**Learning:** Rendering the user profile involved scanning the entire global `reviews` array using `.filter(r => r.author === profileUsername)` to gather user reviews and calling `.some(...)` on all reviews to check duplicates during addReview. This causes O(N) rendering delays as the global reviews array grows.
+**Action:** When filtering a large global array by a primary key/author for UI views, pre-calculate a grouping Map (e.g., `reviewsByAuthor`) and keep it incrementally updated. This changes the O(N) filter into an O(1) map lookup.
