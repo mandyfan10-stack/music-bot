@@ -758,6 +758,12 @@
     });
 
     document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        if (activeModals.length > 0) {
+          closeModal(activeModals[activeModals.length - 1]);
+        }
+        return;
+      }
       if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
       const target = getHapticTarget(event);
       if (target?.matches('[role="button"]')) tgHaptic('light');
@@ -1254,15 +1260,21 @@
       }, 420);
     }
 
+    let activeModals = [];
+
     function openModal(id) {
       const m = document.getElementById(id); m.classList.remove('hidden');
       m.querySelector('.modal-overlay').classList.add('fade-in');
       m.querySelector('.modal-container').classList.add('slide-up-modal');
+      if (!activeModals.includes(id)) {
+        activeModals.push(id);
+      }
     }
 
     function closeModal(id) {
       const m = document.getElementById(id); const c = m.querySelector('.modal-container'); const o = m.querySelector('.modal-overlay');
       c.classList.replace('slide-up-modal', 'slide-down-modal'); o.classList.replace('fade-in', 'fade-out');
+      activeModals = activeModals.filter(modId => modId !== id);
       setTimeout(() => {
         m.classList.add('hidden'); c.classList.remove('slide-down-modal'); o.classList.remove('fade-out');
         if(id === 'modal-add') {
