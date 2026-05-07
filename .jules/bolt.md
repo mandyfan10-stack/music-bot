@@ -21,3 +21,7 @@
 ## 2024-05-28 - Duplicate Inflight External API Requests
 **Learning:** Functions communicating with external APIs (like `fetchItunesData`) can generate duplicate inflight requests if identical requests are triggered concurrently before the first completes, causing excessive latency, bandwidth usage, and potential rate limits.
 **Action:** When adding memory cache (like `new Map()`) to deduplicate requests, cache the initial `Promise` rather than just the final result, and ensure failed promises are evicted so retries can occur.
+
+## 2024-05-29 - Prevent Excessive GC Overhead from Redundant Array Allocations in Filtering and Sorting
+**Learning:** During UI updates that perform multiple consecutive array operations (like copying, filtering, and sorting) over a large dataset, making redundant copies of arrays before returning from `.filter()` directly or repeatedly allocating fallback empty arrays inside a frequent sort comparator (e.g., `(map.get(id) || []).length`) creates a high volume of short-lived objects. This leads to frequent GC sweeps, causing severe UI jank and frame drops.
+**Action:** When an operation naturally creates and returns a new array (like `.filter()`), do not preemptively duplicate the array before calling it. Inside sort comparators and tight loops, prefer optional chaining (e.g., `map.get(id)?.length || 0`) over allocating new objects as defaults.
