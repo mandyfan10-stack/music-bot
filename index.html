@@ -799,7 +799,7 @@
 
     document.getElementById('user-name').innerText = user.username;
 
-    let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), reviewsByAuthor = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
 
     function updateGenreCounts() {
       genreCounts = {};
@@ -812,11 +812,17 @@
     function updateReviewsMap() {
       reviewsByRelId.clear();
       avgRatingByRelId.clear();
+      reviewsByAuthor.clear();
       reviews.forEach(r => {
         if (!reviewsByRelId.has(r.relId)) {
           reviewsByRelId.set(r.relId, []);
         }
         reviewsByRelId.get(r.relId).push(r);
+
+        if (!reviewsByAuthor.has(r.author)) {
+          reviewsByAuthor.set(r.author, []);
+        }
+        reviewsByAuthor.get(r.author).push(r);
       });
       reviewsByRelId.forEach((rvs, relId) => {
         let avg = 0;
@@ -1291,7 +1297,8 @@
       const profileUsername = activeProfileUsername;
       const nameEl = document.getElementById('profile-name');
       if(nameEl) {
-        const userReviews = reviews.filter(r => r.author === profileUsername);
+        // ⚡ Bolt: Replace O(N) array filtering with O(1) map lookup
+        const userReviews = reviewsByAuthor.get(profileUsername) || [];
         nameEl.textContent = profileUsername;
 
         const isMe = profileUsername === user.username;
@@ -1879,6 +1886,7 @@
 
       reviewsByRelId.delete(releaseToDelete);
       avgRatingByRelId.delete(releaseToDelete);
+      updateReviewsMap(); // Rebuild reviewsByAuthor after filtering out deleted release's reviews
       
       renderReleases();
       if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
@@ -1927,6 +1935,9 @@
       // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculations
       if (!reviewsByRelId.has(activeReleaseId)) reviewsByRelId.set(activeReleaseId, []);
       reviewsByRelId.get(activeReleaseId).push(newRev);
+      // Use push to maintain consistent array ordering within map, matching updateReviewsMap
+      if (!reviewsByAuthor.has(newRev.author)) reviewsByAuthor.set(newRev.author, []);
+      reviewsByAuthor.get(newRev.author).push(newRev);
       const rvs = reviewsByRelId.get(activeReleaseId);
       const avg = rvs.length > 0 ? rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length : 0;
       avgRatingByRelId.set(activeReleaseId, avg);
