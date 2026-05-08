@@ -21,3 +21,7 @@
 ## 2024-05-28 - Duplicate Inflight External API Requests
 **Learning:** Functions communicating with external APIs (like `fetchItunesData`) can generate duplicate inflight requests if identical requests are triggered concurrently before the first completes, causing excessive latency, bandwidth usage, and potential rate limits.
 **Action:** When adding memory cache (like `new Map()`) to deduplicate requests, cache the initial `Promise` rather than just the final result, and ensure failed promises are evicted so retries can occur.
+
+## 2024-05-29 - Array Filtering for Relational Data Access
+**Learning:** `openProfileModal` was dynamically scanning the entire global `reviews` array using `reviews.filter(...)` every time a user profile was opened to find their specific reviews. This O(N) operation scales poorly as the platform grows.
+**Action:** Maintain a pre-calculated cache for common 1-to-many relationship lookups. Adding a global `reviewsByAuthor` Map allows for O(1) retrieval of a user's reviews, matching the existing optimization strategy seen with `reviewsByRelId`.
