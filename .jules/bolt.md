@@ -21,3 +21,7 @@
 ## 2024-05-28 - Duplicate Inflight External API Requests
 **Learning:** Functions communicating with external APIs (like `fetchItunesData`) can generate duplicate inflight requests if identical requests are triggered concurrently before the first completes, causing excessive latency, bandwidth usage, and potential rate limits.
 **Action:** When adding memory cache (like `new Map()`) to deduplicate requests, cache the initial `Promise` rather than just the final result, and ensure failed promises are evicted so retries can occur.
+
+## 2024-05-29 - Redundant Array Copying and Allocations in Sorting
+**Learning:** In the `getFilteredReleases` function, calling `[...releases]` unconditionally created an unnecessary intermediate array before it was subsequently passed to `.filter()`, which inherently produces a new array. Furthermore, the `sort` comparator for `reviews` was unnecessarily allocating an empty fallback array `|| []` when a key had no reviews just to check the `.length`, which generated a huge amount of short-lived objects leading to increased GC overhead within an $O(N \log N)$ loop.
+**Action:** To prevent unnecessary memory allocation and GC overhead during rendering and sorting, avoid intermediate array copies (e.g., `[...arr]`) before `.filter()` since it inherently returns a new array. Additionally, prefer optional chaining (e.g., `map.get(id)?.length || 0`) over allocating empty fallback arrays (e.g., `|| []`) in sort comparators.
