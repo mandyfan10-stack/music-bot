@@ -9,3 +9,7 @@
 ## 2026-04-24 - Complex Card Accessibility
 **Learning:** Adding interactive elements (like a "Like" button) inside a semantic `<button>` or `<a>` creates invalid HTML and breaks assistive tech.
 **Action:** For complex interactive cards containing nested buttons, use a non-interactive wrapper (like `<div>`), but apply `tabindex="0"`, `role="button"`, and handle keyboard events (`onkeydown` for Enter and Space) to ensure the card remains accessible without generating invalid nested interactive markup.
+
+## 2026-05-09 - Escape Key Accessibility for Modals
+**Learning:** Custom UI modal implementations often lack native behavior expected by users, such as being dismissable using the 'Escape' key, which is critical for keyboard accessibility and a fluid UX. Furthermore, when multiple modals can be stacked, tracking them is essential.
+**Action:** When implementing custom modals, use a global array stack (`activeModals`) to track opened modals. Implement a single document-level `keydown` listener that checks for `Escape` and closes only the top-most modal (`activeModals[activeModals.length - 1]`) to maintain consistent, accessible interaction patterns.
