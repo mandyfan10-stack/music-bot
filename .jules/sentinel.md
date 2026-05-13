@@ -12,3 +12,8 @@
 **Vulnerability:** In `handleAddRelease()`, the application fetched data from external APIs (oEmbed, iTunes, etc.) and injected `parsedCover` directly into the DOM using `innerHTML` without escaping. An attacker could potentially return malicious payloads containing double quotes to break out of the `src` attribute context and inject executable code (DOM XSS).
 **Learning:** Even data from seemingly trusted or well-known APIs (like oEmbed or iTunes) must be treated as untrusted. Injecting external API data directly into `innerHTML` is dangerous.
 **Prevention:** Always sanitize/escape external data using `escapeHtml()` before injecting it into the DOM via `innerHTML`, even if the data originates from a "trusted" external source.
+
+## 2026-05-13 - Path Traversal Vulnerability in API Route Path Parameters
+**Vulnerability:** API routes constructed by directly interpolating variables (like `pendingReviewDelete` and `releaseToDelete`) into the URL path can be exploited to bypass path structure if the input contains characters like `../`.
+**Learning:** Even when the backend handles IDs safely, unsanitized parameters passed via URL paths represent an injection vulnerability surface, leading to path traversal attacks (e.g. deleting arbitrary resources or hitting unexpected endpoints).
+**Prevention:** Always wrap path parameters constructed from variables with `encodeURIComponent()` to ensure all input is treated as a component, properly encoding slashes and dots.
