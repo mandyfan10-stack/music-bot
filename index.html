@@ -1831,7 +1831,13 @@
       }
 
       reviews = reviews.filter(r => r.id !== pendingReviewDelete);
-      updateReviewsMap();
+      // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculations
+      if (pendingReviewTargetReleaseId && reviewsByRelId.has(pendingReviewTargetReleaseId)) {
+        const updatedReviews = reviewsByRelId.get(pendingReviewTargetReleaseId).filter(r => r.id !== pendingReviewDelete);
+        reviewsByRelId.set(pendingReviewTargetReleaseId, updatedReviews);
+        const avg = updatedReviews.length > 0 ? updatedReviews.reduce((s, r) => s + (r.rating || 0), 0) / updatedReviews.length : 0;
+        avgRatingByRelId.set(pendingReviewTargetReleaseId, avg);
+      }
       if (activeReleaseId && pendingReviewTargetReleaseId === activeReleaseId) {
         renderReviews();
       }
