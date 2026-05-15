@@ -21,3 +21,6 @@
 ## 2024-05-28 - Duplicate Inflight External API Requests
 **Learning:** Functions communicating with external APIs (like `fetchItunesData`) can generate duplicate inflight requests if identical requests are triggered concurrently before the first completes, causing excessive latency, bandwidth usage, and potential rate limits.
 **Action:** When adding memory cache (like `new Map()`) to deduplicate requests, cache the initial `Promise` rather than just the final result, and ensure failed promises are evicted so retries can occur.
+## 2024-05-29 - O(N) Array Recalculations in Review Deletion
+**Learning:** The application was recalculating full O(N) Maps (like `reviewsByRelId` and `avgRatingByRelId`) from scratch via `updateReviewsMap()` after deleting a single review. This caused unnecessary iterations across all releases, degrading performance.
+**Action:** Replaced the full map rebuild in `executeDeleteReview()` with an O(M) targeted incremental update for just the affected release, where M is the number of reviews for that release.
