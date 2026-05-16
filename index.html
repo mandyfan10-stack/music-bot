@@ -539,7 +539,7 @@
       
       <div id="add-form-step-1" class="space-y-4">
         <input id="input-link" aria-label="Ссылка на трек или клип" type="url" placeholder="Ссылка на трек или клип..." class="w-full glass-input rounded-2xl px-4 py-4 text-[14px] text-white outline-none focus:ring-1 ring-red-500/50">
-        <button id="btn-submit" onclick="handleAddRelease()" class="btn-press w-full py-4 bg-red-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-all">
+        <button id="btn-submit" onclick="handleAddRelease()" class="btn-press w-full py-4 bg-red-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
           <span id="btn-add-text">Распознать и добавить</span>
         </button>
       </div>
@@ -1562,7 +1562,9 @@
       const link = document.getElementById('input-link').value.trim();
       if (!link) return showToast('Введите ссылку');
 
+      const submitBtn = document.getElementById('btn-submit');
       const btnText = document.getElementById('btn-add-text');
+      submitBtn.disabled = true;
       btnText.innerText = 'Анализ ссылки...';
 
       let parsedArtist = 'Артист';
@@ -1595,6 +1597,7 @@
             currentPendingLink = link;
             renderAddGenreSelector('manual-genre-selector');
             btnText.innerText = 'Распознать и добавить';
+            submitBtn.disabled = false;
             return showToast('Не удалось считать. Введите вручную.');
         }
       }
@@ -1631,6 +1634,7 @@
             : '✓ Распознано! Выберите жанр и сохраните.';
           document.getElementById('manual-step-alert').className = 'text-[12px] text-green-400 bg-green-400/10 p-3 rounded-xl mb-2 text-center';
           btnText.innerText = 'Распознать и добавить';
+          submitBtn.disabled = false;
           lucide.createIcons();
       }
     }

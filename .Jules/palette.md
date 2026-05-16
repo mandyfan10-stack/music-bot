@@ -9,3 +9,7 @@
 ## 2026-04-24 - Complex Card Accessibility
 **Learning:** Adding interactive elements (like a "Like" button) inside a semantic `<button>` or `<a>` creates invalid HTML and breaks assistive tech.
 **Action:** For complex interactive cards containing nested buttons, use a non-interactive wrapper (like `<div>`), but apply `tabindex="0"`, `role="button"`, and handle keyboard events (`onkeydown` for Enter and Space) to ensure the card remains accessible without generating invalid nested interactive markup.
+
+## 2026-05-16 - Loading State Constraints
+**Learning:** Adding complex loading spinners natively requires additional DOM structure which increases code footprint. Using simple Tailwind disabled styling (`disabled:opacity-50 disabled:cursor-not-allowed`) paired with text content changes is highly effective and requires zero custom CSS or SVG additions.
+**Action:** When adding async interaction states, prioritize setting element `disabled=true` combined with tailwind utility classes for visual feedback, rather than adding new UI elements or structural DOM changes.
