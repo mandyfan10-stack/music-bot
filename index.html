@@ -1437,6 +1437,7 @@
       updateGenreCounts();
       likedSet = new Set(data.likes || []);
       blockedUsers = data.blockedUsers || [];
+      if (typeof data.syncCursor === 'number') syncCursor = data.syncCursor;
       if (data.currentUser) {
         user.username = data.currentUser.displayName || user.username;
         user.isAdmin = !!data.currentUser.isAdmin;
@@ -1488,6 +1489,109 @@
             if (!cached) showToast("Работаем в оффлайн-режиме (сервер недоступен)");
         }
     }
+
+    // --- REAL-TIME СИНХРОНИЗАЦИЯ (long-poll /api/sync/releases) ---
+    let syncCursor = 0;
+    let syncLoopActive = false;
+    let syncAbortController = null;
+    let syncRetryTimer = null;
+
+    // Применяет инкрементальную дельту от сервера к локальному состоянию.
+    function applySyncDelta(data) {
+      let changed = false;
+
+      (data.releases || []).forEach(r => {
+        if (!r || !r.id) return;
+        const idx = releases.findIndex(x => x.id === r.id);
+        if (idx >= 0) releases[idx] = r;
+        else releases.unshift(r);
+        releasesById.set(r.id, r);
+        changed = true;
+      });
+
+      (data.deletedReleaseIds || []).forEach(id => {
+        if (!releasesById.has(id)) return;
+        releasesById.delete(id);
+        releases = releases.filter(x => x.id !== id);
+        likedSet.delete(id);
+        if (activeReleaseId === id) closeModal('modal-release');
+        changed = true;
+      });
+
+      (data.reviews || []).forEach(rv => {
+        if (!rv || !rv.id) return;
+        const idx = reviews.findIndex(x => x.id === rv.id);
+        if (idx >= 0) reviews[idx] = rv;
+        else reviews.unshift(rv);
+        changed = true;
+      });
+
+      (data.deletedReviewIds || []).forEach(id => {
+        const before = reviews.length;
+        reviews = reviews.filter(x => x.id !== id);
+        if (reviews.length !== before) changed = true;
+      });
+
+      if (typeof data.cursor === 'number' && data.cursor > 0) syncCursor = data.cursor;
+
+      if (changed) {
+        updateReviewsMap();
+        updateGenreCounts();
+        updateGenreBadge();
+        renderReleases();
+        if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
+        if (activeReleaseId && !document.getElementById('modal-release').classList.contains('hidden')) {
+          existingReviewForActiveRelease = getExistingReviewForRelease(activeReleaseId);
+          reviewPublishBlocked = !!existingReviewForActiveRelease;
+          renderReviews();
+          updateReviewCharCount();
+        }
+      }
+    }
+
+    async function syncLoopTick() {
+      if (!syncLoopActive) return;
+      syncAbortController = new AbortController();
+      try {
+        const res = await fetch(
+          `${BACKEND_URL}/api/sync/releases?since=${syncCursor}&waitMs=25000`,
+          { headers: authHeaders(), signal: syncAbortController.signal }
+        );
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        applySyncDelta(data);
+        setSyncStatus('Всё актуально', 'ok');
+        if (syncLoopActive) {
+          // hasMore — догоняем сразу, иначе следующий long-poll.
+          setTimeout(syncLoopTick, data.hasMore ? 0 : 0);
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        console.error('Sync error:', e.message || e);
+        setSyncStatus('Оффлайн (кэш)', 'warn');
+        if (syncLoopActive) {
+          syncRetryTimer = setTimeout(syncLoopTick, 5000);
+        }
+      }
+    }
+
+    function startSyncLoop() {
+      if (syncLoopActive) return;
+      syncLoopActive = true;
+      syncLoopTick();
+    }
+
+    function stopSyncLoop() {
+      syncLoopActive = false;
+      if (syncAbortController) syncAbortController.abort();
+      if (syncRetryTimer) { clearTimeout(syncRetryTimer); syncRetryTimer = null; }
+    }
+
+    // Пауза при скрытой вкладке, возобновление с последнего курсора.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopSyncLoop();
+      else startSyncLoop();
+    });
 
     async function fetchOEmbedData(link) {
         const embedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(link)}`);
@@ -2033,8 +2137,8 @@
       }
     })();
 
-    // Запуск синхронизации с БД Render
-    fetchDB();
+    // Запуск синхронизации с БД Render + real-time long-poll
+    fetchDB().finally(() => { if (!document.hidden) startSyncLoop(); });
   </script>
 </body>
 </html>
