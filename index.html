@@ -1096,12 +1096,9 @@
     }
 
     function getFilteredReleases() {
-      let filtered = [...releases];
-
-      // Фильтр по жанру
-      if (activeGenreFilter) {
-        filtered = filtered.filter(r => (r.genre || 'Другое') === activeGenreFilter);
-      }
+      let filtered = activeGenreFilter
+        ? releases.filter(r => (r.genre || 'Другое') === activeGenreFilter)
+        : [...releases];
 
       // Сортировка
       switch (sortMode) {
@@ -1113,8 +1110,8 @@
           break;
         case 'reviews':
           filtered.sort((a, b) => {
-            const countA = (reviewsByRelId.get(a.id) || []).length;
-            const countB = (reviewsByRelId.get(b.id) || []).length;
+            const countA = reviewsByRelId.get(a.id)?.length || 0;
+            const countB = reviewsByRelId.get(b.id)?.length || 0;
             return countB - countA;
           });
           break;
