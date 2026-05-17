@@ -578,6 +578,7 @@
       
       <div class="w-full flex gap-3 mb-8">
         <button id="rel-play-btn" class="btn-press flex-1 py-4 bg-white text-black font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg"><i data-lucide="play" class="w-4 h-4 fill-black"></i> Слушать</button>
+        <button id="rel-share-btn" aria-label="Поделиться релизом" onclick="shareRelease()" class="btn-press w-[64px] bg-white/10 border border-white/10 text-white rounded-2xl flex items-center justify-center shadow-lg transition-colors hover:bg-white/20 shrink-0"><i data-lucide="share-2" class="w-5 h-5"></i></button>
         <button id="rel-delete-btn" aria-label="Удалить релиз" class="hidden btn-press w-[64px] bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl items-center justify-center shadow-lg transition-colors hover:bg-red-500/20 shrink-0"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
       </div>
 
@@ -678,9 +679,16 @@
       initData: '',
       initDataUnsafe: {},
       expand() {},
-      HapticFeedback: { impactOccurred() {} }
+      HapticFeedback: { impactOccurred() {}, notificationOccurred() {} }
     };
     tg.expand?.();
+
+    // Нативная кнопка «Назад» закрывает верхнюю открытую модалку.
+    try {
+      tg.BackButton?.onClick?.(() => {
+        if (openModalStack.length > 0) closeModal(openModalStack[openModalStack.length - 1]);
+      });
+    } catch (_) {}
 
     const BACKEND_URL = "https://music-backend-qjvk.onrender.com";
     const EMPTY_STATE_HTML = `<div class="col-span-2 text-center py-20 opacity-50 text-sm">Список пуст</div>`;
@@ -716,6 +724,15 @@
         const version = Number.parseFloat(tg?.version || '0');
         if (!version || version < 6.1) return;
         tg?.HapticFeedback?.impactOccurred(style);
+      } catch (_) {}
+    }
+
+    // Нативный отклик на успех/ошибку/предупреждение.
+    function tgHapticNotify(type = 'success') {
+      try {
+        const version = Number.parseFloat(tg?.version || '0');
+        if (!version || version < 6.1) return;
+        tg?.HapticFeedback?.notificationOccurred(type);
       } catch (_) {}
     }
 
@@ -847,6 +864,33 @@
         }
       } catch (e) {
         console.warn('Некорректный URL:', urlStr);
+      }
+    }
+
+    // Поделиться релизом через Telegram (ссылка на трек + подпись).
+    function shareRelease() {
+      const rel = releasesById.get(activeReleaseId);
+      if (!rel || !rel.link) return showToast('Нечем поделиться');
+      const text = `${rel.artist} — ${rel.name}`;
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(rel.link)}&text=${encodeURIComponent(text)}`;
+      try {
+        if (tg.openTelegramLink) tg.openTelegramLink(shareUrl);
+        else window.open(shareUrl, '_blank', 'noopener,noreferrer');
+      } catch (_) {
+        window.open(shareUrl, '_blank', 'noopener,noreferrer');
+      }
+      tgHaptic('light');
+    }
+
+    // Deep-link: открыть конкретный релиз, если приложение запущено через startapp=<id>.
+    let startParamHandled = false;
+    function handleStartParam() {
+      if (startParamHandled) return;
+      const param = tg.initDataUnsafe?.start_param;
+      if (!param) { startParamHandled = true; return; }
+      if (releasesById.has(param)) {
+        startParamHandled = true;
+        openRelease(param);
       }
     }
 
@@ -1157,12 +1201,13 @@
       }
     }
 
-    function showToast(msg) {
+    function showToast(msg, haptic = null) {
       const t = document.getElementById('toast');
       document.getElementById('toast-msg').innerText = msg;
       t.classList.replace('opacity-0', 'opacity-100');
       t.classList.replace('pointer-events-none', 'pointer-events-auto');
       setTimeout(() => { t.classList.replace('opacity-100', 'opacity-0'); t.classList.replace('pointer-events-auto', 'pointer-events-none'); }, 2500);
+      if (haptic) tgHapticNotify(haptic);
     }
 
     const TAB_ORDER = ['home', 'likes', 'settings'];
@@ -1253,13 +1298,30 @@
       }, 420);
     }
 
+    // Стек открытых модалок — для нативной кнопки «Назад» Telegram.
+    let openModalStack = [];
+
+    function syncBackButton() {
+      try {
+        const back = tg?.BackButton;
+        if (!back) return;
+        if (openModalStack.length > 0) back.show?.();
+        else back.hide?.();
+      } catch (_) {}
+    }
+
     function openModal(id) {
       const m = document.getElementById(id); m.classList.remove('hidden');
       m.querySelector('.modal-overlay').classList.add('fade-in');
       m.querySelector('.modal-container').classList.add('slide-up-modal');
+      openModalStack = openModalStack.filter(x => x !== id);
+      openModalStack.push(id);
+      syncBackButton();
     }
 
     function closeModal(id) {
+      openModalStack = openModalStack.filter(x => x !== id);
+      syncBackButton();
       const m = document.getElementById(id); const c = m.querySelector('.modal-container'); const o = m.querySelector('.modal-overlay');
       c.classList.replace('slide-up-modal', 'slide-down-modal'); o.classList.replace('fade-in', 'fade-out');
       setTimeout(() => {
@@ -1448,6 +1510,7 @@
       applyUserRole();
       renderReleases();
       switchTab('home');
+      handleStartParam();
     }
 
     // Загрузка: кэш мгновенно → сервер фоном
@@ -1777,7 +1840,7 @@
         if (!saveRes.ok) throw new Error('HTTP ' + saveRes.status);
       } catch(e) {
         console.error('Ошибка сохранения релиза:', e);
-        showToast('Ошибка сохранения — попробуйте позже');
+        showToast('Ошибка сохранения — попробуйте позже', 'error');
         return;
       }
       
@@ -1786,7 +1849,7 @@
       releasesById.set(newRel.id, newRel);
       const g = newRel.genre || 'Другое';
       genreCounts[g] = (genreCounts[g] || 0) + 1;
-      renderReleases(); closeModal('modal-add'); showToast('Релиз сохранен!');
+      renderReleases(); closeModal('modal-add'); showToast('Релиз сохранен!', 'success');
       document.getElementById('manual-artist').value = ''; document.getElementById('manual-title').value = '';
     }
 
@@ -1942,7 +2005,7 @@
         if (!res.ok) throw new Error('HTTP ' + res.status);
       } catch(e) {
         console.error('Ошибка удаления рецензии:', e);
-        showToast('Ошибка удаления — попробуйте позже');
+        showToast('Ошибка удаления — попробуйте позже', 'error');
         return;
       }
 
@@ -1957,7 +2020,7 @@
       if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
 
       closeModal('modal-confirm-review-delete');
-      showToast('Рецензия удалена!');
+      showToast('Рецензия удалена!', 'success');
       pendingReviewDelete = null;
       pendingReviewTargetReleaseId = null;
       reviewDeleteMode = false;
@@ -1974,7 +2037,7 @@
         if (!res.ok) throw new Error('HTTP ' + res.status);
       } catch(e) {
         console.error('Ошибка удаления релиза:', e);
-        showToast('Ошибка удаления — попробуйте позже');
+        showToast('Ошибка удаления — попробуйте позже', 'error');
         return;
       }
       
@@ -2001,7 +2064,7 @@
       
       closeModal('modal-confirm-delete');
       closeModal('modal-release');
-      showToast('Удалено!');
+      showToast('Удалено!', 'success');
       releaseToDelete = null;
     }
 
@@ -2036,7 +2099,7 @@
         if (!res.ok) throw new Error('HTTP ' + res.status);
       } catch(e) {
         console.error('Ошибка сохранения рецензии:', e);
-        showToast('Ошибка сохранения — попробуйте позже');
+        showToast('Ошибка сохранения — попробуйте позже', 'error');
         return;
       }
 
@@ -2053,7 +2116,7 @@
       document.getElementById('rev-text').value = '';
       renderReviews();
       updateReviewCharCount();
-      showToast('Опубликовано!');
+      showToast('Опубликовано!', 'success');
     }
 
     function renderReviews() {
@@ -2098,15 +2161,18 @@
       }
     }
 
-    function changeTheme(hex, btnRef) { 
-      document.documentElement.style.setProperty('--bg-color', hex); 
-      
+    function changeTheme(hex, btnRef, persist = true) {
+      document.documentElement.style.setProperty('--bg-color', hex);
+
       const isLight = hex === '#f2f2f7';
       if(isLight) document.body.classList.add('light-theme');
       else document.body.classList.remove('light-theme');
 
-      // Сохраняем выбор темы
-      localStorage.setItem('xxii_theme', hex);
+      // Сохраняем выбор темы (persist=false — авто-тема Telegram, не считается ручным выбором)
+      if (persist) {
+        localStorage.setItem('xxii_theme', hex);
+        try { tg.CloudStorage?.setItem?.('xxii_theme', hex); } catch (_) {}
+      }
 
       document.querySelectorAll('.theme-btn').forEach(btn => {
         btn.classList.remove('border-white', 'border-black', 'scale-110');
@@ -2127,14 +2193,38 @@
     resetReviewInputs();
     setSortMode('new');
 
-    // Восстановление темы из localStorage
+    function applyTheme(hex, persist = false) {
+      const btns = document.querySelectorAll('.theme-btn');
+      const target = hex === '#f2f2f7' ? btns[1] : btns[0];
+      if (target) changeTheme(hex, target, persist);
+    }
+
+    // Восстановление темы: ручной выбор → Telegram → CloudStorage (между устройствами)
     (function restoreTheme() {
       const saved = localStorage.getItem('xxii_theme');
-      if (saved && saved !== '#000000') {
-        const btns = document.querySelectorAll('.theme-btn');
-        const target = saved === '#f2f2f7' ? btns[1] : btns[0];
-        if (target) changeTheme(saved, target);
+      if (saved === '#000000' || saved === '#f2f2f7') {
+        applyTheme(saved, false);
+      } else {
+        applyTheme(tg.colorScheme === 'light' ? '#f2f2f7' : '#000000', false);
       }
+
+      try {
+        tg.CloudStorage?.getItem?.('xxii_theme', (err, value) => {
+          if (!err && (value === '#000000' || value === '#f2f2f7')) {
+            localStorage.setItem('xxii_theme', value);
+            applyTheme(value, false);
+          }
+        });
+      } catch (_) {}
+
+      // Пока пользователь не выбрал тему вручную — следуем теме клиента Telegram.
+      try {
+        tg.onEvent?.('themeChanged', () => {
+          if (!localStorage.getItem('xxii_theme')) {
+            applyTheme(tg.colorScheme === 'light' ? '#f2f2f7' : '#000000', false);
+          }
+        });
+      } catch (_) {}
     })();
 
     // Запуск синхронизации с БД Render + real-time long-poll
