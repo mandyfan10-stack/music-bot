@@ -506,6 +506,14 @@
       <div id="likes-grid" class="grid grid-cols-2 gap-4"></div>
     </div>
 
+    <div id="screen-feed" class="tab-screen px-6 hidden">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="p-2.5 bg-red-500/10 text-red-500 rounded-2xl"><i data-lucide="newspaper" class="w-6 h-6"></i></div>
+        <h2 class="text-2xl font-semibold tracking-tight text-white">Лента</h2>
+      </div>
+      <div id="feed-list" class="space-y-3"></div>
+    </div>
+
     <div id="screen-settings" class="tab-screen px-6 hidden">
       <div class="flex items-center gap-3 mb-8">
         <div class="p-2.5 bg-red-500/10 text-red-500 rounded-2xl"><i data-lucide="settings" class="w-6 h-6"></i></div>
@@ -523,6 +531,7 @@
 
   <nav class="fixed bottom-0 w-full glass border-t border-white/5 pb-safe pt-2 px-6 flex justify-between items-center z-20" style="padding-bottom: max(env(safe-area-inset-bottom), 16px);">
     <button onclick="switchTab('home')" id="tab-home" class="flex flex-col items-center gap-1 text-red-500 btn-press transition-colors"><i data-lucide="home" class="w-6 h-6 stroke-[2.5px]"></i><span class="text-[10px] font-medium">Главная</span></button>
+    <button onclick="switchTab('feed')" id="tab-feed" class="flex flex-col items-center gap-1 text-gray-500 btn-press transition-colors"><i data-lucide="newspaper" class="w-6 h-6"></i><span class="text-[10px] font-medium">Лента</span></button>
     <button onclick="switchTab('likes')" id="tab-likes" class="flex flex-col items-center gap-1 text-gray-500 btn-press transition-colors"><i data-lucide="heart" class="w-6 h-6"></i><span class="text-[10px] font-medium">Лайки</span></button>
     <button onclick="switchTab('settings')" id="tab-settings" class="flex flex-col items-center gap-1 text-gray-500 btn-press transition-colors"><i data-lucide="settings" class="w-6 h-6"></i><span class="text-[10px] font-medium">Опции</span></button>
   </nav>
@@ -816,6 +825,15 @@
     document.getElementById('user-name').innerText = user.username;
 
     let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let reactedSet = new Set(); // id рецензий, на которые текущий пользователь отреагировал
+
+    // Метка последнего визита — для бейджа «новое» (читаем старое значение, пишем текущее).
+    const lastSeenTs = parseInt(localStorage.getItem('xxii_last_seen') || '0', 10);
+    (function markVisit() {
+      const now = String(Date.now());
+      try { localStorage.setItem('xxii_last_seen', now); } catch (_) {}
+      try { tg.CloudStorage?.setItem?.('xxii_last_seen', now); } catch (_) {}
+    })();
 
     function updateGenreCounts() {
       genreCounts = {};
@@ -1210,7 +1228,7 @@
       if (haptic) tgHapticNotify(haptic);
     }
 
-    const TAB_ORDER = ['home', 'likes', 'settings'];
+    const TAB_ORDER = ['home', 'feed', 'likes', 'settings'];
     let activeTabId = null;
     let tabTransitionTimer = null;
 
@@ -1245,6 +1263,7 @@
       const next = document.getElementById('screen-' + tabId);
       if (!next) return;
       if (tabId === 'likes') renderLikes();
+      if (tabId === 'feed') renderFeed();
 
       const screens = Array.from(document.querySelectorAll('main > div[id^="screen-"]'));
       const current = activeTabId
@@ -1498,6 +1517,7 @@
       updateReviewsMap();
       updateGenreCounts();
       likedSet = new Set(data.likes || []);
+      reactedSet = new Set(data.myReactions || []);
       blockedUsers = data.blockedUsers || [];
       if (typeof data.syncCursor === 'number') syncCursor = data.syncCursor;
       if (data.currentUser) {
@@ -1603,6 +1623,7 @@
         updateGenreBadge();
         renderReleases();
         if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
+        if (!document.getElementById('screen-feed').classList.contains('hidden')) renderFeed();
         if (activeReleaseId && !document.getElementById('modal-release').classList.contains('hidden')) {
           existingReviewForActiveRelease = getExistingReviewForRelease(activeReleaseId);
           reviewPublishBlocked = !!existingReviewForActiveRelease;
@@ -1911,10 +1932,13 @@
       const cachedAvg = avgRatingByRelId.get(r.id);
       const avgRating = cachedAvg ? cachedAvg.toFixed(1) : null;
       const ratingBadge = avgRating ? `<div class="rating-badge absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
+      const isNew = lastSeenTs > 0 && (r.timestamp || 0) > lastSeenTs;
+      const newBadge = isNew ? `<div class="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wider shadow-lg">NEW</div>` : '';
       return `<div onclick="openRelease('${escapeJsHtml(r.id)}')" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); openRelease('${escapeJsHtml(r.id)}'); }" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="card-enter flex flex-col gap-2 w-full min-w-0 active:scale-95 transition-transform relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]" style="animation-delay: ${delay}ms">
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
             <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" onerror="this.src='${escapeJsHtml(fb)}'" class="w-full h-full object-cover">
             ${ratingBadge}
+            ${newBadge}
           <button onclick="toggleLikeAPI(event, '${escapeJsHtml(r.id)}')" data-like-id="${escapeHtml(r.id)}" aria-label="Нравится" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
               <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-red-500 text-red-500':'text-white'}"></i>
             </button>
@@ -1949,6 +1973,49 @@
     function renderLikes() {
       const grid = document.getElementById('likes-grid'); const likedArr = releases.filter(r => likedSet.has(r.id));
       grid.innerHTML = likedArr.length ? likedArr.map((r, i) => renderReleaseCard(r, i)).join('') : EMPTY_STATE_HTML;
+      lucide.createIcons();
+    }
+
+    // Лента активности: последние релизы и рецензии, отсортированные по времени.
+    function renderFeed() {
+      const container = document.getElementById('feed-list');
+      if (!container) return;
+      const items = [];
+      releases.forEach(r => items.push({ type: 'release', ts: r.timestamp || 0, rel: r }));
+      reviews.forEach(rv => items.push({ type: 'review', ts: rv.timestamp || 0, rv }));
+      items.sort((a, b) => b.ts - a.ts);
+      const top = items.slice(0, 40);
+
+      if (!top.length) {
+        container.innerHTML = `<div class="text-center py-20 opacity-50 text-sm text-gray-400">Лента пока пуста</div>`;
+        return;
+      }
+
+      container.innerHTML = top.map(it => {
+        if (it.type === 'release') {
+          const r = it.rel;
+          const fb = getFallbackImg(r.name);
+          return `<div onclick="openRelease('${escapeJsHtml(r.id)}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openRelease('${escapeJsHtml(r.id)}');}" class="bg-white/5 border border-white/5 rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+            <img src="${escapeHtml(r.img) || fb}" onerror="this.src='${escapeJsHtml(fb)}'" alt="" class="w-12 h-12 rounded-xl object-cover shrink-0">
+            <div class="min-w-0 flex-1">
+              <div class="text-[10px] font-bold text-red-500 uppercase tracking-wider flex items-center gap-1"><i data-lucide="disc-3" class="w-3 h-3"></i>Новый релиз</div>
+              <div class="text-[13px] font-bold text-white truncate">${escapeHtml(r.name)}</div>
+              <div class="text-[11px] text-gray-500 truncate">${escapeHtml(r.artist)}</div>
+            </div>
+          </div>`;
+        }
+        const rv = it.rv;
+        const rel = releasesById.get(rv.relId);
+        const relName = rel ? escapeHtml(rel.name) : 'Удалённый релиз';
+        const rating = typeof rv.rating === 'number' ? rv.rating : Number(rv.rating) || 0;
+        return `<div onclick="openRelease('${escapeJsHtml(rv.relId)}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openRelease('${escapeJsHtml(rv.relId)}');}" class="bg-white/5 border border-white/5 rounded-2xl p-3 cursor-pointer hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 min-w-0"><i data-lucide="message-square" class="w-3 h-3 shrink-0"></i><span class="truncate">${escapeHtml(rv.author)} · ${relName}</span></div>
+              <div class="text-white bg-red-600 px-2 py-0.5 rounded-lg font-black text-[10px] shrink-0">${escapeHtml(rating)}</div>
+            </div>
+            <p class="text-[12px] text-gray-300 leading-relaxed line-clamp-2">${escapeHtml(rv.text)}</p>
+          </div>`;
+      }).join('');
       lucide.createIcons();
     }
 
@@ -2085,6 +2152,7 @@
         relId: activeReleaseId,
         author: user.username,
         authorIsAdmin: user.isAdmin,
+        reactionCount: 0,
         text: t,
         rating: finalRating,
         baseRating: selectedRating,
@@ -2119,6 +2187,39 @@
       showToast('Опубликовано!', 'success');
     }
 
+    // Реакция «полезно» на рецензию — оптимистичный toggle с откатом при ошибке.
+    async function toggleReviewReaction(reviewId) {
+      if (!user.isAuthenticated) return showToast('Войдите через Telegram');
+      if (user.isBlocked) return showToast('Ваш аккаунт заблокирован');
+      const review = reviews.find(r => r.id === reviewId);
+      if (!review) return;
+
+      const reacted = !reactedSet.has(reviewId);
+      const apply = (on) => {
+        if (on) { reactedSet.add(reviewId); review.reactionCount = (review.reactionCount || 0) + 1; }
+        else { reactedSet.delete(reviewId); review.reactionCount = Math.max(0, (review.reactionCount || 0) - 1); }
+      };
+      apply(reacted);
+      renderReviews();
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/reviews/${encodeURIComponent(reviewId)}/react`, {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify({ reacted })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (typeof data.reactionCount === 'number') {
+          review.reactionCount = data.reactionCount;
+          renderReviews();
+        }
+      } catch (e) {
+        console.error('Reaction error:', e);
+        apply(!reacted); // откат
+        renderReviews();
+        showToast('Не удалось сохранить реакцию', 'error');
+      }
+    }
+
     function renderReviews() {
       const container = document.getElementById('reviews-container'); const relReviews = reviewsByRelId.get(activeReleaseId) || [];
       activeReleaseReviews = relReviews;
@@ -2127,9 +2228,13 @@
         const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0;
         const criteria = r.criteria ? ` · ${escapeHtml(formatCriteria(r.criteria))}` : '';
         const canDelete = r.author === user.username || user.isAdmin;
+        const reacted = reactedSet.has(r.id);
+        const reactionCount = typeof r.reactionCount === 'number' ? r.reactionCount : 0;
+        const reactBtn = `<button onclick="toggleReviewReaction('${escapeJsHtml(r.id)}'); event.stopPropagation();" aria-label="Полезная рецензия" class="btn-press shrink-0 flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${reacted ? 'bg-red-500/15 border border-red-500/25 text-red-400' : 'bg-white/5 border border-white/10 text-gray-400'}"><i data-lucide="thumbs-up" class="w-3 h-3"></i><span class="text-[10px] font-bold">${reactionCount}</span></button>`;
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
           <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" onclick="openProfileModal('${escapeJsHtml(r.author)}')">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button onclick="openConfirmReviewDelete('${escapeJsHtml(r.id)}', '${escapeJsHtml(r.relId)}'); event.stopPropagation();" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
-          <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span></div>`;
+          <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
+          <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span>${reactBtn}</div></div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
       lucide.createIcons();
     }
