@@ -701,7 +701,6 @@
       isAuthenticated: false
     };
     let blockedUsers = [];
-    let adminUsernames = [];
 
     // Заголовки авторизации для всех API-запросов
     function authHeaders(extra = {}) {
@@ -1295,9 +1294,11 @@
         nameEl.textContent = profileUsername;
 
         const isMe = profileUsername === user.username;
-        // Проверяем, является ли этот пользователь админом (из серверного списка)
+        // Роль определяется сервером: для себя — из user, для других — по флагу authorIsAdmin в их рецензиях.
         const profileCleanName = cleanUsername(profileUsername);
-        const isProfileAdmin = adminUsernames.includes(profileCleanName);
+        const isProfileAdmin = isMe
+          ? user.isAdmin
+          : userReviews.some(r => r.authorIsAdmin);
         let role = isProfileAdmin ? 'Создатель' : 'Пользователь';
 
         const pRole = document.getElementById('profile-role');
@@ -1397,9 +1398,11 @@
 
     function saveCache(data) {
       try {
+        // currentUser (роль/блокировка) не кэшируем — статус может устареть.
+        const { currentUser, ...cacheable } = data;
         const payload = {
           savedAt: Date.now(),
-          data
+          data: cacheable
         };
         localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
       } catch(e) {}
@@ -1434,7 +1437,6 @@
       updateGenreCounts();
       likedSet = new Set(data.likes || []);
       blockedUsers = data.blockedUsers || [];
-      adminUsernames = data.adminUsernames || [];
       if (data.currentUser) {
         user.username = data.currentUser.displayName || user.username;
         user.isAdmin = !!data.currentUser.isAdmin;
@@ -1689,39 +1691,49 @@
         return `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
     }
     
+    // ⚡ Bolt: Replace O(N) full DOM re-renders with targeted O(1) DOM updates
+    function applyLikeState(id, liked) {
+      const safeId = escapeCssString(id);
+      document.querySelectorAll(`button[data-like-id="${safeId}"]`).forEach(btn => {
+        const icon = btn.querySelector('svg') || btn.querySelector('i');
+        if (!icon) return;
+        if (liked) {
+          icon.classList.add('fill-red-500', 'text-red-500');
+          icon.classList.remove('text-white');
+        } else {
+          icon.classList.remove('fill-red-500', 'text-red-500');
+          icon.classList.add('text-white');
+        }
+      });
+      if (!document.getElementById('screen-likes').classList.contains('hidden')) {
+        renderLikes();
+      }
+    }
+
     function toggleLikeAPI(e, id) {
       e.stopPropagation();
       const isLiking = !likedSet.has(id);
-      
+
+      // Оптимистично обновляем UI
       if (isLiking) likedSet.add(id);
       else likedSet.delete(id);
-      
-      // Отправка в БД Render (лайки — можно fire-and-forget, но логируем)
+      applyLikeState(id, isLiking);
+
+      // Отправка в БД Render с откатом при ошибке
       fetch(`${BACKEND_URL}/api/likes`, {
           method: 'POST',
           headers: authHeaders(),
           body: JSON.stringify({ releaseId: id, isLike: isLiking })
-      }).then(res => { if (!res.ok) console.error('Like save error:', res.status); })
-       .catch(e => console.error('Like network error:', e));
-      
-      // ⚡ Bolt: Replace O(N) full DOM re-renders with targeted O(1) DOM updates
-      const safeId = escapeCssString(id);
-      document.querySelectorAll(`button[data-like-id="${safeId}"]`).forEach(btn => {
-        const icon = btn.querySelector('svg') || btn.querySelector('i');
-        if (icon) {
-          if (isLiking) {
-            icon.classList.add('fill-red-500', 'text-red-500');
-            icon.classList.remove('text-white');
-          } else {
-            icon.classList.remove('fill-red-500', 'text-red-500');
-            icon.classList.add('text-white');
-          }
-        }
+      }).then(res => {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+      }).catch(err => {
+        console.error('Like save error:', err);
+        // Откат оптимистичного изменения
+        if (isLiking) likedSet.delete(id);
+        else likedSet.add(id);
+        applyLikeState(id, !isLiking);
+        showToast('Не удалось сохранить лайк');
       });
-
-      if (!document.getElementById('screen-likes').classList.contains('hidden')) {
-        renderLikes();
-      }
     }
 
     function renderReleaseCard(r, index) {
@@ -1780,8 +1792,8 @@
       document.getElementById('rel-img').src = rel.img || fb;
       document.getElementById('rel-img').onerror = function() { this.src = fb; };
 
-      document.getElementById('rel-title').innerText = rel.name;
-      document.getElementById('rel-artist').innerText = rel.artist;
+      document.getElementById('rel-title').textContent = rel.name;
+      document.getElementById('rel-artist').textContent = rel.artist;
       document.getElementById('rel-play-btn').onclick = () => openSafeUrl(rel.link);
 
       existingReviewForActiveRelease = getExistingReviewForRelease(id);
@@ -1905,6 +1917,7 @@
         id: Date.now().toString(),
         relId: activeReleaseId,
         author: user.username,
+        authorIsAdmin: user.isAdmin,
         text: t,
         rating: finalRating,
         baseRating: selectedRating,
