@@ -8,15 +8,15 @@ Telegram Mini App «XXII SOUND»: каталог музыкальных рели
 
 - Ванильный JavaScript (ES6+), **без фреймворка и без сборки**.
 - Tailwind CSS, Lucide Icons, Telegram WebApp SDK — всё через CDN.
-- Всё приложение — один файл `index.html` (~2500 строк: HTML + CSS + JS).
 
 ## Структура
 
-- `index.html` — всё приложение (разметка, стили в `<style>`, логика в финальном
-  `<script>`).
-- `src/utils.js` — утилиты экранирования, подключается отдельным `<script>`
-  и переиспользуется тестами через `module.exports`.
-- `tests/utils.test.js` — тесты утилит (Node встроенный `test`).
+- `index.html` — только разметка; CSS и JS вынесены в отдельные файлы.
+- `src/styles.css` — все стили (подключается `<link>`).
+- `src/app.js` — вся логика приложения (подключается `<script src defer>`).
+- `src/utils.js` — утилиты экранирования + чистые функции каталога
+  (`filterAndSortReleases`); переиспользуется тестами через `module.exports`.
+- `tests/utils.test.js` — тесты утилит и логики фильтрации (Node `test`).
 - `CODE_AUDIT_*.md` — отчёты аудитов.
 
 ## Архитектура
@@ -48,11 +48,19 @@ Telegram Mini App «XXII SOUND»: каталог музыкальных рели
 `renderCriteriaChart()` (график средних оценок), `toggleNotifications()`
 (подписка на push), pull-to-refresh — IIFE `setupPullToRefresh()`.
 
+## Обработка событий
+
+Inline-обработчиков (`onclick=` и т.п.) **нет** — это позволило убрать
+`'unsafe-inline'` из `script-src` CSP. Вместо них — делегирование: элементы
+помечаются `data-act` / `data-act-input` / `data-act-focus` / `data-act-change`,
+параметры передаются через `data-*`. Карта действий — объект `clickActions`
+в `app.js`; новые интерактивные элементы добавляют запись туда, а не `onclick`.
+
 ## Конвенции
 
-- **Всегда экранировать** пользовательские данные в шаблонах `innerHTML`:
-  `escapeHtml` (текст), `escapeJsHtml` (внутри `onclick='...'`),
-  `escapeCssString` (CSS-селекторы). Утилиты — в `src/utils.js`.
+- **Всегда экранировать** данные в шаблонах `innerHTML`: `escapeHtml` (текст и
+  значения `data-*`), `escapeCssString` (CSS-селекторы). Утилиты — в
+  `src/utils.js`.
 - **Роль пользователя определяет только сервер** (`currentUser` из `/api/data`),
   никогда не доверять клиенту.
 - Сетевые мутации — **оптимистичные, с откатом** при ошибке (образец —
@@ -62,14 +70,13 @@ Telegram Mini App «XXII SOUND»: каталог музыкальных рели
 
 ## Команды
 
-- Тесты утилит: `node --test`
-- Синтаксис: `node --check src/utils.js`
-- Локальный просмотр: открыть `index.html` (есть безопасный фолбэк вне Telegram).
+- Тесты (утилиты + логика фильтрации): `node --test`
+- Синтаксис: `node --check src/app.js` и `node --check src/utils.js`
 - Полная проверка UI требует среды Telegram Mini App.
 
 ## Известные риски
 
-- Много inline-обработчиков (`onclick`) + широкий `innerHTML` — основная
-  XSS-поверхность; держать экранирование строгим.
-- `unsafe-inline` в CSP (`script-src`/`style-src`) — ослабляет защиту.
+- Широкий `innerHTML` в рендер-функциях — держать экранирование строгим.
+- `'unsafe-inline'` остаётся в `style-src` CSP (нужно для Tailwind CDN и
+  inline-атрибутов `style`).
 - Зависимость от CDN — supply-chain риск (SRI есть только у Lucide).
