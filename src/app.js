@@ -14,6 +14,8 @@
     } catch (_) {}
 
     const BACKEND_URL = "https://music-backend-qjvk.onrender.com";
+    // URL Mini App для deep-link шеринга (?startapp=<id>) — приходит из /api/data.
+    let miniAppUrl = '';
 
     // Telegram initData — подписанная строка для серверной проверки
     const tgInitData = tg.initData || '';
@@ -140,7 +142,6 @@
       'pick-cover': () => document.getElementById('manual-cover-input')?.click(),
       'save-manual-release': () => saveManualRelease(),
       'share-release': () => shareRelease(),
-      'share-card': () => shareReleaseCard(),
       'submit-review': () => addReview(),
       'execute-delete-release': () => executeDeleteRelease(),
       'execute-delete-review': () => executeDeleteReview(),
@@ -339,155 +340,56 @@
       }
     }
 
-    // Поделиться релизом через Telegram (ссылка на трек + подпись).
-    function shareRelease() {
-      const rel = releasesById.get(activeReleaseId);
-      if (!rel || !rel.link) return showToast('Нечем поделиться');
+    // Deep-link на Mini App, открывающий этот релиз (?startapp=<id>).
+    function releaseDeepLink(relId) {
+      if (!miniAppUrl) return '';
+      const sep = miniAppUrl.includes('?') ? '&' : '?';
+      return `${miniAppUrl}${sep}startapp=${encodeURIComponent(relId)}`;
+    }
+
+    // Фолбэк-шеринг для клиентов без tg.shareMessage: пересылаем deep-link в бота
+    // (а не ссылку на стороннюю площадку).
+    function shareReleaseLink(rel) {
+      const link = releaseDeepLink(rel.id);
+      if (!link) return showToast('Шеринг недоступен');
       const text = `${rel.artist} — ${rel.name}`;
-      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(rel.link)}&text=${encodeURIComponent(text)}`;
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
       try {
         if (tg.openTelegramLink) tg.openTelegramLink(shareUrl);
         else window.open(shareUrl, '_blank', 'noopener,noreferrer');
       } catch (_) {
         window.open(shareUrl, '_blank', 'noopener,noreferrer');
       }
-      tgHaptic('light');
     }
 
-    // Прямоугольник со скруглёнными углами на canvas.
-    function canvasRoundRect(ctx, x, y, w, h, r) {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + w, y, x + w, y + h, r);
-      ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.arcTo(x, y + h, x, y, r);
-      ctx.arcTo(x, y, x + w, y, r);
-      ctx.closePath();
-    }
-
-    // Перенос текста по словам в пределах ширины (для canvas).
-    function wrapCanvasText(ctx, text, maxWidth) {
-      const words = String(text || '').split(/\s+/).filter(Boolean);
-      const lines = [];
-      let line = '';
-      for (const w of words) {
-        const test = line ? line + ' ' + w : w;
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = w;
-        } else {
-          line = test;
-        }
-      }
-      if (line) lines.push(line);
-      return lines;
-    }
-
-    // Рисует фирменную карточку релиза на canvas и возвращает PNG-Blob.
-    async function buildReleaseCardImage(rel) {
-      try { await document.fonts.ready; } catch (_) {}
-      const W = 1080, H = 1350;
-      const canvas = document.createElement('canvas');
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext('2d');
-
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, W, H);
-      const glow = ctx.createRadialGradient(W / 2, H * 0.4, 60, W / 2, H * 0.4, 640);
-      glow.addColorStop(0, 'rgba(220,38,38,0.5)');
-      glow.addColorStop(1, 'rgba(220,38,38,0)');
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, W, H);
-
-      ctx.textAlign = 'center';
-      ctx.font = '900 46px sans-serif';
-      ctx.fillStyle = '#ff0000';
-      ctx.fillText('XXII', W / 2 - 72, 132);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText('SOUND', W / 2 + 80, 132);
-
-      const rating = avgRatingByRelId.get(rel.id) || 0;
-      if (rating > 0) {
-        ctx.beginPath();
-        ctx.arc(W / 2, H * 0.38, 132, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.06)';
-        ctx.fill();
-        ctx.lineWidth = 6;
-        ctx.strokeStyle = '#dc2626';
-        ctx.stroke();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '900 102px sans-serif';
-        ctx.fillText(rating.toFixed(1), W / 2, H * 0.38 + 36);
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = '600 26px sans-serif';
-        ctx.fillText('★ РЕЙТИНГ', W / 2, H * 0.38 + 92);
-      }
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '800 74px sans-serif';
-      let y = H * 0.6;
-      wrapCanvasText(ctx, rel.name || 'Без названия', W - 160).slice(0, 3).forEach(l => {
-        ctx.fillText(l, W / 2, y);
-        y += 88;
-      });
-
-      ctx.fillStyle = '#9ca3af';
-      ctx.font = '500 44px sans-serif';
-      y += 8;
-      wrapCanvasText(ctx, rel.artist || '', W - 200).slice(0, 2).forEach(l => {
-        ctx.fillText(l, W / 2, y);
-        y += 56;
-      });
-
-      if (rel.genre) {
-        const label = String(rel.genre).toUpperCase();
-        ctx.font = '700 30px sans-serif';
-        const gw = ctx.measureText(label).width + 60;
-        const gy = y + 16;
-        ctx.fillStyle = '#dc2626';
-        canvasRoundRect(ctx, W / 2 - gw / 2, gy, gw, 60, 30);
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(label, W / 2, gy + 41);
-      }
-
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.font = '500 28px sans-serif';
-      ctx.fillText('Новые релизы в Telegram', W / 2, H - 72);
-
-      return new Promise((resolve, reject) => {
-        canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png');
-      });
-    }
-
-    // Поделиться релизом в виде картинки-карточки (Web Share или скачивание).
-    async function shareReleaseCard() {
+    // Поделиться релизом: нативное Telegram-сообщение с кнопкой в бота
+    // (tg.shareMessage), с фолбэком на deep-link для клиентов старше Bot API 8.0.
+    async function shareRelease() {
       const rel = releasesById.get(activeReleaseId);
       if (!rel) return showToast('Нечем поделиться');
-      tgHaptic('medium');
-      showToast('Готовим карточку...');
-      try {
-        const blob = await buildReleaseCardImage(rel);
-        const file = new File([blob], 'xxii-release.png', { type: 'image/png' });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: `${rel.artist} — ${rel.name}` });
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'xxii-release.png';
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 2000);
-          showToast('Карточка сохранена', 'success');
+      tgHaptic('light');
+
+      const canShareMessage = typeof tg.shareMessage === 'function'
+        && parseFloat(tg.version || '0') >= 8;
+
+      if (canShareMessage) {
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/releases/${encodeURIComponent(rel.id)}/share-message`, {
+            method: 'POST', headers: authHeaders()
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          if (!data.preparedMessageId) throw new Error('No preparedMessageId');
+          tg.shareMessage(data.preparedMessageId, (sent) => {
+            if (sent) showToast('Отправлено', 'success');
+          });
+          return;
+        } catch (e) {
+          console.error('shareMessage error:', e);
+          // Фолбэк ниже.
         }
-      } catch (e) {
-        if (e && e.name === 'AbortError') return; // пользователь закрыл системный диалог
-        console.error('Share card error:', e);
-        showToast('Не удалось создать карточку', 'error');
       }
+      shareReleaseLink(rel);
     }
 
     // Deep-link: открыть конкретный релиз, если приложение запущено через startapp=<id>.
@@ -1204,6 +1106,7 @@
       likedSet = new Set(data.likes || []);
       reactedSet = new Set(data.myReactions || []);
       blockedUsers = data.blockedUsers || [];
+      if (typeof data.miniAppUrl === 'string') miniAppUrl = data.miniAppUrl;
       if (typeof data.syncCursor === 'number') syncCursor = data.syncCursor;
       if (data.currentUser) {
         if (data.currentUser.userId != null) user.userId = data.currentUser.userId;
