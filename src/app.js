@@ -14,7 +14,6 @@
     } catch (_) {}
 
     const BACKEND_URL = "https://music-backend-qjvk.onrender.com";
-    const EMPTY_STATE_HTML = `<div class="col-span-2 text-center py-20 opacity-50 text-sm">Список пуст</div>`;
 
     // Telegram initData — подписанная строка для серверной проверки
     const tgInitData = tg.initData || '';
@@ -128,6 +127,7 @@
       'pick-cover': () => document.getElementById('manual-cover-input')?.click(),
       'save-manual-release': () => saveManualRelease(),
       'share-release': () => shareRelease(),
+      'share-card': () => shareReleaseCard(),
       'submit-review': () => addReview(),
       'execute-delete-release': () => executeDeleteRelease(),
       'execute-delete-review': () => executeDeleteReview(),
@@ -320,6 +320,142 @@
         window.open(shareUrl, '_blank', 'noopener,noreferrer');
       }
       tgHaptic('light');
+    }
+
+    // Прямоугольник со скруглёнными углами на canvas.
+    function canvasRoundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    // Перенос текста по словам в пределах ширины (для canvas).
+    function wrapCanvasText(ctx, text, maxWidth) {
+      const words = String(text || '').split(/\s+/).filter(Boolean);
+      const lines = [];
+      let line = '';
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = w;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    }
+
+    // Рисует фирменную карточку релиза на canvas и возвращает PNG-Blob.
+    async function buildReleaseCardImage(rel) {
+      try { await document.fonts.ready; } catch (_) {}
+      const W = 1080, H = 1350;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, W, H);
+      const glow = ctx.createRadialGradient(W / 2, H * 0.4, 60, W / 2, H * 0.4, 640);
+      glow.addColorStop(0, 'rgba(220,38,38,0.5)');
+      glow.addColorStop(1, 'rgba(220,38,38,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.textAlign = 'center';
+      ctx.font = '900 46px sans-serif';
+      ctx.fillStyle = '#ff0000';
+      ctx.fillText('XXII', W / 2 - 72, 132);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('SOUND', W / 2 + 80, 132);
+
+      const rating = avgRatingByRelId.get(rel.id) || 0;
+      if (rating > 0) {
+        ctx.beginPath();
+        ctx.arc(W / 2, H * 0.38, 132, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.fill();
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#dc2626';
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 102px sans-serif';
+        ctx.fillText(rating.toFixed(1), W / 2, H * 0.38 + 36);
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = '600 26px sans-serif';
+        ctx.fillText('★ РЕЙТИНГ', W / 2, H * 0.38 + 92);
+      }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 74px sans-serif';
+      let y = H * 0.6;
+      wrapCanvasText(ctx, rel.name || 'Без названия', W - 160).slice(0, 3).forEach(l => {
+        ctx.fillText(l, W / 2, y);
+        y += 88;
+      });
+
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '500 44px sans-serif';
+      y += 8;
+      wrapCanvasText(ctx, rel.artist || '', W - 200).slice(0, 2).forEach(l => {
+        ctx.fillText(l, W / 2, y);
+        y += 56;
+      });
+
+      if (rel.genre) {
+        const label = String(rel.genre).toUpperCase();
+        ctx.font = '700 30px sans-serif';
+        const gw = ctx.measureText(label).width + 60;
+        const gy = y + 16;
+        ctx.fillStyle = '#dc2626';
+        canvasRoundRect(ctx, W / 2 - gw / 2, gy, gw, 60, 30);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(label, W / 2, gy + 41);
+      }
+
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '500 28px sans-serif';
+      ctx.fillText('Новые релизы в Telegram', W / 2, H - 72);
+
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png');
+      });
+    }
+
+    // Поделиться релизом в виде картинки-карточки (Web Share или скачивание).
+    async function shareReleaseCard() {
+      const rel = releasesById.get(activeReleaseId);
+      if (!rel) return showToast('Нечем поделиться');
+      tgHaptic('medium');
+      showToast('Готовим карточку...');
+      try {
+        const blob = await buildReleaseCardImage(rel);
+        const file = new File([blob], 'xxii-release.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: `${rel.artist} — ${rel.name}` });
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'xxii-release.png';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          showToast('Карточка сохранена', 'success');
+        }
+      } catch (e) {
+        if (e && e.name === 'AbortError') return; // пользователь закрыл системный диалог
+        console.error('Share card error:', e);
+        showToast('Не удалось создать карточку', 'error');
+      }
     }
 
     // Deep-link: открыть конкретный релиз, если приложение запущено через startapp=<id>.
@@ -830,6 +966,25 @@
 
         document.getElementById('profile-reviews-count').innerText = userReviews.length;
         document.getElementById('profile-likes-count').innerText = isMe ? likedSet.size : '?';
+
+        // Средняя выставленная оценка и любимый жанр — по рецензиям пользователя.
+        let avgEl = document.getElementById('profile-avg-rating');
+        let genreEl = document.getElementById('profile-top-genre');
+        if (userReviews.length) {
+          const sum = userReviews.reduce((s, r) => s + (typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0), 0);
+          avgEl.innerText = (sum / userReviews.length).toFixed(1);
+          const genreTally = {};
+          userReviews.forEach(r => {
+            const rel = releasesById.get(r.relId);
+            const g = (rel && rel.genre) || 'Другое';
+            genreTally[g] = (genreTally[g] || 0) + 1;
+          });
+          const topGenre = Object.keys(genreTally).sort((a, b) => genreTally[b] - genreTally[a])[0];
+          genreEl.innerText = topGenre || '—';
+        } else {
+          avgEl.innerText = '—';
+          genreEl.innerText = '—';
+        }
 
         // Админ-функции: блокировка + удаление всех рецензий
         const adminActions = document.getElementById('profile-admin-actions');
@@ -1463,9 +1618,15 @@
       }
     }
 
+    const LIKES_EMPTY_HTML = `<div class="col-span-2 flex flex-col items-center justify-center py-20 text-center">
+        <i data-lucide="heart" class="w-12 h-12 text-gray-500 mb-4" stroke-width="1"></i>
+        <p class="text-gray-400 text-[14px] mb-4">Здесь появятся релизы, которые вам понравились</p>
+        <button data-act="switch-tab" data-tab="home" class="btn-press px-5 py-2.5 bg-red-600 text-white text-[12px] font-bold rounded-full">К каталогу</button>
+      </div>`;
+
     function renderLikes() {
       const grid = document.getElementById('likes-grid'); const likedArr = releases.filter(r => likedSet.has(r.id));
-      grid.innerHTML = likedArr.length ? likedArr.map((r, i) => renderReleaseCard(r, i)).join('') : EMPTY_STATE_HTML;
+      grid.innerHTML = likedArr.length ? likedArr.map((r, i) => renderReleaseCard(r, i)).join('') : LIKES_EMPTY_HTML;
       lucide.createIcons();
     }
 
@@ -1678,6 +1839,30 @@
       renderReviews();
       updateReviewCharCount();
       showToast('Опубликовано!', 'success');
+      celebrate();
+    }
+
+    // Небольшой залп конфетти — отклик на успешную публикацию рецензии.
+    function celebrate() {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const colors = ['#ff0000', '#ffffff', '#fbbf24', '#fb7185'];
+      const count = 26;
+      for (let i = 0; i < count; i++) {
+        const piece = document.createElement('span');
+        piece.className = 'confetti-piece';
+        piece.style.background = colors[i % colors.length];
+        document.body.appendChild(piece);
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.6;
+        const dist = 130 + Math.random() * 170;
+        const dx = Math.cos(angle) * dist;
+        const dy = Math.sin(angle) * dist + 90;
+        const rot = Math.random() * 720 - 360;
+        const anim = piece.animate([
+          { transform: 'translate(-50%, -50%) rotate(0deg)', opacity: 1 },
+          { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${rot}deg)`, opacity: 0 }
+        ], { duration: 900 + Math.random() * 500, easing: 'cubic-bezier(0.18, 0.9, 0.22, 1)' });
+        anim.onfinish = () => piece.remove();
+      }
     }
 
     // Реакция «полезно» на рецензию — оптимистичный toggle с откатом при ошибке.
@@ -1879,6 +2064,24 @@
         });
       } catch (_) {}
     })();
+
+    // Скелетон-заглушки на экране загрузки, пока не пришли данные.
+    function renderSkeletonGrid() {
+      const grid = document.getElementById('skeleton-grid');
+      if (!grid || grid.children.length) return;
+      let html = '';
+      for (let i = 0; i < 6; i++) {
+        html += `<div class="flex flex-col gap-2">
+          <div class="w-full aspect-square skeleton-card"></div>
+          <div class="px-1 space-y-1.5">
+            <div class="skeleton-card" style="height:12px;width:75%;border-radius:5px"></div>
+            <div class="skeleton-card" style="height:10px;width:50%;border-radius:5px"></div>
+          </div>
+        </div>`;
+      }
+      grid.innerHTML = html;
+    }
+    renderSkeletonGrid();
 
     // Запуск синхронизации с БД Render + real-time long-poll
     fetchDB().finally(() => { if (!document.hidden) startSyncLoop(); });

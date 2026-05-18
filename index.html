@@ -60,9 +60,10 @@
       <i data-lucide="loader-2" class="w-5 h-5"></i>
     </div>
 
-    <div id="screen-loading" class="px-6 flex flex-col items-center justify-center h-[60vh] opacity-50">
-        <i data-lucide="loader-2" class="w-8 h-8 text-gray-400 animate-spin mb-4"></i>
-        <p class="text-sm text-gray-400">Синхронизация...</p>
+    <div id="screen-loading" class="px-6">
+        <div class="h-7 w-44 skeleton-card mb-4 mt-1" style="height:28px;border-radius:10px"></div>
+        <div class="h-11 w-full skeleton-card mb-5" style="height:44px;border-radius:16px"></div>
+        <div id="skeleton-grid" class="grid grid-cols-2 gap-4"></div>
     </div>
 
     <div id="screen-home" class="tab-screen px-6 hidden">
@@ -223,8 +224,9 @@
       
       <div class="w-full flex gap-3 mb-8">
         <button id="rel-play-btn" class="btn-press flex-1 py-4 bg-white text-black font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg"><i data-lucide="play" class="w-4 h-4 fill-black"></i> Слушать</button>
-        <button id="rel-share-btn" aria-label="Поделиться релизом" data-act="share-release" class="btn-press w-[64px] bg-white/10 border border-white/10 text-white rounded-2xl flex items-center justify-center shadow-lg transition-colors hover:bg-white/20 shrink-0"><i data-lucide="share-2" class="w-5 h-5"></i></button>
-        <button id="rel-delete-btn" aria-label="Удалить релиз" class="hidden btn-press w-[64px] bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl items-center justify-center shadow-lg transition-colors hover:bg-red-500/20 shrink-0"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+        <button id="rel-card-btn" aria-label="Поделиться карточкой" data-act="share-card" class="btn-press w-[56px] bg-white/10 border border-white/10 text-white rounded-2xl flex items-center justify-center shadow-lg transition-colors hover:bg-white/20 shrink-0"><i data-lucide="image" class="w-5 h-5"></i></button>
+        <button id="rel-share-btn" aria-label="Поделиться релизом" data-act="share-release" class="btn-press w-[56px] bg-white/10 border border-white/10 text-white rounded-2xl flex items-center justify-center shadow-lg transition-colors hover:bg-white/20 shrink-0"><i data-lucide="share-2" class="w-5 h-5"></i></button>
+        <button id="rel-delete-btn" aria-label="Удалить релиз" class="hidden btn-press w-[56px] bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl items-center justify-center shadow-lg transition-colors hover:bg-red-500/20 shrink-0"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
       </div>
 
       <div class="w-full">
@@ -298,6 +300,16 @@
             <i data-lucide="heart" class="w-6 h-6 text-red-500 mb-2"></i>
             <span id="profile-likes-count" class="text-2xl font-black text-white">0</span>
             <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">Лайков</span>
+          </div>
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center text-center shadow-inner">
+            <i data-lucide="star" class="w-6 h-6 text-amber-400 mb-2"></i>
+            <span id="profile-avg-rating" class="text-2xl font-black text-white">—</span>
+            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">Средняя оценка</span>
+          </div>
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col items-center text-center shadow-inner">
+            <i data-lucide="music" class="w-6 h-6 text-gray-400 mb-2"></i>
+            <span id="profile-top-genre" class="text-[15px] font-black text-white truncate max-w-full">—</span>
+            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-1">Любимый жанр</span>
           </div>
         </div>
 
