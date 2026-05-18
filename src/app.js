@@ -24,6 +24,7 @@
 
     // Роль определяется ТОЛЬКО сервером, не клиентом!
     let user = {
+      userId: (tgUser && tgUser.id) || null,
       username: localDisplayName,
       role: 'Пользователь',
       isAdmin: false,
@@ -65,6 +66,14 @@
       const target = source.closest('button, [role="button"], .modal-overlay');
       if (!target || target.disabled || target.getAttribute('aria-disabled') === 'true') return null;
       return target;
+    }
+
+    // Перерисовка иконок Lucide. Lucide грузится с CDN — если он не доступен,
+    // приложение не должно падать с ReferenceError.
+    function refreshIcons() {
+      try {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      } catch (_) {}
     }
 
     function setSyncStatus(text, mode = 'idle') {
@@ -111,7 +120,11 @@
     // =====================================================
     const clickActions = {
       'close-welcome': () => closeWelcomeScreen(),
-      'open-profile': (el) => openProfileModal(el.dataset.user || null),
+      'open-profile': (el) => openProfileModal(el.dataset.user ? {
+        id: el.dataset.authorId || null,
+        username: el.dataset.username || '',
+        displayName: el.dataset.user
+      } : null),
       'open-add': () => openAddModal(),
       'clear-search': () => clearSearch(),
       'clear-genre': () => clearGenreFilter(),
@@ -287,7 +300,7 @@
     let reviewDeleteMode = false;
     let reviewPublishBlocked = false;
     let existingReviewForActiveRelease = null;
-    let activeProfileUsername = null;
+    let activeProfile = null; // { id, username, displayName }
     let activeReleaseReviews = [];
     const REVIEW_MIN_LENGTH = 30;
     const REVIEW_MAX_LENGTH = 3000;
@@ -597,10 +610,9 @@
       if (activeGenreFilter) {
         badge.classList.remove('hidden');
         document.getElementById('active-genre-name').innerText = activeGenreFilter;
-        // ⚡ Bolt: Replace O(N) array filtering with O(1) dictionary lookup
         const count = genreCounts[activeGenreFilter] || 0;
         document.getElementById('active-genre-count').innerText = `${count} релиз${count === 1 ? '' : count > 1 && count < 5 ? 'а' : 'ов'}`;
-        lucide.createIcons();
+        refreshIcons();
       } else {
         badge.classList.add('hidden');
       }
@@ -887,7 +899,7 @@
           document.getElementById('manual-cover-preview').innerHTML = `<i data-lucide="image-plus" class="w-8 h-8 text-gray-400 mb-2"></i><span class="text-[12px] text-gray-400">Загрузить обложку (необязательно)</span>`;
           document.getElementById('manual-artist').value = '';
           document.getElementById('manual-title').value = '';
-          lucide.createIcons();
+          refreshIcons();
         }
         if(id === 'modal-release') {
           reviewPublishBlocked = false;
@@ -901,17 +913,34 @@
       }, 450);
     }
 
-    function openProfileModal(targetUser = null) {
-      activeProfileUsername = typeof targetUser === 'string' ? targetUser : user.username;
-      const profileUsername = activeProfileUsername;
+    // Принадлежит ли рецензия пользователю. authorId приходит с сервера и
+    // надёжен; displayName — фолбэк для старых записей без authorId.
+    function reviewByUser(review, userId, displayName) {
+      if (userId != null && review.authorId != null) {
+        return String(review.authorId) === String(userId);
+      }
+      return !!displayName && review.author === displayName;
+    }
+
+    // target: null → собственный профиль; иначе { id, username, displayName }.
+    function openProfileModal(target = null) {
+      const profile = (target && typeof target === 'object')
+        ? { id: target.id != null ? target.id : null, username: target.username || '', displayName: target.displayName || '' }
+        : { id: user.userId != null ? user.userId : null, username: cleanUsername(user.username), displayName: user.username };
+      activeProfile = profile;
+
       const nameEl = document.getElementById('profile-name');
       if(nameEl) {
-        const userReviews = reviews.filter(r => r.author === profileUsername);
-        nameEl.textContent = profileUsername;
+        // Профиль и его рецензии ищутся по authorId, а не по отображаемому
+        // имени — иначе тёзки без @username сливаются в один профиль.
+        const userReviews = reviews.filter(r => reviewByUser(r, profile.id, profile.displayName));
+        nameEl.textContent = profile.displayName || (profile.username ? '@' + profile.username : '—');
 
-        const isMe = profileUsername === user.username;
+        const isMe = (profile.id != null && user.userId != null)
+          ? String(profile.id) === String(user.userId)
+          : profile.displayName === user.username;
         // Роль определяется сервером: для себя — из user, для других — по флагу authorIsAdmin в их рецензиях.
-        const profileCleanName = cleanUsername(profileUsername);
+        const profileCleanName = profile.username || cleanUsername(profile.displayName);
         const isProfileAdmin = isMe
           ? user.isAdmin
           : userReviews.some(r => r.authorIsAdmin);
@@ -964,20 +993,21 @@
             adminActions.classList.add('hidden');
         }
 
-        renderUserReviews(userReviews, profileUsername);
+        renderUserReviews(userReviews, isMe);
 
-        const safeName = profileUsername.replace('@', '').substring(0, 2).toUpperCase() || 'XX';
+        const safeName = (profile.displayName || profile.username || 'XX').replace('@', '').substring(0, 2).toUpperCase() || 'XX';
         document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
 
         openModal('modal-profile');
-        lucide.createIcons();
+        refreshIcons();
       }
     }
 
     // --- АДМИН-ФУНКЦИИ: блокировка и удаление ---
     async function toggleBlockUser() {
-      if (!activeProfileUsername || !user.isAdmin) return;
-      const cleanName = cleanUsername(activeProfileUsername);
+      if (!activeProfile || !user.isAdmin) return;
+      const cleanName = activeProfile.username || cleanUsername(activeProfile.displayName);
+      if (!cleanName) return showToast('У пользователя нет @username');
       const isCurrentlyBlocked = blockedUsers.includes(cleanName);
       try {
         const res = await fetch(`${BACKEND_URL}/api/block`, {
@@ -992,13 +1022,14 @@
           blockedUsers.push(cleanName);
           showToast(`@${cleanName} заблокирован`);
         }
-        openProfileModal(activeProfileUsername);
+        openProfileModal(activeProfile);
       } catch(e) { showToast('Ошибка: ' + e.message); }
     }
 
     async function deleteAllReviewsByUser() {
-      if (!activeProfileUsername || !user.isAdmin) return;
-      const cleanName = cleanUsername(activeProfileUsername);
+      if (!activeProfile || !user.isAdmin) return;
+      const cleanName = activeProfile.username || cleanUsername(activeProfile.displayName);
+      if (!cleanName) return showToast('У пользователя нет @username');
       if (!confirm(`Удалить ВСЕ рецензии @${cleanName}?`)) return;
       try {
         const res = await fetch(`${BACKEND_URL}/api/reviews/by-author/${encodeURIComponent(cleanName)}`, {
@@ -1009,7 +1040,7 @@
         reviews = reviews.filter(r => cleanUsername(r.authorUsername || r.author) !== cleanName);
         updateReviewsMap();
         showToast(`Удалено ${data.deleted} рецензий`);
-        openProfileModal(activeProfileUsername);
+        openProfileModal(activeProfile);
       } catch(e) { showToast('Ошибка: ' + e.message); }
     }
 
@@ -1065,7 +1096,6 @@
 
     function applyData(data) {
       releases = data.releases || [];
-      // ⚡ Bolt: Precompute Map for O(1) lookups
       releasesById = new Map(releases.map(r => [r.id, r]));
       reviews = data.reviews || [];
       updateReviewsMap();
@@ -1075,6 +1105,7 @@
       blockedUsers = data.blockedUsers || [];
       if (typeof data.syncCursor === 'number') syncCursor = data.syncCursor;
       if (data.currentUser) {
+        if (data.currentUser.userId != null) user.userId = data.currentUser.userId;
         user.username = data.currentUser.displayName || user.username;
         user.isAdmin = !!data.currentUser.isAdmin;
         user.isBlocked = !!data.currentUser.isBlocked;
@@ -1202,8 +1233,8 @@
         applySyncDelta(data);
         setSyncStatus('Всё актуально', 'ok');
         if (syncLoopActive) {
-          // hasMore — догоняем сразу, иначе следующий long-poll.
-          setTimeout(syncLoopTick, data.hasMore ? 0 : 0);
+          // Сервер сам держит long-poll до 25 с, поэтому следующий тик — сразу.
+          setTimeout(syncLoopTick, 0);
         }
       } catch (e) {
         if (e.name === 'AbortError') return;
@@ -1437,19 +1468,25 @@
             : '✓ Распознано! Выберите жанр и сохраните.';
           document.getElementById('manual-step-alert').className = 'text-[12px] text-green-400 bg-green-400/10 p-3 rounded-xl mb-2 text-center';
           btnText.innerText = 'Распознать и добавить';
-          lucide.createIcons();
+          refreshIcons();
       }
     }
 
     function handleCoverUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
+      // Лимит размера: base64 крупнее оригинала, а сервер режет data:image > ~3 МБ.
+      const MAX_COVER_BYTES = 2 * 1024 * 1024;
+      if (file.size > MAX_COVER_BYTES) {
+        event.target.value = '';
+        return showToast('Файл слишком большой (максимум 2 МБ)', 'error');
+      }
       const reader = new FileReader();
       reader.onload = function(e) {
           manualCoverBase64 = e.target.result;
           const previewZone = document.getElementById('manual-cover-preview');
           previewZone.innerHTML = `<img src="${escapeHtml(manualCoverBase64)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="media-edit-overlay absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
-          lucide.createIcons();
+          refreshIcons();
       }
       reader.readAsDataURL(file);
     }
@@ -1482,7 +1519,6 @@
       }
       
       releases.unshift(newRel);
-      // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculations
       releasesById.set(newRel.id, newRel);
       const g = newRel.genre || 'Другое';
       genreCounts[g] = (genreCounts[g] || 0) + 1;
@@ -1495,7 +1531,6 @@
         return `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
     }
     
-    // ⚡ Bolt: Replace O(N) full DOM re-renders with targeted O(1) DOM updates
     function applyLikeState(id, liked) {
       const safeId = escapeCssString(id);
       document.querySelectorAll(`button[data-like-id="${safeId}"]`).forEach(btn => {
@@ -1544,7 +1579,6 @@
       const isLiked = likedSet.has(r.id);
       const fb = getFallbackImg(r.name);
       const delay = index * 50;
-      // ⚡ Bolt: Replace O(N) .reduce() array scan inside render loop with O(1) map lookup
       const cachedAvg = avgRatingByRelId.get(r.id);
       const avgRating = cachedAvg ? cachedAvg.toFixed(1) : null;
       const ratingBadge = avgRating ? `<div class="rating-badge absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
@@ -1582,7 +1616,7 @@
           noResults.classList.add('hidden');
           grid.innerHTML = filtered.map((r, i) => renderReleaseCard(r, i)).join('');
         }
-        lucide.createIcons();
+        refreshIcons();
       }
     }
 
@@ -1595,7 +1629,7 @@
     function renderLikes() {
       const grid = document.getElementById('likes-grid'); const likedArr = releases.filter(r => likedSet.has(r.id));
       grid.innerHTML = likedArr.length ? likedArr.map((r, i) => renderReleaseCard(r, i)).join('') : LIKES_EMPTY_HTML;
-      lucide.createIcons();
+      refreshIcons();
     }
 
     // Лента активности: последние релизы и рецензии, отсортированные по времени.
@@ -1638,11 +1672,10 @@
             <p class="text-[12px] text-gray-300 leading-relaxed line-clamp-2">${escapeHtml(rv.text)}</p>
           </div>`;
       }).join('');
-      lucide.createIcons();
+      refreshIcons();
     }
 
     function openRelease(id) {
-      // ⚡ Bolt: Use O(1) map lookup instead of O(N) array search
       const rel = releasesById.get(id); if (!rel) return; activeReleaseId = id;
       const fb = getFallbackImg(rel.name);
       document.getElementById('rel-img').src = rel.img || fb;
@@ -1676,7 +1709,7 @@
     function getExistingReviewForRelease(releaseId) {
       const relReviews = reviewsByRelId.get(releaseId);
       if (!relReviews) return null;
-      return relReviews.find(r => r.author === user.username) || null;
+      return relReviews.find(r => reviewByUser(r, user.userId, user.username)) || null;
     }
 
     function openConfirmReviewDelete(reviewId, releaseId) {
@@ -1704,7 +1737,7 @@
         renderReviews();
       }
       if (document.getElementById('modal-profile') && !document.getElementById('modal-profile').classList.contains('hidden')) {
-        openProfileModal(activeProfileUsername || user.username);
+        openProfileModal(activeProfile);
       }
       if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
 
@@ -1730,7 +1763,6 @@
         return;
       }
       
-      // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculations
       const relToDeleteObj = releasesById.get(releaseToDelete);
       if (relToDeleteObj) {
         const g = relToDeleteObj.genre || 'Другое';
@@ -1765,7 +1797,7 @@
       if (!t) return showToast('Напишите текст');
       if (t.length < REVIEW_MIN_LENGTH) return showToast(`Минимум ${REVIEW_MIN_LENGTH} символов`);
       if (t.length > REVIEW_MAX_LENGTH) return showToast(`Максимум ${REVIEW_MAX_LENGTH} символов`);
-      if (reviews.some(r => r.relId === activeReleaseId && r.author === user.username)) return showToast('На этот трек уже есть ваша рецензия');
+      if (reviews.some(r => r.relId === activeReleaseId && reviewByUser(r, user.userId, user.username))) return showToast('На этот трек уже есть ваша рецензия');
 
       const objectiveRating = getCriteriaAverage(selectedCriteria);
       const finalRating = Math.round((objectiveRating + selectedRating) / 2 * 10) / 10;
@@ -1773,6 +1805,8 @@
         id: Date.now().toString(),
         relId: activeReleaseId,
         author: user.username,
+        authorId: user.userId,
+        authorUsername: cleanUsername(user.username),
         authorIsAdmin: user.isAdmin,
         reactionCount: 0,
         text: t,
@@ -1794,7 +1828,6 @@
       }
 
       reviews.unshift(newRev);
-      // ⚡ Bolt: Use incremental cache updates instead of O(N) full recalculations
       if (!reviewsByRelId.has(activeReleaseId)) reviewsByRelId.set(activeReleaseId, []);
       reviewsByRelId.get(activeReleaseId).push(newRev);
       const rvs = reviewsByRelId.get(activeReleaseId);
@@ -1873,17 +1906,17 @@
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
         const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0;
         const criteria = r.criteria ? ` · ${escapeHtml(formatCriteria(r.criteria))}` : '';
-        const canDelete = r.author === user.username || user.isAdmin;
+        const canDelete = reviewByUser(r, user.userId, user.username) || user.isAdmin;
         const reacted = reactedSet.has(r.id);
         const reactionCount = typeof r.reactionCount === 'number' ? r.reactionCount : 0;
         const reactBtn = `<button data-act="toggle-reaction" data-id="${escapeHtml(r.id)}" aria-label="Полезная рецензия" class="btn-press shrink-0 flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${reacted ? 'bg-red-500/15 border border-red-500/25 text-red-400' : 'bg-white/5 border border-white/10 text-gray-400'}"><i data-lucide="thumbs-up" class="w-3 h-3"></i><span class="text-[10px] font-bold">${reactionCount}</span></button>`;
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
-          <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" data-act="open-profile" data-user="${escapeHtml(r.author)}">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button data-act="open-confirm-review-delete" data-id="${escapeHtml(r.id)}" data-rel="${escapeHtml(r.relId)}" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
+          <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" data-act="open-profile" data-user="${escapeHtml(r.author)}" data-author-id="${escapeHtml(r.authorId == null ? '' : r.authorId)}" data-username="${escapeHtml(r.authorUsername || '')}">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button data-act="open-confirm-review-delete" data-id="${escapeHtml(r.id)}" data-rel="${escapeHtml(r.relId)}" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
           <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span>${reactBtn}</div></div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
       renderCriteriaChart(activeReleaseId);
-      lucide.createIcons();
+      refreshIcons();
     }
 
     // Множественное число для слова «рецензия» по правилам русского языка.
@@ -1940,15 +1973,13 @@
       container.classList.remove('hidden');
     }
 
-    function renderUserReviews(userReviews, profileUsername) {
+    function renderUserReviews(userReviews, isMe) {
       const revContainer = document.getElementById('profile-user-reviews');
-      const isMe = profileUsername === user.username;
       if (userReviews.length > 0) {
-        // ⚡ Bolt: Use global releasesById for O(1) lookups
         revContainer.innerHTML = userReviews.map(r => {
           const rel = releasesById.get(r.relId);
           const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
-          const canDelete = (isMe && r.author === user.username) || user.isAdmin;
+          const canDelete = isMe || user.isAdmin;
           const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0;
           return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-500" data-act="open-release" data-id="${escapeHtml(r.relId)}" tabindex="0" role="button" aria-label="Открыть релиз: ${relName}">
             <div class="flex justify-between items-center mb-2 gap-2">
@@ -1991,10 +2022,10 @@
       btnRef.classList.add(isLight ? 'border-black' : 'border-white');
       
       btnRef.innerHTML = `<i data-lucide="check" class="w-6 h-6 ${isLight ? 'text-black' : 'text-white'}"></i>`;
-      lucide.createIcons();
+      refreshIcons();
     }
 
-    lucide.createIcons();
+    refreshIcons();
     selectRating(10);
     resetReviewInputs();
     setSortMode('new');

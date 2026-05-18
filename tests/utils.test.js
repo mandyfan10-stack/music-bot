@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { cleanUsername, escapeHtml, escapeJs, escapeJsHtml, escapeCssString, filterAndSortReleases } = require('../src/utils.js');
+const { cleanUsername, escapeHtml, escapeCssString, filterAndSortReleases } = require('../src/utils.js');
 
 test('cleanUsername: should remove leading @ and convert to lowercase', () => {
   assert.strictEqual(cleanUsername('@User'), 'user');
@@ -51,49 +51,15 @@ test('escapeHtml: should convert non-strings to strings and escape them', () => 
     assert.strictEqual(escapeHtml(true), 'true');
 });
 
+test('escapeHtml: should preserve falsy non-nullish values like 0 and false', () => {
+    assert.strictEqual(escapeHtml(0), '0');
+    assert.strictEqual(escapeHtml(false), 'false');
+});
+
 test('escapeHtml: should escape a complex mix of characters', () => {
     assert.strictEqual(
         escapeHtml('Text with & < > " and \''),
         'Text with &amp; &lt; &gt; &quot; and &#39;'
-    );
-});
-
-test('escapeJs: should escape quotes and backslashes', () => {
-    assert.strictEqual(escapeJs(`a'b\"c\\d`), `a\\'b\\\"c\\\\d`);
-});
-
-test('escapeJs: should return empty string for nullish values', () => {
-    assert.strictEqual(escapeJs(null), '');
-    assert.strictEqual(escapeJs(undefined), '');
-});
-
-
-test('escapeJs: should escape all occurrences of quotes and backslashes', () => {
-    assert.strictEqual(escapeJs("'''"), "\\'\\'\\'");
-    assert.strictEqual(escapeJs('"""'), '\\"\\"\\"');
-    assert.strictEqual(escapeJs('a\\b\\c'), 'a\\\\b\\\\c');
-});
-
-test('escapeJs: should return empty string for empty string input', () => {
-    assert.strictEqual(escapeJs(''), '');
-});
-
-test('escapeJs: should convert non-strings to strings and escape them', () => {
-    assert.strictEqual(escapeJs(123), '123');
-    assert.strictEqual(escapeJs(true), 'true');
-});
-
-test('escapeJs: should escape a complex mix of characters', () => {
-    assert.strictEqual(
-        escapeJs(`Text with \\ and " and '`),
-        `Text with \\\\ and \\" and \\'`
-    );
-});
-
-test('escapeJsHtml: should combine JS and HTML escaping safely', () => {
-    assert.strictEqual(
-        escapeJsHtml(`'"><script>alert(1)</script>`),
-        `\\&#39;\\&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;`
     );
 });
 

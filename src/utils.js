@@ -4,17 +4,10 @@ function cleanUsername(username) {
 }
 
 function escapeHtml(str) {
-  if (!str) return '';
+  // Проверяем именно на null/undefined: число 0 и false — валидные значения,
+  // которые должны рендериться как "0"/"false", а не теряться.
+  if (str == null) return '';
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function escapeJs(str) {
-  if (!str) return '';
-  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
-}
-
-function escapeJsHtml(str) {
-  return escapeHtml(escapeJs(str));
 }
 
 function escapeCssString(str) {
@@ -77,8 +70,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     cleanUsername,
     escapeHtml,
-    escapeJs,
-    escapeJsHtml,
     escapeCssString,
     filterAndSortReleases
   };
