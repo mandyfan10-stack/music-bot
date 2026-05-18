@@ -150,6 +150,9 @@
       'toggle-like': (el, e) => toggleLikeAPI(e, el.dataset.id),
       'toggle-reaction': (el) => toggleReviewReaction(el.dataset.id),
       'open-confirm-review-delete': (el) => openConfirmReviewDelete(el.dataset.id, el.dataset.rel),
+      'toggle-comments': (el) => toggleComments(el.dataset.id),
+      'submit-comment': (el) => submitComment(el.dataset.id),
+      'delete-comment': (el) => deleteComment(el.dataset.id, el.dataset.review),
     };
 
     document.addEventListener('click', (event) => {
@@ -164,6 +167,7 @@
       if (!el) return;
       if (el.dataset.actInput === 'search') onSearchInput();
       else if (el.dataset.actInput === 'review-char-count') updateReviewCharCount();
+      else if (el.dataset.actInput === 'comment-draft') commentDrafts.set(el.dataset.id, el.value);
     });
 
     document.addEventListener('focusin', (event) => {
@@ -261,6 +265,10 @@
 
     let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
     let reactedSet = new Set(); // id рецензий, на которые текущий пользователь отреагировал
+    let comments = [], commentsByReviewId = new Map();
+    let expandedComments = new Set(); // id рецензий с раскрытой веткой комментариев
+    let commentDrafts = new Map();    // reviewId → черновик комментария (переживает ре-рендер)
+    const COMMENT_MAX_LENGTH = 1000;
 
     // Метка последнего визита — для бейджа «новое» (читаем старое значение, пишем текущее).
     const lastSeenTs = parseInt(localStorage.getItem('xxii_last_seen') || '0', 10);
@@ -294,6 +302,17 @@
         }
         avgRatingByRelId.set(relId, avg);
       });
+    }
+
+    // Группировка комментариев по рецензии; в каждой группе — по времени (старые сверху).
+    function updateCommentsMap() {
+      commentsByReviewId.clear();
+      comments.forEach(c => {
+        if (!c || !c.reviewId) return;
+        if (!commentsByReviewId.has(c.reviewId)) commentsByReviewId.set(c.reviewId, []);
+        commentsByReviewId.get(c.reviewId).push(c);
+      });
+      commentsByReviewId.forEach(list => list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)));
     }
     let pendingReviewDelete = null;
     let pendingReviewTargetReleaseId = null;
@@ -922,6 +941,79 @@
       return !!displayName && review.author === displayName;
     }
 
+    // --- СТАТИСТИКА ПРОФИЛЯ ---
+    // Бейджи-достижения, вычисляемые из рецензий пользователя.
+    function computeProfileBadges(userReviews) {
+      const badges = [];
+      const count = userReviews.length;
+      if (count >= 1) badges.push({ icon: 'pen-line', label: 'Первая рецензия' });
+      if (count >= 10) badges.push({ icon: 'flame', label: 'Плодовитый' });
+      if (count >= 25) badges.push({ icon: 'crown', label: 'Ветеран' });
+
+      const genres = new Set();
+      userReviews.forEach(r => {
+        const rel = releasesById.get(r.relId);
+        genres.add((rel && rel.genre) || 'Другое');
+      });
+      if (genres.size >= 5) badges.push({ icon: 'disc-3', label: 'Меломан' });
+
+      if (count >= 3) {
+        const avg = userReviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / count;
+        if (avg < 5) badges.push({ icon: 'gavel', label: 'Строгий критик' });
+        else if (avg >= 8) badges.push({ icon: 'sparkles', label: 'Щедрый' });
+      }
+      return badges;
+    }
+
+    function renderProfileBadges(userReviews) {
+      const wrap = document.getElementById('profile-badges');
+      const list = document.getElementById('profile-badges-list');
+      if (!wrap || !list) return;
+      const badges = computeProfileBadges(userReviews);
+      if (!badges.length) {
+        wrap.classList.add('hidden');
+        list.innerHTML = '';
+        return;
+      }
+      list.innerHTML = badges.map(b => `<span class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-[11px] font-bold text-gray-200">
+          <i data-lucide="${escapeHtml(b.icon)}" class="w-3.5 h-3.5 text-amber-400"></i>${escapeHtml(b.label)}</span>`).join('');
+      wrap.classList.remove('hidden');
+    }
+
+    // График средних оценок пользователя по 6 критериям (предпочтения критика).
+    function renderProfileCriteriaChart(userReviews) {
+      const container = document.getElementById('profile-criteria-chart');
+      if (!container) return;
+      if (!userReviews.length) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+      }
+      const sums = {};
+      criteriaConfig.forEach(({ key }) => { sums[key] = 0; });
+      userReviews.forEach(r => {
+        const c = r.criteria || {};
+        criteriaConfig.forEach(({ key }) => {
+          sums[key] += typeof c[key] === 'number' ? c[key] : 5;
+        });
+      });
+      const bars = criteriaConfig.map(({ key, label }) => {
+        const avg = sums[key] / userReviews.length;
+        const pct = Math.max(0, Math.min(100, avg * 10));
+        return `<div class="flex items-center gap-2">
+          <span class="text-[10px] text-gray-400 w-24 shrink-0 truncate" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+          <div class="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
+            <div class="h-full rounded-full bg-red-500" style="width: ${pct}%"></div>
+          </div>
+          <span class="text-[11px] font-bold text-white w-7 text-right">${avg.toFixed(1)}</span>
+        </div>`;
+      }).join('');
+      container.innerHTML = `
+        <h3 class="text-[13px] font-bold text-white mb-3 pl-1">Средние оценки по критериям</h3>
+        <div class="bg-white/5 border border-white/10 rounded-[1.5rem] p-5 space-y-3">${bars}</div>`;
+      container.classList.remove('hidden');
+    }
+
     // target: null → собственный профиль; иначе { id, username, displayName }.
     function openProfileModal(target = null) {
       const profile = (target && typeof target === 'object')
@@ -993,6 +1085,8 @@
             adminActions.classList.add('hidden');
         }
 
+        renderProfileBadges(userReviews);
+        renderProfileCriteriaChart(userReviews);
         renderUserReviews(userReviews, isMe);
 
         const safeName = (profile.displayName || profile.username || 'XX').replace('@', '').substring(0, 2).toUpperCase() || 'XX';
@@ -1037,8 +1131,13 @@
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
+        const goneReviewIds = new Set(
+          reviews.filter(r => cleanUsername(r.authorUsername || r.author) === cleanName).map(r => r.id)
+        );
         reviews = reviews.filter(r => cleanUsername(r.authorUsername || r.author) !== cleanName);
         updateReviewsMap();
+        comments = comments.filter(c => !goneReviewIds.has(c.reviewId));
+        updateCommentsMap();
         showToast(`Удалено ${data.deleted} рецензий`);
         openProfileModal(activeProfile);
       } catch(e) { showToast('Ошибка: ' + e.message); }
@@ -1099,6 +1198,8 @@
       releasesById = new Map(releases.map(r => [r.id, r]));
       reviews = data.reviews || [];
       updateReviewsMap();
+      comments = data.comments || [];
+      updateCommentsMap();
       updateGenreCounts();
       likedSet = new Set(data.likes || []);
       reactedSet = new Set(data.myReactions || []);
@@ -1202,7 +1303,34 @@
         if (reviews.length !== before) changed = true;
       });
 
+      let commentsChanged = false;
+
+      (data.comments || []).forEach(c => {
+        if (!c || !c.id) return;
+        const idx = comments.findIndex(x => x.id === c.id);
+        if (idx >= 0) comments[idx] = c;
+        else comments.push(c);
+        commentsChanged = true;
+      });
+
+      (data.deletedCommentIds || []).forEach(id => {
+        const before = comments.length;
+        comments = comments.filter(x => x.id !== id);
+        if (comments.length !== before) commentsChanged = true;
+      });
+
+      // Удалённые рецензии/релизы уносят свои комментарии (каскад на сервере).
+      const goneReviewIds = new Set(data.deletedReviewIds || []);
+      const goneReleaseIds = new Set(data.deletedReleaseIds || []);
+      if (goneReviewIds.size || goneReleaseIds.size) {
+        const before = comments.length;
+        comments = comments.filter(c => !goneReviewIds.has(c.reviewId) && !goneReleaseIds.has(c.relId));
+        if (comments.length !== before) commentsChanged = true;
+      }
+
       if (typeof data.cursor === 'number' && data.cursor > 0) syncCursor = data.cursor;
+
+      if (commentsChanged) updateCommentsMap();
 
       if (changed) {
         updateReviewsMap();
@@ -1211,12 +1339,13 @@
         renderReleases();
         if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
         if (!document.getElementById('screen-feed').classList.contains('hidden')) renderFeed();
-        if (activeReleaseId && !document.getElementById('modal-release').classList.contains('hidden')) {
-          existingReviewForActiveRelease = getExistingReviewForRelease(activeReleaseId);
-          reviewPublishBlocked = !!existingReviewForActiveRelease;
-          renderReviews();
-          updateReviewCharCount();
-        }
+      }
+      if ((changed || commentsChanged) && activeReleaseId
+          && !document.getElementById('modal-release').classList.contains('hidden')) {
+        existingReviewForActiveRelease = getExistingReviewForRelease(activeReleaseId);
+        reviewPublishBlocked = !!existingReviewForActiveRelease;
+        renderReviews();
+        updateReviewCharCount();
       }
     }
 
@@ -1733,6 +1862,9 @@
 
       reviews = reviews.filter(r => r.id !== pendingReviewDelete);
       updateReviewsMap();
+      // Комментарии удалённой рецензии каскадно удаляются и на сервере.
+      comments = comments.filter(c => c.reviewId !== pendingReviewDelete);
+      updateCommentsMap();
       if (activeReleaseId && pendingReviewTargetReleaseId === activeReleaseId) {
         renderReviews();
       }
@@ -1779,6 +1911,9 @@
 
       reviewsByRelId.delete(releaseToDelete);
       avgRatingByRelId.delete(releaseToDelete);
+      // Комментарии релиза каскадно удаляются и на сервере.
+      comments = comments.filter(c => c.relId !== releaseToDelete);
+      updateCommentsMap();
       
       renderReleases();
       if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
@@ -1899,6 +2034,115 @@
       }
     }
 
+    // --- КОММЕНТАРИИ К РЕЦЕНЗИЯМ ---
+    function renderCommentItem(c) {
+      const canDel = reviewByUser(c, user.userId, user.username) || user.isAdmin;
+      const adminTag = c.authorIsAdmin
+        ? '<span class="text-[9px] text-red-400 font-bold uppercase ml-1">Создатель</span>' : '';
+      return `<div class="bg-black/20 rounded-xl p-3 border border-white/5">
+        <div class="flex justify-between items-center gap-2 mb-1">
+          <button data-act="open-profile" data-user="${escapeHtml(c.author)}" data-author-id="${escapeHtml(c.authorId == null ? '' : c.authorId)}" data-username="${escapeHtml(c.authorUsername || '')}" class="text-[12px] font-bold text-white hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm">${escapeHtml(c.author)}${adminTag}</button>
+          ${canDel ? `<button data-act="delete-comment" data-id="${escapeHtml(c.id)}" data-review="${escapeHtml(c.reviewId)}" aria-label="Удалить комментарий" class="btn-press w-6 h-6 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center shrink-0"><i data-lucide="trash-2" class="w-3 h-3"></i></button>` : ''}
+        </div>
+        <p class="text-[12px] text-gray-300 leading-relaxed break-words">${escapeHtml(c.text)}</p>
+        <span class="text-[9px] text-gray-500 font-medium">${escapeHtml(c.date || '')}</span>
+      </div>`;
+    }
+
+    function renderCommentsSection(reviewId) {
+      const list = commentsByReviewId.get(reviewId) || [];
+      const count = list.length;
+      const expanded = expandedComments.has(reviewId);
+      const toggle = `<button data-act="toggle-comments" data-id="${escapeHtml(reviewId)}" class="btn-press flex items-center gap-1.5 text-[11px] font-bold text-gray-400 hover:text-white transition-colors mt-2">
+          <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+          <span>Комментарии${count ? ` (${count})` : ''}</span>
+          <i data-lucide="${expanded ? 'chevron-up' : 'chevron-down'}" class="w-3 h-3"></i>
+        </button>`;
+      if (!expanded) return toggle;
+
+      const items = list.map(renderCommentItem).join('')
+        || `<div class="text-[11px] text-gray-500 text-center py-2">Комментариев пока нет</div>`;
+      const draft = commentDrafts.get(reviewId) || '';
+      const inputBox = user.isAuthenticated ? `<div class="flex items-end gap-2 mt-1">
+          <textarea data-act-input="comment-draft" data-id="${escapeHtml(reviewId)}" rows="1" maxlength="${COMMENT_MAX_LENGTH}" aria-label="Текст комментария" placeholder="Ваш комментарий..." class="flex-1 bg-black/20 border border-white/5 rounded-xl outline-none p-2.5 text-[12px] text-white resize-none transition-all focus:border-red-500/30">${escapeHtml(draft)}</textarea>
+          <button data-act="submit-comment" data-id="${escapeHtml(reviewId)}" class="btn-press shrink-0 px-3 py-2.5 bg-white/10 border border-white/10 text-white text-[12px] font-bold rounded-xl">Отправить</button>
+        </div>` : '';
+      return `${toggle}<div class="mt-2 space-y-2">${items}${inputBox}</div>`;
+    }
+
+    function toggleComments(reviewId) {
+      if (expandedComments.has(reviewId)) expandedComments.delete(reviewId);
+      else expandedComments.add(reviewId);
+      renderReviews();
+    }
+
+    // Добавление комментария — оптимистично, с откатом при ошибке.
+    async function submitComment(reviewId) {
+      if (!user.isAuthenticated) return showToast('Войдите через Telegram');
+      if (user.isBlocked) return showToast('Ваш аккаунт заблокирован');
+      const text = (commentDrafts.get(reviewId) || '').trim();
+      if (!text) return showToast('Напишите комментарий');
+      if (text.length > COMMENT_MAX_LENGTH) return showToast(`Максимум ${COMMENT_MAX_LENGTH} символов`);
+
+      const newComment = {
+        id: Date.now().toString(),
+        reviewId: reviewId,
+        relId: activeReleaseId,
+        text: text,
+        author: user.username,
+        authorId: user.userId,
+        authorUsername: cleanUsername(user.username),
+        authorIsAdmin: user.isAdmin,
+        date: new Date().toLocaleDateString('ru-RU'),
+        timestamp: Date.now()
+      };
+
+      comments.push(newComment);
+      commentDrafts.delete(reviewId);
+      expandedComments.add(reviewId);
+      updateCommentsMap();
+      renderReviews();
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/reviews/${encodeURIComponent(reviewId)}/comments`, {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ id: newComment.id, text: text })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        showToast('Комментарий добавлен', 'success');
+      } catch (e) {
+        console.error('Comment add error:', e);
+        comments = comments.filter(c => c.id !== newComment.id); // откат
+        commentDrafts.set(reviewId, text);
+        updateCommentsMap();
+        renderReviews();
+        showToast('Не удалось отправить комментарий', 'error');
+      }
+    }
+
+    // Удаление комментария — оптимистично, с откатом при ошибке.
+    async function deleteComment(commentId, reviewId) {
+      if (!confirm('Удалить комментарий?')) return;
+      const removed = comments.find(c => c.id === commentId);
+      if (!removed) return;
+      comments = comments.filter(c => c.id !== commentId);
+      updateCommentsMap();
+      renderReviews();
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/comments/${encodeURIComponent(commentId)}`, {
+          method: 'DELETE', headers: authHeaders()
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        showToast('Комментарий удалён', 'success');
+      } catch (e) {
+        console.error('Comment delete error:', e);
+        comments.push(removed); // откат
+        updateCommentsMap();
+        renderReviews();
+        showToast('Не удалось удалить комментарий', 'error');
+      }
+    }
+
     function renderReviews() {
       const container = document.getElementById('reviews-container'); const relReviews = reviewsByRelId.get(activeReleaseId) || [];
       activeReleaseReviews = relReviews;
@@ -1913,7 +2157,8 @@
         return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
           <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" data-act="open-profile" data-user="${escapeHtml(r.author)}" data-author-id="${escapeHtml(r.authorId == null ? '' : r.authorId)}" data-username="${escapeHtml(r.authorUsername || '')}">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button data-act="open-confirm-review-delete" data-id="${escapeHtml(r.id)}" data-rel="${escapeHtml(r.relId)}" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
-          <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span>${reactBtn}</div></div>`;
+          <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span>${reactBtn}</div>
+          ${renderCommentsSection(r.id)}</div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
       renderCriteriaChart(activeReleaseId);
       refreshIcons();
