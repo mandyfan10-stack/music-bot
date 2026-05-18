@@ -508,28 +508,18 @@
 
       <!-- ПОИСК ПО ЖАНРУ + СОРТИРОВКА -->
       <div id="filter-bar" class="mb-5 space-y-3">
-        <!-- Глобальный поиск по названию релиза и артисту -->
-        <div class="relative flex items-center">
-          <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute left-3.5 pointer-events-none"></i>
-          <input id="release-search" aria-label="Поиск по названию или артисту" type="text" placeholder="Поиск релиза или артиста..." autocomplete="off"
-            class="w-full glass-input rounded-2xl pl-10 pr-10 py-3 text-[13px] text-white outline-none focus:ring-1 ring-red-500/30 transition-all"
-            oninput="onReleaseSearchInput()">
-          <button id="release-search-clear" aria-label="Очистить поиск" class="hidden absolute right-3 p-1 rounded-full hover:bg-white/10 transition-colors" onclick="clearReleaseSearch()">
-            <i data-lucide="x" class="w-4 h-4 text-gray-400"></i>
-          </button>
-        </div>
-        <!-- Поиск по жанру -->
+        <!-- Единый поиск: релиз, артист или жанр -->
         <div class="relative">
           <div class="relative flex items-center">
             <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute left-3.5 pointer-events-none"></i>
-            <input id="genre-search" aria-label="Поиск по жанру" type="text" placeholder="Поиск по жанру..." autocomplete="off"
+            <input id="genre-search" aria-label="Поиск релиза, артиста или жанра" type="text" placeholder="Поиск: релиз, артист, жанр..." autocomplete="off"
               class="w-full glass-input rounded-2xl pl-10 pr-10 py-3 text-[13px] text-white outline-none focus:ring-1 ring-red-500/30 transition-all"
-              oninput="onGenreSearchInput()" onfocus="showGenreDropdown()">
-            <button id="genre-search-clear" aria-label="Очистить поиск" class="hidden absolute right-3 p-1 rounded-full hover:bg-white/10 transition-colors" onclick="clearGenreSearch()">
+              oninput="onSearchInput()" onfocus="showGenreDropdown()">
+            <button id="genre-search-clear" aria-label="Очистить поиск" class="hidden absolute right-3 p-1 rounded-full hover:bg-white/10 transition-colors" onclick="clearSearch()">
               <i data-lucide="x" class="w-4 h-4 text-gray-400"></i>
             </button>
           </div>
-          <!-- Дропдаун автодополнения -->
+          <!-- Дропдаун-подсказки жанров -->
           <div id="genre-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 glass rounded-2xl border border-white/10 overflow-hidden z-30 shadow-2xl">
             <div id="genre-dropdown-list" class="max-h-[200px] overflow-y-auto hide-scrollbar"></div>
           </div>
@@ -539,7 +529,7 @@
           <span class="px-3 py-1.5 bg-red-500 text-white text-[11px] font-bold rounded-xl flex items-center gap-1.5">
             <i data-lucide="music" class="w-3 h-3"></i>
             <span id="active-genre-name"></span>
-            <button onclick="clearGenreSearch()" aria-label="Удалить фильтр жанра" class="ml-1 hover:bg-white/20 rounded-full p-0.5 transition-colors">
+            <button onclick="clearGenreFilter()" aria-label="Удалить фильтр жанра" class="ml-1 hover:bg-white/20 rounded-full p-0.5 transition-colors">
               <i data-lucide="x" class="w-3 h-3"></i>
             </button>
           </span>
@@ -1043,7 +1033,7 @@
     let sortMode = 'new';
     let selectedGenreForAdd = '';
     let genreDropdownOpen = false;
-    let searchQuery = ''; // поиск по названию релиза и артисту
+    let searchQuery = ''; // текстовый поиск по релизу, артисту и жанру
 
     function renderAddGenreSelector(containerId) {
       const container = document.getElementById(containerId);
@@ -1061,38 +1051,30 @@
       renderAddGenreSelector('manual-genre-selector');
     }
 
-    function onGenreSearchInput() {
+    // Единый поиск: фильтрует каталог по релизу/артисту/жанру и показывает
+    // подсказки жанров в дропдауне.
+    function onSearchInput() {
       const input = document.getElementById('genre-search');
-      const val = input.value.trim();
-      const clearBtn = document.getElementById('genre-search-clear');
-      clearBtn.classList.toggle('hidden', !val);
-
-      if (val.length > 0 || document.activeElement === input) {
+      searchQuery = input.value.trim();
+      document.getElementById('genre-search-clear').classList.toggle('hidden', !searchQuery);
+      if (searchQuery.length > 0 || document.activeElement === input) {
         showGenreDropdown();
       } else {
         hideGenreDropdown();
-        // Пустой ввод — сброс фильтра
-        if (activeGenreFilter) {
-          activeGenreFilter = '';
-          updateGenreBadge();
-          renderReleases();
-          updateResetBtn();
-        }
       }
+      renderReleases();
+      updateResetBtn();
     }
 
     function renderGenreDropdown(query = '') {
       const list = document.getElementById('genre-dropdown-list');
       const low = query.toLowerCase();
 
-      // Фильтруем жанры
-      let matched = GENRES.filter(g => {
-        if (!low) return true;
-        return g.toLowerCase().includes(low);
-      });
+      const matched = GENRES.filter(g => !low || g.toLowerCase().includes(low));
 
+      // Нет подходящего жанра — прячем дропдаун; поиск по каталогу продолжает работать.
       if (matched.length === 0) {
-        list.innerHTML = `<div class="px-4 py-3 text-[12px] text-gray-500 text-center">Жанр «${escapeHtml(query)}» не найден</div>`;
+        hideGenreDropdown();
         return;
       }
 
@@ -1108,48 +1090,34 @@
       }).join('');
     }
 
+    // Тап по подсказке жанра — точный фильтр; текстовый запрос при этом сбрасываем.
     function selectGenreFilter(genre) {
       const input = document.getElementById('genre-search');
-      if (activeGenreFilter === genre) {
-        // Снять фильтр
-        activeGenreFilter = '';
-        input.value = '';
-      } else {
-        activeGenreFilter = genre;
-        input.value = '';
-      }
-      hideGenreDropdown();
-      updateGenreBadge();
-      renderReleases();
-      updateResetBtn();
-      document.getElementById('genre-search-clear').classList.add('hidden');
-    }
-
-    function clearGenreSearch() {
-      const input = document.getElementById('genre-search');
-      input.value = '';
-      activeGenreFilter = '';
-      hideGenreDropdown();
-      updateGenreBadge();
-      renderReleases();
-      updateResetBtn();
-      document.getElementById('genre-search-clear').classList.add('hidden');
-    }
-
-    // Глобальный поиск по названию релиза и имени артиста.
-    function onReleaseSearchInput() {
-      const input = document.getElementById('release-search');
-      searchQuery = input.value.trim();
-      document.getElementById('release-search-clear').classList.toggle('hidden', !searchQuery);
-      renderReleases();
-      updateResetBtn();
-    }
-
-    function clearReleaseSearch() {
-      const input = document.getElementById('release-search');
+      activeGenreFilter = activeGenreFilter === genre ? '' : genre;
       input.value = '';
       searchQuery = '';
-      document.getElementById('release-search-clear').classList.add('hidden');
+      document.getElementById('genre-search-clear').classList.add('hidden');
+      hideGenreDropdown();
+      updateGenreBadge();
+      renderReleases();
+      updateResetBtn();
+    }
+
+    // Очистка текстового запроса (крестик в поле поиска).
+    function clearSearch() {
+      const input = document.getElementById('genre-search');
+      input.value = '';
+      searchQuery = '';
+      document.getElementById('genre-search-clear').classList.add('hidden');
+      hideGenreDropdown();
+      renderReleases();
+      updateResetBtn();
+    }
+
+    // Снятие фильтра по жанру (крестик на бейдже).
+    function clearGenreFilter() {
+      activeGenreFilter = '';
+      updateGenreBadge();
       renderReleases();
       updateResetBtn();
     }
@@ -1211,8 +1179,7 @@
       searchQuery = '';
       document.getElementById('genre-search').value = '';
       document.getElementById('genre-search-clear').classList.add('hidden');
-      document.getElementById('release-search').value = '';
-      document.getElementById('release-search-clear').classList.add('hidden');
+      hideGenreDropdown();
       updateGenreBadge();
       setSortMode('new');
       renderReleases();
@@ -1236,12 +1203,13 @@
         filtered = filtered.filter(r => (r.genre || 'Другое') === activeGenreFilter);
       }
 
-      // Глобальный поиск по названию и артисту
+      // Текстовый поиск по названию, артисту и жанру
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         filtered = filtered.filter(r =>
           (r.name || '').toLowerCase().includes(q) ||
-          (r.artist || '').toLowerCase().includes(q)
+          (r.artist || '').toLowerCase().includes(q) ||
+          (r.genre || '').toLowerCase().includes(q)
         );
       }
 
