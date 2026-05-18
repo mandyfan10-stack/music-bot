@@ -343,6 +343,61 @@
     body.light-theme .sync-pill.ok { color: #059669; border-color: rgba(16,185,129,0.24); background: linear-gradient(135deg, rgba(236,253,245,0.98), rgba(209,250,229,0.68)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.92), 0 8px 24px rgba(16,185,129,0.1); }
     body.light-theme .sync-pill.warn { color: #e11d48; border-color: rgba(225,29,72,0.24); background: linear-gradient(135deg, rgba(255,241,242,0.98), rgba(255,228,230,0.68)); }
 
+    /* Pull-to-refresh */
+    #ptr-indicator {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translate(-50%, -44px);
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: rgba(28, 28, 30, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #f87171;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 15;
+      transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease;
+    }
+    #ptr-indicator.ptr-pulling { transition: none; }
+    #ptr-indicator.ptr-refreshing {
+      transform: translate(-50%, 16px);
+      opacity: 1;
+    }
+    #ptr-indicator.ptr-refreshing i { animation: ptrSpin 0.8s linear infinite; }
+    body.light-theme #ptr-indicator { background: rgba(255, 255, 255, 0.95); border-color: rgba(0, 0, 0, 0.1); }
+    @keyframes ptrSpin { to { transform: rotate(360deg); } }
+
+    /* Переключатель уведомлений */
+    .notif-switch {
+      width: 48px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 3px;
+      display: flex;
+      align-items: center;
+      transition: background 0.3s ease, border-color 0.3s ease, opacity 0.3s ease;
+    }
+    .notif-switch[disabled] { opacity: 0.4; }
+    .notif-switch-knob {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .notif-switch.on { background: #dc2626; border-color: #dc2626; }
+    .notif-switch.on .notif-switch-knob { transform: translateX(20px); }
+    body.light-theme .notif-switch { background: rgba(0, 0, 0, 0.12); border-color: rgba(0, 0, 0, 0.08); }
+    body.light-theme .notif-switch.on { background: #dc2626; border-color: #dc2626; }
+
     @media (max-width: 420px) {
       header { padding-left: 14px !important; padding-right: 14px !important; gap: 8px !important; }
       main > .tab-screen { padding-left: 16px !important; padding-right: 16px !important; }
@@ -433,7 +488,11 @@
   </header>
 
   <main class="flex-1 overflow-y-auto hide-scrollbar pb-24 relative">
-    
+
+    <div id="ptr-indicator" aria-hidden="true">
+      <i data-lucide="loader-2" class="w-5 h-5"></i>
+    </div>
+
     <div id="screen-loading" class="px-6 flex flex-col items-center justify-center h-[60vh] opacity-50">
         <i data-lucide="loader-2" class="w-8 h-8 text-gray-400 animate-spin mb-4"></i>
         <p class="text-sm text-gray-400">Синхронизация...</p>
@@ -449,7 +508,17 @@
 
       <!-- ПОИСК ПО ЖАНРУ + СОРТИРОВКА -->
       <div id="filter-bar" class="mb-5 space-y-3">
-        <!-- Поисковая строка -->
+        <!-- Глобальный поиск по названию релиза и артисту -->
+        <div class="relative flex items-center">
+          <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute left-3.5 pointer-events-none"></i>
+          <input id="release-search" aria-label="Поиск по названию или артисту" type="text" placeholder="Поиск релиза или артиста..." autocomplete="off"
+            class="w-full glass-input rounded-2xl pl-10 pr-10 py-3 text-[13px] text-white outline-none focus:ring-1 ring-red-500/30 transition-all"
+            oninput="onReleaseSearchInput()">
+          <button id="release-search-clear" aria-label="Очистить поиск" class="hidden absolute right-3 p-1 rounded-full hover:bg-white/10 transition-colors" onclick="clearReleaseSearch()">
+            <i data-lucide="x" class="w-4 h-4 text-gray-400"></i>
+          </button>
+        </div>
+        <!-- Поиск по жанру -->
         <div class="relative">
           <div class="relative flex items-center">
             <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute left-3.5 pointer-events-none"></i>
@@ -519,11 +588,21 @@
         <div class="p-2.5 bg-red-500/10 text-red-500 rounded-2xl"><i data-lucide="settings" class="w-6 h-6"></i></div>
         <h2 class="text-2xl font-semibold tracking-tight text-white">Настройки</h2>
       </div>
-      <div class="glass border border-white/5 p-6 rounded-[2rem]">
+      <div class="glass border border-white/5 p-6 rounded-[2rem] mb-4">
         <h3 class="text-[14px] font-medium text-gray-200 mb-4">Тема оформления</h3>
         <div class="flex justify-start gap-4" id="theme-selector">
           <button onclick="changeTheme('#000000', this)" aria-label="Тёмная тема" class="theme-btn btn-press w-12 h-12 rounded-full bg-[#000000] border-2 border-white scale-110 shadow-inner flex items-center justify-center transition-all"><i data-lucide="check" class="w-6 h-6 text-white"></i></button>
           <button onclick="changeTheme('#f2f2f7', this)" aria-label="Светлая тема" class="theme-btn btn-press w-12 h-12 rounded-full bg-[#f2f2f7] border-2 border-white/10 shadow-inner flex items-center justify-center transition-all"></button>
+        </div>
+      </div>
+      <div class="glass border border-white/5 p-6 rounded-[2rem]">
+        <h3 class="text-[14px] font-medium text-gray-200 mb-1">Уведомления</h3>
+        <div class="flex items-center justify-between gap-4">
+          <p class="text-[12px] text-gray-500 leading-relaxed">Сообщать в чате о новых релизах</p>
+          <button id="notif-toggle" role="switch" aria-checked="false" aria-label="Уведомления о новых релизах"
+            onclick="toggleNotifications()" class="notif-switch btn-press shrink-0" disabled>
+            <span class="notif-switch-knob"></span>
+          </button>
         </div>
       </div>
     </div>
@@ -602,6 +681,7 @@
            </div>
            <button id="btn-submit-review" onclick="addReview()" class="btn-press w-full py-3 bg-white/10 text-white text-[13px] font-bold rounded-xl border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed">Опубликовать</button>
         </div>
+        <div id="criteria-chart" class="hidden mt-8"></div>
         <div id="reviews-container" class="mt-8 space-y-3"></div>
       </div>
     </div>
@@ -715,7 +795,8 @@
       role: 'Пользователь',
       isAdmin: false,
       isBlocked: false,
-      isAuthenticated: false
+      isAuthenticated: false,
+      notificationsEnabled: true
     };
     let blockedUsers = [];
 
@@ -819,6 +900,36 @@
       }
       if (user.isBlocked) {
         showToast('Ваш аккаунт заблокирован. Только чтение.');
+      }
+    }
+
+    // Отражает текущее состояние подписки на push в переключателе «Настроек».
+    function applyNotificationsToggle() {
+      const toggle = document.getElementById('notif-toggle');
+      if (!toggle) return;
+      const on = !!user.notificationsEnabled;
+      toggle.classList.toggle('on', on);
+      toggle.setAttribute('aria-checked', on ? 'true' : 'false');
+      toggle.disabled = !user.isAuthenticated;
+    }
+
+    // Включение/выключение push-уведомлений — оптимистично, с откатом при ошибке.
+    async function toggleNotifications() {
+      if (!user.isAuthenticated) return showToast('Войдите через Telegram');
+      const next = !user.notificationsEnabled;
+      user.notificationsEnabled = next;
+      applyNotificationsToggle();
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/notifications/subscribe`, {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify({ enabled: next })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        showToast(next ? 'Уведомления включены' : 'Уведомления выключены', 'success');
+      } catch (e) {
+        console.error('Notifications toggle error:', e);
+        user.notificationsEnabled = !next; // откат
+        applyNotificationsToggle();
+        showToast('Не удалось сохранить настройку', 'error');
       }
     }
 
@@ -932,6 +1043,7 @@
     let sortMode = 'new';
     let selectedGenreForAdd = '';
     let genreDropdownOpen = false;
+    let searchQuery = ''; // поиск по названию релиза и артисту
 
     function renderAddGenreSelector(containerId) {
       const container = document.getElementById(containerId);
@@ -1024,6 +1136,24 @@
       document.getElementById('genre-search-clear').classList.add('hidden');
     }
 
+    // Глобальный поиск по названию релиза и имени артиста.
+    function onReleaseSearchInput() {
+      const input = document.getElementById('release-search');
+      searchQuery = input.value.trim();
+      document.getElementById('release-search-clear').classList.toggle('hidden', !searchQuery);
+      renderReleases();
+      updateResetBtn();
+    }
+
+    function clearReleaseSearch() {
+      const input = document.getElementById('release-search');
+      input.value = '';
+      searchQuery = '';
+      document.getElementById('release-search-clear').classList.add('hidden');
+      renderReleases();
+      updateResetBtn();
+    }
+
     function showGenreDropdown() {
       const val = document.getElementById('genre-search').value.trim();
       const dd = document.getElementById('genre-dropdown');
@@ -1078,8 +1208,11 @@
     function resetFilters() {
       activeGenreFilter = '';
       sortMode = 'new';
+      searchQuery = '';
       document.getElementById('genre-search').value = '';
       document.getElementById('genre-search-clear').classList.add('hidden');
+      document.getElementById('release-search').value = '';
+      document.getElementById('release-search-clear').classList.add('hidden');
       updateGenreBadge();
       setSortMode('new');
       renderReleases();
@@ -1087,7 +1220,7 @@
 
     function updateResetBtn() {
       const btn = document.getElementById('btn-reset-filters');
-      const hasFilters = activeGenreFilter || sortMode !== 'new';
+      const hasFilters = activeGenreFilter || sortMode !== 'new' || searchQuery;
       btn.classList.toggle('hidden', !hasFilters);
     }
 
@@ -1101,6 +1234,15 @@
       // Фильтр по жанру
       if (activeGenreFilter) {
         filtered = filtered.filter(r => (r.genre || 'Другое') === activeGenreFilter);
+      }
+
+      // Глобальный поиск по названию и артисту
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        filtered = filtered.filter(r =>
+          (r.name || '').toLowerCase().includes(q) ||
+          (r.artist || '').toLowerCase().includes(q)
+        );
       }
 
       // Сортировка
@@ -1525,9 +1667,11 @@
         user.isAdmin = !!data.currentUser.isAdmin;
         user.isBlocked = !!data.currentUser.isBlocked;
         user.isAuthenticated = !!data.currentUser.isAuthenticated;
+        user.notificationsEnabled = data.currentUser.notificationsEnabled !== false;
         user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
       }
       applyUserRole();
+      applyNotificationsToggle();
       renderReleases();
       switchTab('home');
       handleStartParam();
@@ -1676,6 +1820,66 @@
       if (document.hidden) stopSyncLoop();
       else startSyncLoop();
     });
+
+    // --- PULL-TO-REFRESH ---
+    (function setupPullToRefresh() {
+      const main = document.querySelector('main');
+      const indicator = document.getElementById('ptr-indicator');
+      if (!main || !indicator) return;
+
+      const THRESHOLD = 70;   // минимальное смещение для запуска обновления
+      const MAX_PULL = 110;   // максимальное визуальное смещение индикатора
+      let startY = 0, pull = 0, tracking = false, refreshing = false;
+
+      function resetIndicator() {
+        pull = 0;
+        indicator.classList.remove('ptr-pulling', 'ptr-refreshing');
+        indicator.style.transform = '';
+        indicator.style.opacity = '';
+      }
+
+      function triggerRefresh() {
+        refreshing = true;
+        pull = 0;
+        indicator.classList.remove('ptr-pulling');
+        indicator.style.transform = '';
+        indicator.style.opacity = '';
+        indicator.classList.add('ptr-refreshing');
+        tgHaptic('medium');
+        Promise.resolve(fetchDB()).finally(() => {
+          refreshing = false;
+          resetIndicator();
+        });
+      }
+
+      main.addEventListener('touchstart', (e) => {
+        if (refreshing || main.scrollTop > 0) { tracking = false; return; }
+        startY = e.touches[0].clientY;
+        tracking = true;
+        pull = 0;
+      }, { passive: true });
+
+      main.addEventListener('touchmove', (e) => {
+        if (!tracking || refreshing) return;
+        const delta = e.touches[0].clientY - startY;
+        if (delta <= 0 || main.scrollTop > 0) {
+          if (pull > 0) resetIndicator();
+          tracking = false;
+          return;
+        }
+        pull = Math.min(MAX_PULL, delta * 0.5); // демпфирование жеста
+        indicator.classList.add('ptr-pulling');
+        indicator.style.transform = `translate(-50%, ${pull - 44}px)`;
+        indicator.style.opacity = String(Math.min(1, pull / THRESHOLD));
+      }, { passive: true });
+
+      main.addEventListener('touchend', () => {
+        if (!tracking || refreshing) return;
+        tracking = false;
+        if (pull >= THRESHOLD) triggerRefresh();
+        else resetIndicator();
+      });
+    })();
 
     async function fetchOEmbedData(link) {
         const embedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(link)}`);
@@ -2236,7 +2440,62 @@
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
           <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span>${reactBtn}</div></div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
+      renderCriteriaChart(activeReleaseId);
       lucide.createIcons();
+    }
+
+    // Множественное число для слова «рецензия» по правилам русского языка.
+    function pluralReviews(n) {
+      const mod10 = n % 10, mod100 = n % 100;
+      if (mod10 === 1 && mod100 !== 11) return 'рецензия';
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'рецензии';
+      return 'рецензий';
+    }
+
+    // График средних оценок по 6 критериям для активного релиза.
+    function renderCriteriaChart(relId) {
+      const container = document.getElementById('criteria-chart');
+      if (!container) return;
+      const relReviews = reviewsByRelId.get(relId) || [];
+      if (!relReviews.length) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+      }
+
+      const sums = {};
+      criteriaConfig.forEach(({ key }) => { sums[key] = 0; });
+      relReviews.forEach(rv => {
+        const c = rv.criteria || {};
+        criteriaConfig.forEach(({ key }) => {
+          sums[key] += typeof c[key] === 'number' ? c[key] : 5;
+        });
+      });
+
+      const overall = avgRatingByRelId.get(relId) || 0;
+      const bars = criteriaConfig.map(({ key, label }) => {
+        const avg = sums[key] / relReviews.length;
+        const pct = Math.max(0, Math.min(100, avg * 10));
+        return `<div class="flex items-center gap-2">
+          <span class="text-[10px] text-gray-400 w-24 shrink-0 truncate" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+          <div class="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
+            <div class="h-full rounded-full bg-red-500" style="width: ${pct}%"></div>
+          </div>
+          <span class="text-[11px] font-bold text-white w-7 text-right">${avg.toFixed(1)}</span>
+        </div>`;
+      }).join('');
+
+      container.innerHTML = `
+        <h3 class="text-lg font-bold text-white mb-4">Оценки по критериям</h3>
+        <div class="bg-white/5 border border-white/10 rounded-[1.5rem] p-5 space-y-3">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[12px] text-gray-400">Средний рейтинг</span>
+            <span class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[12px]">${overall.toFixed(1)}</span>
+          </div>
+          ${bars}
+          <p class="text-[10px] text-gray-500 pt-1">По ${relReviews.length} ${pluralReviews(relReviews.length)}</p>
+        </div>`;
+      container.classList.remove('hidden');
     }
 
     function renderUserReviews(userReviews, profileUsername) {
