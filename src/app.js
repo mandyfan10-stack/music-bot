@@ -648,48 +648,16 @@
       btn.classList.toggle('hidden', !hasFilters);
     }
 
-    function getAvgRating(releaseId) {
-      return avgRatingByRelId.get(releaseId) || 0;
-    }
-
+    // Чистая логика фильтрации/сортировки вынесена в utils.js (filterAndSortReleases)
+    // и покрыта тестами; здесь только подстановка текущего состояния.
     function getFilteredReleases() {
-      let filtered = [...releases];
-
-      // Фильтр по жанру
-      if (activeGenreFilter) {
-        filtered = filtered.filter(r => (r.genre || 'Другое') === activeGenreFilter);
-      }
-
-      // Текстовый поиск по названию, артисту и жанру
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        filtered = filtered.filter(r =>
-          (r.name || '').toLowerCase().includes(q) ||
-          (r.artist || '').toLowerCase().includes(q) ||
-          (r.genre || '').toLowerCase().includes(q)
-        );
-      }
-
-      // Сортировка
-      switch (sortMode) {
-        case 'rating-desc':
-          filtered.sort((a, b) => getAvgRating(b.id) - getAvgRating(a.id));
-          break;
-        case 'rating-asc':
-          filtered.sort((a, b) => getAvgRating(a.id) - getAvgRating(b.id));
-          break;
-        case 'reviews':
-          filtered.sort((a, b) => {
-            const countA = (reviewsByRelId.get(a.id) || []).length;
-            const countB = (reviewsByRelId.get(b.id) || []).length;
-            return countB - countA;
-          });
-          break;
-        default: // 'new'
-          filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      }
-
-      return filtered;
+      return filterAndSortReleases(releases, {
+        genre: activeGenreFilter,
+        query: searchQuery,
+        sortMode: sortMode,
+        avgRating: (id) => avgRatingByRelId.get(id) || 0,
+        reviewCount: (id) => (reviewsByRelId.get(id) || []).length,
+      });
     }
 
     const ratingContainer = document.getElementById('rating-buttons-container');

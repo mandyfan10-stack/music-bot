@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { cleanUsername, escapeHtml, escapeJs, escapeJsHtml, escapeCssString } = require('../src/utils.js');
+const { cleanUsername, escapeHtml, escapeJs, escapeJsHtml, escapeCssString, filterAndSortReleases } = require('../src/utils.js');
 
 test('cleanUsername: should remove leading @ and convert to lowercase', () => {
   assert.strictEqual(cleanUsername('@User'), 'user');
@@ -103,4 +103,72 @@ test('escapeCssString: should escape selector string delimiters', () => {
 
 test('escapeCssString: should escape CSS line terminators', () => {
     assert.strictEqual(escapeCssString('a\nb\rc\f'), 'a\\A b\\D c\\C ');
+});
+
+// --- filterAndSortReleases ---
+const SAMPLE = [
+  { id: 'a', name: 'Закат', artist: 'Гром', genre: 'Рэп', timestamp: 30 },
+  { id: 'b', name: 'Рассвет', artist: 'Луна', genre: 'Поп', timestamp: 10 },
+  { id: 'c', name: 'Полдень', artist: 'Гром', genre: 'Рэп', timestamp: 20 },
+];
+
+test('filterAndSortReleases: default sort is newest first by timestamp', () => {
+  const out = filterAndSortReleases(SAMPLE, {});
+  assert.deepStrictEqual(out.map(r => r.id), ['a', 'c', 'b']);
+});
+
+test('filterAndSortReleases: genre filter keeps only matching releases', () => {
+  const out = filterAndSortReleases(SAMPLE, { genre: 'Поп' });
+  assert.deepStrictEqual(out.map(r => r.id), ['b']);
+});
+
+test('filterAndSortReleases: missing genre falls back to "Другое"', () => {
+  const items = [{ id: 'x', name: 'X', timestamp: 1 }];
+  assert.strictEqual(filterAndSortReleases(items, { genre: 'Другое' }).length, 1);
+  assert.strictEqual(filterAndSortReleases(items, { genre: 'Рэп' }).length, 0);
+});
+
+test('filterAndSortReleases: query matches name, artist or genre, case-insensitive', () => {
+  assert.deepStrictEqual(filterAndSortReleases(SAMPLE, { query: 'закат' }).map(r => r.id), ['a']);
+  assert.deepStrictEqual(filterAndSortReleases(SAMPLE, { query: 'гром' }).map(r => r.id), ['a', 'c']);
+  assert.deepStrictEqual(filterAndSortReleases(SAMPLE, { query: 'поп' }).map(r => r.id), ['b']);
+});
+
+test('filterAndSortReleases: genre filter and query combine', () => {
+  const out = filterAndSortReleases(SAMPLE, { genre: 'Рэп', query: 'полдень' });
+  assert.deepStrictEqual(out.map(r => r.id), ['c']);
+});
+
+test('filterAndSortReleases: rating sort uses the avgRating lookup', () => {
+  const avg = { a: 4, b: 9, c: 6 };
+  const opts = { avgRating: (id) => avg[id] || 0 };
+  assert.deepStrictEqual(
+    filterAndSortReleases(SAMPLE, { ...opts, sortMode: 'rating-desc' }).map(r => r.id),
+    ['b', 'c', 'a']
+  );
+  assert.deepStrictEqual(
+    filterAndSortReleases(SAMPLE, { ...opts, sortMode: 'rating-asc' }).map(r => r.id),
+    ['a', 'c', 'b']
+  );
+});
+
+test('filterAndSortReleases: reviews sort uses the reviewCount lookup', () => {
+  const counts = { a: 1, b: 5, c: 2 };
+  const out = filterAndSortReleases(SAMPLE, {
+    sortMode: 'reviews',
+    reviewCount: (id) => counts[id] || 0,
+  });
+  assert.deepStrictEqual(out.map(r => r.id), ['b', 'c', 'a']);
+});
+
+test('filterAndSortReleases: does not mutate the input array', () => {
+  const input = SAMPLE.slice();
+  const before = input.map(r => r.id);
+  filterAndSortReleases(input, { sortMode: 'new' });
+  assert.deepStrictEqual(input.map(r => r.id), before);
+});
+
+test('filterAndSortReleases: tolerates nullish input', () => {
+  assert.deepStrictEqual(filterAndSortReleases(null, {}), []);
+  assert.deepStrictEqual(filterAndSortReleases(undefined), []);
 });
