@@ -1910,7 +1910,7 @@
         ghost.remove();
         relImg.style.opacity = '';
       };
-      ghost.addEventListener('transitionend', cleanup);
+      ghost.addEventListener('transitionend', cleanup, { once: true });
       setTimeout(cleanup, 700); // страховка
     }
 

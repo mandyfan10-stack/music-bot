@@ -460,10 +460,6 @@
       0% { background-position: 130% 0; }
       100% { background-position: -130% 0; }
     }
-    @media (prefers-reduced-motion: reduce) {
-      .skeleton-card { animation: none; }
-    }
-
     /* Pull-to-refresh */
     #ptr-indicator {
       position: absolute;
