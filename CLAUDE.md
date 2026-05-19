@@ -6,13 +6,18 @@ Telegram Mini App «XXII SOUND»: каталог музыкальных рели
 
 ## Стек
 
-- Ванильный JavaScript (ES6+), **без фреймворка и без сборки**.
-- Tailwind CSS, Lucide Icons, Telegram WebApp SDK — всё через CDN.
+- Ванильный JavaScript (ES6+), **без фреймворка; деплой без сборки**.
+- Tailwind CSS — собран заранее в `src/tailwind.css` (артефакт закоммичен в
+  репозиторий, рантайм-CDN убран). Lucide Icons и Telegram WebApp SDK — CDN.
 
 ## Структура
 
 - `index.html` — только разметка; CSS и JS вынесены в отдельные файлы.
-- `src/styles.css` — все стили (подключается `<link>`).
+- `src/tailwind.css` — собранный Tailwind (генерируется, закоммичен).
+- `src/tailwind.input.css` + `tailwind.config.js` — вход и конфиг для сборки.
+- `package.json` — devDependency `tailwindcss` и скрипт `build:css` (для
+  регенерации; на деплой не влияет).
+- `src/styles.css` — кастомные стили поверх Tailwind (подключается `<link>`).
 - `src/app.js` — вся логика приложения (подключается `<script src defer>`).
 - `src/utils.js` — утилиты экранирования + чистые функции каталога
   (`filterAndSortReleases`); переиспользуется тестами через `module.exports`.
@@ -72,11 +77,13 @@ Inline-обработчиков (`onclick=` и т.п.) **нет** — это п�
 
 - Тесты (утилиты + логика фильтрации): `node --test`
 - Синтаксис: `node --check src/app.js` и `node --check src/utils.js`
+- Пересобрать Tailwind после изменения классов: `npm install && npm run build:css`
 - Полная проверка UI требует среды Telegram Mini App.
 
 ## Известные риски
 
 - Широкий `innerHTML` в рендер-функциях — держать экранирование строгим.
-- `'unsafe-inline'` остаётся в `style-src` CSP (нужно для Tailwind CDN и
-  inline-атрибутов `style`).
-- Зависимость от CDN — supply-chain риск (SRI есть только у Lucide).
+- `'unsafe-inline'` остаётся в `style-src` CSP — нужно для inline-атрибутов
+  `style` в шаблонах.
+- CDN-зависимости: Lucide (с SRI) и Telegram SDK (SRI невозможен — версию
+  обновляет Telegram). Tailwind с CDN снят — собирается заранее.

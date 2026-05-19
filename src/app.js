@@ -205,6 +205,20 @@
       openRelease(el.dataset.id);
     });
 
+    // Глобальный перехват ошибок — приложение не падает молча: логируем и
+    // показываем тост (не чаще раза в 8 с, чтобы не спамить).
+    let lastErrorToastTs = 0;
+    function reportGlobalError(label, err) {
+      console.error('[' + label + ']', err);
+      const now = Date.now();
+      if (now - lastErrorToastTs > 8000) {
+        lastErrorToastTs = now;
+        try { showToast('Что-то пошло не так'); } catch (_) {}
+      }
+    }
+    window.addEventListener('error', (e) => reportGlobalError('error', e.error || e.message));
+    window.addEventListener('unhandledrejection', (e) => reportGlobalError('promise', e.reason));
+
     // Фолбэк-обложка: событие error не всплывает — слушаем в фазе перехвата.
     document.addEventListener('error', (event) => {
       const img = event.target;
@@ -1110,6 +1124,7 @@
       }
     }
 
+    let sessionExpiredWarned = false;
     function applyData(data) {
       releases = data.releases || [];
       releasesById = new Map(releases.map(r => [r.id, r]));
@@ -1131,6 +1146,11 @@
         user.isAuthenticated = !!data.currentUser.isAuthenticated;
         user.notificationsEnabled = data.currentUser.notificationsEnabled !== false;
         user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
+        // initData отправлена, но сервер не принял её — сессия Telegram устарела.
+        if (tg.initData && !user.isAuthenticated && !sessionExpiredWarned) {
+          sessionExpiredWarned = true;
+          showToast('Сессия Telegram устарела — переоткройте приложение');
+        }
       }
       applyUserRole();
       applyNotificationsToggle();
@@ -1186,6 +1206,8 @@
     let syncLoopActive = false;
     let syncAbortController = null;
     let syncRetryTimer = null;
+    const SYNC_RETRY_BASE_MS = 5000, SYNC_RETRY_MAX_MS = 30000;
+    let syncRetryDelay = SYNC_RETRY_BASE_MS;
 
     // Применяет инкрементальную дельту от сервера к локальному состоянию.
     function applySyncDelta(data) {
@@ -1281,17 +1303,20 @@
         const data = await res.json();
         applySyncDelta(data);
         setSyncStatus('Всё актуально', 'ok');
+        syncRetryDelay = SYNC_RETRY_BASE_MS; // успех — сбрасываем backoff
         if (syncLoopActive) {
           // Сервер сам держит long-poll до 25 с. Небольшой зазор — защита от
           // tight-loop, если сервер вдруг начнёт отвечать мгновенно.
-          setTimeout(syncLoopTick, 600);
+          syncRetryTimer = setTimeout(syncLoopTick, 600);
         }
       } catch (e) {
         if (e.name === 'AbortError') return;
         console.error('Sync error:', e.message || e);
         setSyncStatus('Оффлайн (кэш)', 'warn');
         if (syncLoopActive) {
-          syncRetryTimer = setTimeout(syncLoopTick, 5000);
+          // Экспоненциальный backoff: 5с → 10с → 20с → 30с (потолок).
+          syncRetryTimer = setTimeout(syncLoopTick, syncRetryDelay);
+          syncRetryDelay = Math.min(syncRetryDelay * 2, SYNC_RETRY_MAX_MS);
         }
       }
     }
@@ -1371,6 +1396,13 @@
         tracking = false;
         if (pull >= THRESHOLD) triggerRefresh();
         else resetIndicator();
+      });
+
+      // Прерванный системой жест (touchcancel) не должен оставлять флаг взведённым.
+      main.addEventListener('touchcancel', () => {
+        if (!tracking) return;
+        tracking = false;
+        if (!refreshing) resetIndicator();
       });
     })();
 
@@ -1643,7 +1675,7 @@
       const newBadge = isNew ? `<div class="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wider shadow-lg">NEW</div>` : '';
       return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="${enterCls}flex flex-col gap-2 w-full min-w-0 active:scale-95 transition-transform relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]"${enterStyle}>
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
-            <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" class="w-full h-full object-cover">
+            <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" loading="lazy" decoding="async" class="w-full h-full object-cover">
             ${ratingBadge}
             ${newBadge}
           <button data-act="toggle-like" data-id="${escapeHtml(r.id)}" data-like-id="${escapeHtml(r.id)}" aria-label="Нравится" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
@@ -1709,7 +1741,7 @@
           const r = it.rel;
           const fb = getFallbackImg(r.name);
           return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" role="button" tabindex="0" class="bg-white/5 border border-white/5 rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-500">
-            <img src="${escapeHtml(r.img) || fb}" data-fallback="${escapeHtml(fb)}" alt="" class="w-12 h-12 rounded-xl object-cover shrink-0">
+            <img src="${escapeHtml(r.img) || fb}" data-fallback="${escapeHtml(fb)}" alt="" loading="lazy" decoding="async" class="w-12 h-12 rounded-xl object-cover shrink-0">
             <div class="min-w-0 flex-1">
               <div class="text-[10px] font-bold text-red-500 uppercase tracking-wider flex items-center gap-1"><i data-lucide="disc-3" class="w-3 h-3"></i>Новый релиз</div>
               <div class="text-[13px] font-bold text-white truncate">${escapeHtml(r.name)}</div>
