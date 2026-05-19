@@ -162,7 +162,7 @@
       'execute-delete-review': () => executeDeleteReview(),
       'toggle-block-user': () => toggleBlockUser(),
       'delete-all-reviews': () => deleteAllReviewsByUser(),
-      'open-release': (el) => openRelease(el.dataset.id),
+      'open-release': (el) => openRelease(el.dataset.id, el),
       'toggle-like': (el, e) => toggleLikeAPI(e, el.dataset.id),
       'toggle-reaction': (el) => toggleReviewReaction(el.dataset.id),
       'open-confirm-review-delete': (el) => openConfirmReviewDelete(el.dataset.id, el.dataset.rel),
@@ -202,7 +202,7 @@
       const el = event.target.closest('[data-act="open-release"]');
       if (!el || ['BUTTON', 'A', 'INPUT', 'TEXTAREA'].includes(el.tagName)) return;
       event.preventDefault();
-      openRelease(el.dataset.id);
+      openRelease(el.dataset.id, el);
     });
 
     // Глобальный перехват ошибок — приложение не падает молча: логируем и
@@ -844,42 +844,65 @@
 
     function openModal(id) {
       const m = document.getElementById(id); m.classList.remove('hidden');
-      m.querySelector('.modal-overlay').classList.add('fade-in');
-      m.querySelector('.modal-container').classList.add('slide-up-modal');
+      const c = m.querySelector('.modal-container');
+      const o = m.querySelector('.modal-overlay');
+      // Сброс возможных остатков inline-стилей от свайпа.
+      c.style.transform = ''; c.style.transition = '';
+      o.style.opacity = ''; o.style.transition = '';
+      o.classList.remove('fade-out'); o.classList.add('fade-in');
+      c.classList.remove('slide-down-modal'); c.classList.add('slide-up-modal');
       openModalStack = openModalStack.filter(x => x !== id);
       openModalStack.push(id);
       document.body.classList.add('modal-open'); // фон уходит вглубь
       syncBackButton();
+      // После открытия снимаем slide-up-modal: иначе forwards-заливка анимации
+      // перекрывает inline-transform при свайпе вниз.
+      setTimeout(() => { if (!m.classList.contains('hidden')) c.classList.remove('slide-up-modal'); }, 700);
     }
 
-    function closeModal(id) {
+    // Финальная очистка модалки — общая для обычного и свайп-закрытия.
+    function finalizeModalClose(id) {
+      const m = document.getElementById(id);
+      const c = m.querySelector('.modal-container');
+      const o = m.querySelector('.modal-overlay');
+      m.classList.add('hidden');
+      c.classList.remove('slide-down-modal', 'slide-up-modal');
+      o.classList.remove('fade-out', 'fade-in');
+      c.style.transform = ''; c.style.transition = '';
+      o.style.opacity = ''; o.style.transition = '';
+      if (id === 'modal-add') {
+        document.getElementById('add-form-step-1').classList.remove('hidden');
+        document.getElementById('add-form-step-manual').classList.add('hidden');
+        manualCoverBase64 = null;
+        document.getElementById('manual-cover-preview').innerHTML = `<i data-lucide="image-plus" class="w-8 h-8 text-gray-400 mb-2"></i><span class="text-[12px] text-gray-400">Загрузить обложку (необязательно)</span>`;
+        document.getElementById('manual-artist').value = '';
+        document.getElementById('manual-title').value = '';
+        refreshIcons();
+      }
+      if (id === 'modal-release') {
+        reviewPublishBlocked = false;
+        existingReviewForActiveRelease = null;
+        document.getElementById('rel-img').style.opacity = ''; // на случай прерванного морфа
+      }
+      if (id === 'modal-confirm-review-delete') {
+        pendingReviewDelete = null;
+        pendingReviewTargetReleaseId = null;
+        reviewDeleteMode = false;
+      }
+    }
+
+    function closeModal(id, immediate) {
       openModalStack = openModalStack.filter(x => x !== id);
       // Фон возвращается, как только закрыта последняя модалка из стека.
       if (openModalStack.length === 0) document.body.classList.remove('modal-open');
       syncBackButton();
-      const m = document.getElementById(id); const c = m.querySelector('.modal-container'); const o = m.querySelector('.modal-overlay');
-      c.classList.replace('slide-up-modal', 'slide-down-modal'); o.classList.replace('fade-in', 'fade-out');
-      setTimeout(() => {
-        m.classList.add('hidden'); c.classList.remove('slide-down-modal'); o.classList.remove('fade-out');
-        if(id === 'modal-add') {
-          document.getElementById('add-form-step-1').classList.remove('hidden');
-          document.getElementById('add-form-step-manual').classList.add('hidden');
-          manualCoverBase64 = null;
-          document.getElementById('manual-cover-preview').innerHTML = `<i data-lucide="image-plus" class="w-8 h-8 text-gray-400 mb-2"></i><span class="text-[12px] text-gray-400">Загрузить обложку (необязательно)</span>`;
-          document.getElementById('manual-artist').value = '';
-          document.getElementById('manual-title').value = '';
-          refreshIcons();
-        }
-        if(id === 'modal-release') {
-          reviewPublishBlocked = false;
-          existingReviewForActiveRelease = null;
-        }
-        if(id === 'modal-confirm-review-delete') {
-          pendingReviewDelete = null;
-          pendingReviewTargetReleaseId = null;
-          reviewDeleteMode = false;
-        }
-      }, 500); // совпадает с длительностью slideDown — анимация не обрезается
+      if (immediate) { finalizeModalClose(id); return; }
+      const m = document.getElementById(id);
+      const c = m.querySelector('.modal-container');
+      const o = m.querySelector('.modal-overlay');
+      c.classList.remove('slide-up-modal'); c.classList.add('slide-down-modal');
+      o.classList.remove('fade-in'); o.classList.add('fade-out');
+      setTimeout(() => finalizeModalClose(id), 460);
     }
 
     // Принадлежит ли рецензия пользователю. authorId приходит с сервера и
@@ -1425,6 +1448,71 @@
       });
     })();
 
+    // Свайп вниз закрывает модалку-шторку (iOS sheets). Тянуть можно от верха
+    // листа; если контент проскроллен — жест отдаётся прокрутке.
+    (function setupSheetDrag() {
+      const THRESHOLD = 110;
+      let container = null, modalId = null, overlay = null;
+      let startY = 0, dy = 0, dragging = false;
+
+      document.addEventListener('touchstart', (e) => {
+        container = null; dragging = false; dy = 0;
+        if (e.touches.length !== 1) return;
+        const c = e.target.closest('.modal-container');
+        if (!c) return;
+        if (e.target.closest('input, textarea')) return; // не мешаем вводу
+        const modal = c.closest('[id^="modal-"]');
+        if (!modal || modal.classList.contains('hidden')) return;
+        if (c.scrollTop > 0) return;
+        container = c; modalId = modal.id;
+        overlay = modal.querySelector('.modal-overlay');
+        startY = e.touches[0].clientY;
+      }, { passive: true });
+
+      document.addEventListener('touchmove', (e) => {
+        if (!container) return;
+        const delta = e.touches[0].clientY - startY;
+        if (!dragging) {
+          if (delta > 6 && container.scrollTop <= 0) {
+            dragging = true;
+            container.classList.remove('slide-up-modal');
+            container.style.transition = 'none';
+          } else if (delta < -2) {
+            container = null; // ушли вверх — отдать прокрутке
+            return;
+          } else {
+            return;
+          }
+        }
+        e.preventDefault();
+        dy = Math.max(0, delta);
+        container.style.transform = `translateY(${dy}px)`;
+        if (overlay) overlay.style.opacity = String(Math.max(0.15, 1 - dy / 600));
+      }, { passive: false });
+
+      function endDrag() {
+        if (!container) return;
+        const c = container, id = modalId, ov = overlay, dist = dy;
+        container = null; dragging = false;
+        if (dist > THRESHOLD) {
+          c.style.transition = 'transform 0.28s var(--ios-glide)';
+          c.style.transform = 'translateY(100%)';
+          if (ov) { ov.style.transition = 'opacity 0.28s var(--ios-glide)'; ov.style.opacity = '0'; }
+          setTimeout(() => closeModal(id, true), 280);
+        } else {
+          c.style.transition = 'transform 0.4s var(--ios-glide)';
+          c.style.transform = 'translateY(0px)';
+          if (ov) { ov.style.transition = 'opacity 0.3s var(--ios-glide)'; ov.style.opacity = ''; }
+          setTimeout(() => {
+            c.style.transition = ''; c.style.transform = '';
+            if (ov) ov.style.transition = '';
+          }, 430);
+        }
+      }
+      document.addEventListener('touchend', endDrag, { passive: true });
+      document.addEventListener('touchcancel', endDrag, { passive: true });
+    })();
+
     async function fetchOEmbedData(link) {
         const embedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(link)}`);
         const embedData = await embedRes.json();
@@ -1783,11 +1871,56 @@
       refreshIcons();
     }
 
-    function openRelease(id) {
+    // Морфинг: обложка нажатой карточки «вырастает» в обложку модалки релиза.
+    // Призрак летит из ректа карточки к месту #rel-img, лист едет вверх позади.
+    function morphCoverFromCard(cardEl) {
+      if (!cardEl) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const srcImg = cardEl.querySelector('img');
+      if (!srcImg) return;
+      const from = srcImg.getBoundingClientRect();
+      if (from.width < 4 || from.height < 4) return;
+
+      const m = document.getElementById('modal-release');
+      m.classList.remove('hidden'); // показать для замера (slide-up ещё не добавлен)
+      const relImg = document.getElementById('rel-img');
+      const to = relImg.getBoundingClientRect();
+      if (to.width < 4) return;
+
+      relImg.style.opacity = '0'; // прячем реальную обложку на время морфа
+
+      const ghost = document.createElement('img');
+      ghost.src = relImg.src;
+      ghost.alt = '';
+      ghost.setAttribute('aria-hidden', 'true');
+      ghost.style.cssText = `position:fixed; left:${to.left}px; top:${to.top}px; width:${to.width}px; height:${to.height}px; object-fit:cover; border-radius:2rem; z-index:80; pointer-events:none; margin:0; will-change:transform;`;
+      ghost.style.transformOrigin = '0 0';
+      const s = from.width / to.width;
+      ghost.style.transform = `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${s})`;
+      document.body.appendChild(ghost);
+      void ghost.offsetWidth; // зафиксировать стартовое состояние
+
+      ghost.style.transition = 'transform 0.5s var(--ios-glide)';
+      ghost.style.transform = 'translate(0px, 0px) scale(1)';
+
+      let done = false;
+      const cleanup = () => {
+        if (done) return;
+        done = true;
+        ghost.remove();
+        relImg.style.opacity = '';
+      };
+      ghost.addEventListener('transitionend', cleanup);
+      setTimeout(cleanup, 700); // страховка
+    }
+
+    function openRelease(id, sourceEl) {
       const rel = releasesById.get(id); if (!rel) return; activeReleaseId = id;
       const fb = getFallbackImg(rel.name);
-      document.getElementById('rel-img').src = rel.img || fb;
-      document.getElementById('rel-img').onerror = function() { this.src = fb; };
+      const relImg = document.getElementById('rel-img');
+      relImg.src = rel.img || fb;
+      relImg.onerror = function() { this.src = fb; };
+      relImg.style.opacity = ''; // сброс на случай прошлого морфа
 
       document.getElementById('rel-title').textContent = rel.name;
       document.getElementById('rel-artist').textContent = rel.artist;
@@ -1806,7 +1939,9 @@
         delBtn.classList.remove('flex');
       }
 
-      resetReviewInputs(); renderReviews(); openModal('modal-release');
+      resetReviewInputs(); renderReviews();
+      morphCoverFromCard(sourceEl);
+      openModal('modal-release');
     }
 
     function openConfirmDelete(id) {

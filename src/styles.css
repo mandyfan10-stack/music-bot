@@ -35,7 +35,7 @@
     }
     
     /* Пружинная моторика iOS 26 */
-    .slide-up-modal { animation: slideUp 0.62s var(--ios-spring) forwards; }
+    .slide-up-modal { animation: slideUp 0.52s var(--ios-glide) forwards; }
     .slide-down-modal { animation: slideDown 0.4s var(--ios-glide) forwards; }
     .fade-in { animation: fadeIn 0.42s var(--ios-glide) forwards; }
     .fade-out { animation: fadeOut 0.32s var(--ios-glide) forwards; }
@@ -56,10 +56,11 @@
       z-index: 1;
       pointer-events: none;
     }
-    /* Входящий экран пружинит из глубины, уходящий — «утопает» с микро-blur */
-    .tab-enter-forward { animation: tabEnterForward 0.52s var(--ios-spring) forwards; }
+    /* Вход экрана — чистое замедление (push-переход iOS, без оголения края),
+       уходящий «утопает» с микро-blur. Пружина живёт в индикаторе вкладок. */
+    .tab-enter-forward { animation: tabEnterForward 0.48s var(--ios-glide) forwards; }
     .tab-exit-forward { animation: tabExitForward 0.4s var(--ios-glide) forwards; }
-    .tab-enter-backward { animation: tabEnterBackward 0.52s var(--ios-spring) forwards; }
+    .tab-enter-backward { animation: tabEnterBackward 0.48s var(--ios-glide) forwards; }
     .tab-exit-backward { animation: tabExitBackward 0.4s var(--ios-glide) forwards; }
 
     .card-enter {
