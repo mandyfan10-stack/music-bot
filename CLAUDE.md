@@ -1,8 +1,8 @@
 # CLAUDE.md — music-bot (фронтенд XXII SOUND)
 
 Telegram Mini App «XXII SOUND»: каталог музыкальных релизов с рецензиями,
-оценками по критериям, лайками и реакциями. Это **фронтенд**. Парный
-репозиторий с API — `music_backend` (FastAPI + MongoDB).
+оценками по критериям, лайками, реакциями и комментариями. Это **фронтенд**.
+Парный репозиторий с API — `music_backend` (FastAPI + MongoDB).
 
 ## Стек
 
@@ -18,40 +18,54 @@ Telegram Mini App «XXII SOUND»: каталог музыкальных рели
 - `package.json` — devDependency `tailwindcss` и скрипт `build:css` (для
   регенерации; на деплой не влияет).
 - `src/styles.css` — кастомные стили поверх Tailwind (подключается `<link>`).
-- `src/app.js` — вся логика приложения (подключается `<script src defer>`).
+- `src/app.js` — вся логика приложения (~2440 строк, `<script src defer>`).
 - `src/utils.js` — утилиты экранирования + чистые функции каталога
   (`filterAndSortReleases`); переиспользуется тестами через `module.exports`.
 - `tests/utils.test.js` — тесты утилит и логики фильтрации (Node `test`).
-- `CODE_AUDIT_*.md` — отчёты аудитов.
 
 ## Архитектура
 
 - **SPA с 4 вкладками**: `home`, `feed`, `likes`, `settings` (`TAB_ORDER`),
-  переключение — `switchTab()`. Детали и формы — модалки (`openModal`/
-  `closeModal`), стек модалок `openModalStack` для нативной кнопки «Назад».
+  переключение — `switchTab()` с анимированным переходом и морфящимся
+  индикатором (`moveTabIndicator`). Детали и формы — модалки-шторки
+  (`openModal`/`closeModal`), стек `openModalStack` для нативной кнопки
+  «Назад». Шторку можно закрыть свайпом вниз (`setupSheetDrag`).
 - **Поток данных**: cache-first. `fetchDB()` мгновенно показывает кэш
   (`localStorage`, ключ `xxii_cache_v2`, TTL 15 мин), затем `GET /api/data`.
-  Real-time — long-poll `GET /api/sync/releases` в `syncLoopTick()`,
-  инкрементальные дельты применяет `applySyncDelta()`.
+  Real-time — long-poll `GET /api/sync/releases` в `syncLoopTick()`;
+  инкрементальные дельты (релизы, рецензии, комментарии) применяет
+  `applySyncDelta()`. Статус синка — «остров» в духе iOS Dynamic Island
+  (`setSyncStatus`).
 - **Состояние** — глобальные переменные: `releases`, `releasesById` (Map),
-  `reviews`, `reviewsByRelId` (Map), `avgRatingByRelId` (Map), `likedSet`,
-  `reactedSet`, `genreCounts`, `user`. Фреймворка нет — обновление через
-  `renderReleases()` / `renderReviews()` / `renderFeed()` и `innerHTML`.
+  `reviews`, `reviewsByRelId` (Map), `avgRatingByRelId` (Map), `comments`,
+  `commentsByReviewId` (Map), `likedSet`, `reactedSet`, `genreCounts`, `user`.
+  Фреймворка нет — обновление через `renderReleases()` / `renderReviews()` /
+  `renderFeed()` и `innerHTML`.
 - **Telegram SDK**: авторизация через `tg.initData` (заголовок
   `X-Telegram-Init-Data`, см. `authHeaders()`); haptics (`tgHaptic`,
   `tgHapticNotify`); тема; `CloudStorage`; deep-link `start_param`
-  (`handleStartParam` открывает релиз по `?startapp=<id>`).
-- **Бэкенд**: `BACKEND_URL` захардкожен в `index.html`. Контракт см.
+  (`handleStartParam` открывает релиз по `?startapp=<id>`); шеринг через
+  `tg.shareMessage` (`shareRelease`).
+- **Бэкенд**: `BACKEND_URL` захардкожен в `app.js`. Контракт см.
   `music_backend/CLAUDE.md`. Внешние API: noembed, iTunes (обложки),
   ui-avatars (фолбэк-аватары) — все домены перечислены в CSP `connect-src`.
 
 ## Ключевые функции
 
-`getFilteredReleases()` (жанр + поиск + сортировка), `renderReleaseCard()`,
-`openRelease()`, `addReview()`, `toggleLikeAPI()`, `toggleReviewReaction()`,
-`handleAddRelease()`/`saveManualRelease()` (добавление релиза, только админ),
-`renderCriteriaChart()` (график средних оценок), `toggleNotifications()`
-(подписка на push), pull-to-refresh — IIFE `setupPullToRefresh()`.
+- Каталог: `getFilteredReleases()` (жанр + поиск + сортировка),
+  `renderReleaseCard()`, `renderReleases()`, `openRelease()`.
+- Рецензии/оценки: `addReview()`, `renderReviews()`, `renderCriteriaChart()`.
+- Комментарии: `submitComment()`, `deleteComment()`, `toggleComments()`,
+  `renderCommentsSection()` (черновики переживают ре-рендер — `commentDrafts`).
+- Реакции/лайки: `toggleLikeAPI()`, `toggleReviewReaction()`.
+- Профиль: `openProfileModal()`, `computeProfileBadges()` (бейджи-достижения),
+  `renderProfileCriteriaChart()` (график предпочтений критика).
+- Добавление релиза (только админ): `handleAddRelease()` (oEmbed → бэкенд →
+  ручной ввод) и `saveManualRelease()`.
+- Шеринг: `shareRelease()` (нативное TG-сообщение, фолбэк на deep-link).
+- Push: `toggleNotifications()`.
+- Жесты: `setupPullToRefresh()`, `setupSheetDrag()` (свайп-закрытие модалок),
+  `morphCoverFromCard()` (FLIP-морф обложки карточки в модалку).
 
 ## Обработка событий
 
@@ -64,14 +78,19 @@ Inline-обработчиков (`onclick=` и т.п.) **нет** — это п�
 ## Конвенции
 
 - **Всегда экранировать** данные в шаблонах `innerHTML`: `escapeHtml` (текст и
-  значения `data-*`), `escapeCssString` (CSS-селекторы). Утилиты — в
-  `src/utils.js`.
+  значения `data-*`; коэрсит non-string, пропускает `0`/`false`),
+  `escapeCssString` (CSS-селекторы). Утилиты — в `src/utils.js`.
 - **Роль пользователя определяет только сервер** (`currentUser` из `/api/data`),
   никогда не доверять клиенту.
-- Сетевые мутации — **оптимистичные, с откатом** при ошибке (образец —
-  `toggleLikeAPI`, `toggleReviewReaction`, `toggleNotifications`).
+- Сетевые мутации двух видов: **toggle-операции оптимистичные с откатом**
+  (`toggleLikeAPI`, `toggleReviewReaction`, `toggleNotifications`,
+  `submitComment`, `deleteComment`); **создание/удаление рецензий и релизов
+  pessimistic** — ждут ответа сервера, затем меняют локальное состояние
+  (`addReview`, `saveManualRelease`, `executeDeleteReview`,
+  `executeDeleteRelease`). Серверные `id` совпадают с клиентскими, поэтому
+  `applySyncDelta` обновляет такие записи на месте, без дублей.
 - Доступность: `aria-label`, `role="button"`, `tabindex`, поддержка
-  `prefers-reduced-motion`.
+  `prefers-reduced-motion` (анимации и морф отключаются).
 
 ## Команды
 

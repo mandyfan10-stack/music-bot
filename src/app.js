@@ -346,11 +346,9 @@
     }
     let pendingReviewDelete = null;
     let pendingReviewTargetReleaseId = null;
-    let reviewDeleteMode = false;
     let reviewPublishBlocked = false;
     let existingReviewForActiveRelease = null;
     let activeProfile = null; // { id, username, displayName }
-    let activeReleaseReviews = [];
     const REVIEW_MIN_LENGTH = 30;
     const REVIEW_MAX_LENGTH = 3000;
 
@@ -887,7 +885,6 @@
       if (id === 'modal-confirm-review-delete') {
         pendingReviewDelete = null;
         pendingReviewTargetReleaseId = null;
-        reviewDeleteMode = false;
       }
     }
 
@@ -1958,7 +1955,6 @@
     function openConfirmReviewDelete(reviewId, releaseId) {
       pendingReviewDelete = reviewId;
       pendingReviewTargetReleaseId = releaseId;
-      reviewDeleteMode = true;
       openModal('modal-confirm-review-delete');
     }
 
@@ -1991,7 +1987,6 @@
       showToast('Рецензия удалена!', 'success');
       pendingReviewDelete = null;
       pendingReviewTargetReleaseId = null;
-      reviewDeleteMode = false;
       reviewPublishBlocked = false;
       existingReviewForActiveRelease = null;
       updateReviewCharCount();
@@ -2259,7 +2254,6 @@
 
     function renderReviews() {
       const container = document.getElementById('reviews-container'); const relReviews = reviewsByRelId.get(activeReleaseId) || [];
-      activeReleaseReviews = relReviews;
       container.innerHTML = relReviews.map((r, i) => {
         const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
         const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0;
