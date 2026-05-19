@@ -34,14 +34,16 @@
     <span id="toast-msg"></span>
   </div>
 
+  <!-- Остров статуса синхронизации (в духе iOS Dynamic Island) -->
+  <div id="sync-status" class="sync-island is-syncing" role="status" aria-live="polite">
+    <span class="sync-island-glyph" aria-hidden="true"></span>
+    <span class="sync-island-text">Синхронизация</span>
+  </div>
+
   <header class="pt-6 pb-4 px-6 flex items-center justify-between gap-3 z-10 bg-transparent sticky top-0">
     <div class="flex items-center gap-3 min-w-0 flex-1">
       <div class="logo-container shrink-0"><span class="logo-text">XXII</span></div>
       <span class="brand-name font-bold tracking-tight text-xl text-white uppercase shrink-0" style="font-family: 'Poiret One', sans-serif; letter-spacing: 1px;">Sound</span>
-      <span id="sync-status" class="sync-pill syncing text-[10px] font-semibold px-2.5 py-1 rounded-full" aria-live="polite">
-        <span class="sync-dot" aria-hidden="true"></span>
-        <span class="sync-text">Синхронизация...</span>
-      </span>
     </div>
     <button id="user-profile" aria-label="Профиль пользователя" data-act="open-profile" class="flex items-center gap-2 bg-white/5 border border-white/5 rounded-full pl-1.5 pr-3 py-1 backdrop-blur-md cursor-pointer btn-press transition-colors hover:bg-white/10 text-left shrink-0 max-w-[42vw]">
       <div class="w-7 h-7 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center border border-white/10">

@@ -78,16 +78,31 @@
       } catch (_) {}
     }
 
+    // Остров статуса синхронизации (в духе iOS Dynamic Island): при синке и
+    // оффлайне развёрнут с текстом, при «всё актуально» — кратко показывается
+    // и плавно сворачивается в точку.
+    let syncCollapseTimer = null;
     function setSyncStatus(text, mode = 'idle') {
       const el = document.getElementById('sync-status');
       if (!el) return;
-      const textEl = el.querySelector('.sync-text');
+      const textEl = el.querySelector('.sync-island-text');
       if (textEl) textEl.textContent = text;
       else el.textContent = text;
-      el.classList.remove('ok', 'warn', 'syncing');
-      if (mode === 'idle' || mode === 'syncing') el.classList.add('syncing');
-      if (mode === 'ok') el.classList.add('ok');
-      if (mode === 'warn') el.classList.add('warn');
+      el.classList.remove('is-ok', 'is-warn', 'is-syncing');
+      if (syncCollapseTimer) { clearTimeout(syncCollapseTimer); syncCollapseTimer = null; }
+
+      if (mode === 'ok') {
+        el.classList.add('is-ok');
+        el.classList.remove('is-collapsed');
+        // Свернуть в точку после короткой паузы.
+        syncCollapseTimer = setTimeout(() => el.classList.add('is-collapsed'), 1800);
+      } else if (mode === 'warn') {
+        el.classList.add('is-warn');
+        el.classList.remove('is-collapsed');
+      } else {
+        el.classList.add('is-syncing');
+        el.classList.remove('is-collapsed');
+      }
     }
 
     document.addEventListener('pointerdown', (event) => {
@@ -831,7 +846,7 @@
           pendingReviewTargetReleaseId = null;
           reviewDeleteMode = false;
         }
-      }, 450);
+      }, 500); // совпадает с длительностью slideDown — анимация не обрезается
     }
 
     // Принадлежит ли рецензия пользователю. authorId приходит с сервера и
@@ -1107,7 +1122,7 @@
       reactedSet = new Set(data.myReactions || []);
       blockedUsers = data.blockedUsers || [];
       if (typeof data.miniAppUrl === 'string') miniAppUrl = data.miniAppUrl;
-      if (typeof data.syncCursor === 'number') syncCursor = data.syncCursor;
+      if (data.syncCursor != null) syncCursor = String(data.syncCursor);
       if (data.currentUser) {
         if (data.currentUser.userId != null) user.userId = data.currentUser.userId;
         user.username = data.currentUser.displayName || user.username;
@@ -1165,7 +1180,9 @@
     }
 
     // --- REAL-TIME СИНХРОНИЗАЦИЯ (long-poll /api/sync/releases) ---
-    let syncCursor = 0;
+    // Курсор — строка: токены (time_ns) превышают Number.MAX_SAFE_INTEGER,
+    // числом JS терял бы точность и переотдавал бы те же события в цикле.
+    let syncCursor = '0';
     let syncLoopActive = false;
     let syncAbortController = null;
     let syncRetryTimer = null;
@@ -1231,7 +1248,7 @@
         if (comments.length !== before) commentsChanged = true;
       }
 
-      if (typeof data.cursor === 'number' && data.cursor > 0) syncCursor = data.cursor;
+      if (data.cursor != null && String(data.cursor) !== '0') syncCursor = String(data.cursor);
 
       if (commentsChanged) updateCommentsMap();
 
@@ -1265,8 +1282,9 @@
         applySyncDelta(data);
         setSyncStatus('Всё актуально', 'ok');
         if (syncLoopActive) {
-          // Сервер сам держит long-poll до 25 с, поэтому следующий тик — сразу.
-          setTimeout(syncLoopTick, 0);
+          // Сервер сам держит long-poll до 25 с. Небольшой зазор — защита от
+          // tight-loop, если сервер вдруг начнёт отвечать мгновенно.
+          setTimeout(syncLoopTick, 600);
         }
       } catch (e) {
         if (e.name === 'AbortError') return;
@@ -1607,16 +1625,23 @@
       });
     }
 
+    // id релизов, чьи карточки уже хоть раз отрисованы — чтобы анимация
+    // появления (cardPop) не проигрывалась повторно на каждом ре-рендере.
+    const seenReleaseIds = new Set();
+
     function renderReleaseCard(r, index) {
       const isLiked = likedSet.has(r.id);
       const fb = getFallbackImg(r.name);
-      const delay = index * 50;
+      const firstPaint = !seenReleaseIds.has(r.id);
+      seenReleaseIds.add(r.id);
+      const enterCls = firstPaint ? 'card-enter ' : '';
+      const enterStyle = firstPaint ? ` style="animation-delay: ${index * 50}ms"` : '';
       const cachedAvg = avgRatingByRelId.get(r.id);
       const avgRating = cachedAvg ? cachedAvg.toFixed(1) : null;
       const ratingBadge = avgRating ? `<div class="rating-badge absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
       const isNew = lastSeenTs > 0 && (r.timestamp || 0) > lastSeenTs;
       const newBadge = isNew ? `<div class="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wider shadow-lg">NEW</div>` : '';
-      return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="card-enter flex flex-col gap-2 w-full min-w-0 active:scale-95 transition-transform relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]" style="animation-delay: ${delay}ms">
+      return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="${enterCls}flex flex-col gap-2 w-full min-w-0 active:scale-95 transition-transform relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]"${enterStyle}>
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
             <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" class="w-full h-full object-cover">
             ${ratingBadge}
