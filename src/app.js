@@ -733,15 +733,31 @@
       document.querySelectorAll('nav > button[id^="tab-"]').forEach(btn => {
         const id = btn.id.replace('tab-', '');
         const icon = btn.querySelector('svg') || btn.querySelector('i');
-        if (id === tabId) { 
-          btn.className = `flex flex-col items-center gap-1 text-red-500 btn-press transition-colors`; 
-          if(icon) icon.classList.add('stroke-[2.5px]'); 
-        } else { 
-          btn.className = `flex flex-col items-center gap-1 text-gray-500 btn-press transition-colors`; 
-          if(icon) icon.classList.remove('stroke-[2.5px]'); 
-        }
+        const active = id === tabId;
+        btn.className = `flex flex-col items-center gap-1 ${active ? 'text-red-500' : 'text-gray-500'} btn-press transition-colors${active ? ' tab-active' : ''}`;
+        if (icon) icon.classList.toggle('stroke-[2.5px]', active);
       });
+      moveTabIndicator(tabId);
     }
+
+    // Морфящийся индикатор активной вкладки: пружиной перетекает к выбранной.
+    let tabIndicatorReady = false;
+    function moveTabIndicator(tabId) {
+      const ind = document.getElementById('tab-indicator');
+      const btn = document.getElementById('tab-' + tabId);
+      if (!ind || !btn) return;
+      if (!tabIndicatorReady) ind.style.transition = 'none';
+      ind.style.width = btn.offsetWidth + 'px';
+      ind.style.height = btn.offsetHeight + 'px';
+      ind.style.transform = `translate(${btn.offsetLeft}px, ${btn.offsetTop}px)`;
+      if (!tabIndicatorReady) {
+        void ind.offsetWidth; // первое размещение — без анимации из угла
+        ind.style.transition = '';
+        ind.classList.add('ready');
+        tabIndicatorReady = true;
+      }
+    }
+    window.addEventListener('resize', () => { if (activeTabId) moveTabIndicator(activeTabId); });
 
     function cleanupTabTransition(screen) {
       if (!screen) return;
@@ -811,7 +827,7 @@
         cleanupTabTransition(current);
         cleanupTabTransition(next);
         tabTransitionTimer = null;
-      }, 420);
+      }, 540); // совпадает с длительностью пружинного входа вкладки
     }
 
     // Стек открытых модалок — для нативной кнопки «Назад» Telegram.
@@ -832,11 +848,14 @@
       m.querySelector('.modal-container').classList.add('slide-up-modal');
       openModalStack = openModalStack.filter(x => x !== id);
       openModalStack.push(id);
+      document.body.classList.add('modal-open'); // фон уходит вглубь
       syncBackButton();
     }
 
     function closeModal(id) {
       openModalStack = openModalStack.filter(x => x !== id);
+      // Фон возвращается, как только закрыта последняя модалка из стека.
+      if (openModalStack.length === 0) document.body.classList.remove('modal-open');
       syncBackButton();
       const m = document.getElementById(id); const c = m.querySelector('.modal-container'); const o = m.querySelector('.modal-overlay');
       c.classList.replace('slide-up-modal', 'slide-down-modal'); o.classList.replace('fade-in', 'fade-out');
@@ -1667,7 +1686,7 @@
       const firstPaint = !seenReleaseIds.has(r.id);
       seenReleaseIds.add(r.id);
       const enterCls = firstPaint ? 'card-enter ' : '';
-      const enterStyle = firstPaint ? ` style="animation-delay: ${index * 50}ms"` : '';
+      const enterStyle = firstPaint ? ` style="animation-delay: ${Math.min(index, 14) * 32}ms"` : '';
       const cachedAvg = avgRatingByRelId.get(r.id);
       const avgRating = cachedAvg ? cachedAvg.toFixed(1) : null;
       const ratingBadge = avgRating ? `<div class="rating-badge absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
@@ -2027,7 +2046,7 @@
           <textarea data-act-input="comment-draft" data-id="${escapeHtml(reviewId)}" rows="1" maxlength="${COMMENT_MAX_LENGTH}" aria-label="Текст комментария" placeholder="Ваш комментарий..." class="flex-1 bg-black/20 border border-white/5 rounded-xl outline-none p-2.5 text-[12px] text-white resize-none transition-all focus:border-red-500/30">${escapeHtml(draft)}</textarea>
           <button data-act="submit-comment" data-id="${escapeHtml(reviewId)}" class="btn-press shrink-0 px-3 py-2.5 bg-white/10 border border-white/10 text-white text-[12px] font-bold rounded-xl">Отправить</button>
         </div>` : '';
-      return `${toggle}<div class="mt-2 space-y-2">${items}${inputBox}</div>`;
+      return `${toggle}<div class="comments-reveal mt-2 space-y-2">${items}${inputBox}</div>`;
     }
 
     function toggleComments(reviewId) {
@@ -2114,7 +2133,7 @@
         const reacted = reactedSet.has(r.id);
         const reactionCount = typeof r.reactionCount === 'number' ? r.reactionCount : 0;
         const reactBtn = `<button data-act="toggle-reaction" data-id="${escapeHtml(r.id)}" aria-label="Полезная рецензия" class="btn-press shrink-0 flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${reacted ? 'bg-red-500/15 border border-red-500/25 text-red-400' : 'bg-white/5 border border-white/10 text-gray-400'}"><i data-lucide="thumbs-up" class="w-3 h-3"></i><span class="text-[10px] font-bold">${reactionCount}</span></button>`;
-        return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${i*50}ms">
+        return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${Math.min(i, 12) * 36}ms">
           <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" data-act="open-profile" data-user="${escapeHtml(r.author)}" data-author-id="${escapeHtml(r.authorId == null ? '' : r.authorId)}" data-username="${escapeHtml(r.authorUsername || '')}">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button data-act="open-confirm-review-delete" data-id="${escapeHtml(r.id)}" data-rel="${escapeHtml(r.relId)}" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
           <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span>${reactBtn}</div>

@@ -4,8 +4,12 @@
     :root {
       --bg-color: #000000;
       --accent-red: #ff0000;
-      --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
-      --ease-spring: cubic-bezier(0.18, 0.9, 0.22, 1);
+      /* Пружинная моторика iOS 26 */
+      --ios-spring: cubic-bezier(0.34, 1.42, 0.5, 1);   /* мягкий overshoot — входы, морф */
+      --ios-snappy: cubic-bezier(0.22, 0.9, 0.32, 1);   /* быстрый отклик — тапы, переключатели */
+      --ios-glide: cubic-bezier(0.32, 0.72, 0, 1);      /* плавное замедление — фейды, выходы */
+      --ease-out: var(--ios-glide);
+      --ease-spring: var(--ios-spring);
     }
     
     body { 
@@ -14,17 +18,27 @@
       font-family: 'Inter', sans-serif; 
       overflow: hidden; 
       -webkit-tap-highlight-color: transparent;
-      transition: background-color 0.6s cubic-bezier(0.32, 0.72, 0, 1);
+      transition: background-color 0.6s var(--ios-glide);
     }
     
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* «Утопание» фона под открытой модалкой — глубина в духе iOS-листов */
+    main {
+      transform-origin: 50% 0;
+      transition: transform 0.55s var(--ios-spring), filter 0.5s var(--ios-glide);
+    }
+    body.modal-open main {
+      transform: scale(0.965) translateY(8px);
+      filter: brightness(0.82);
+    }
     
-    /* Пружинные анимации Apple */
-    .slide-up-modal { animation: slideUp 0.6s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
-    .slide-down-modal { animation: slideDown 0.5s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
-    .fade-in { animation: fadeIn 0.5s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
-    .fade-out { animation: fadeOut 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+    /* Пружинная моторика iOS 26 */
+    .slide-up-modal { animation: slideUp 0.62s var(--ios-spring) forwards; }
+    .slide-down-modal { animation: slideDown 0.4s var(--ios-glide) forwards; }
+    .fade-in { animation: fadeIn 0.42s var(--ios-glide) forwards; }
+    .fade-out { animation: fadeOut 0.32s var(--ios-glide) forwards; }
 
     .tab-screen {
       transform: translate3d(0, 0, 0);
@@ -42,31 +56,34 @@
       z-index: 1;
       pointer-events: none;
     }
-    .tab-enter-forward { animation: tabEnterForward 0.38s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
-    .tab-exit-forward { animation: tabExitForward 0.32s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
-    .tab-enter-backward { animation: tabEnterBackward 0.38s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
-    .tab-exit-backward { animation: tabExitBackward 0.32s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+    /* Входящий экран пружинит из глубины, уходящий — «утопает» с микро-blur */
+    .tab-enter-forward { animation: tabEnterForward 0.52s var(--ios-spring) forwards; }
+    .tab-exit-forward { animation: tabExitForward 0.4s var(--ios-glide) forwards; }
+    .tab-enter-backward { animation: tabEnterBackward 0.52s var(--ios-spring) forwards; }
+    .tab-exit-backward { animation: tabExitBackward 0.4s var(--ios-glide) forwards; }
 
     .card-enter {
       opacity: 0;
-      transform: translateY(30px) scale(0.9);
-      animation: cardPop 0.7s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+      transform: translateY(22px) scale(0.92);
+      animation: cardPop 0.56s var(--ios-spring) forwards;
     }
 
     @keyframes slideUp { 0% { transform: translateY(100%); } 100% { transform: translateY(0); } }
     @keyframes slideDown { 0% { transform: translateY(0); } 100% { transform: translateY(100%); } }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-    @keyframes tabEnterForward { from { opacity: 0; transform: translate3d(28px, 0, 0) scale(0.985); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
-    @keyframes tabExitForward { from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; transform: translate3d(-18px, 0, 0) scale(0.995); } }
-    @keyframes tabEnterBackward { from { opacity: 0; transform: translate3d(-28px, 0, 0) scale(0.985); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
-    @keyframes tabExitBackward { from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; transform: translate3d(18px, 0, 0) scale(0.995); } }
+    @keyframes tabEnterForward { from { opacity: 0; transform: translate3d(26px, 0, 0) scale(0.955); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+    @keyframes tabExitForward { from { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; filter: blur(4px); transform: translate3d(-14px, 0, 0) scale(0.97); } }
+    @keyframes tabEnterBackward { from { opacity: 0; transform: translate3d(-26px, 0, 0) scale(0.955); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+    @keyframes tabExitBackward { from { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; filter: blur(4px); transform: translate3d(14px, 0, 0) scale(0.97); } }
     @keyframes cardPop { to { opacity: 1; transform: translateY(0) scale(1); } }
     @keyframes pressRipple {
-      from { opacity: 0.28; transform: translate(-50%, -50%) scale(0); }
-      to { opacity: 0; transform: translate(-50%, -50%) scale(2.9); }
+      from { opacity: 0.22; transform: translate(-50%, -50%) scale(0); }
+      to { opacity: 0; transform: translate(-50%, -50%) scale(2.6); }
     }
     @keyframes islandSpin { to { transform: rotate(360deg); } }
+    @keyframes commentsReveal { from { opacity: 0; transform: translateY(-6px); } }
+    .comments-reveal { animation: commentsReveal 0.32s var(--ios-glide); }
     @keyframes islandDrop {
       from { opacity: 0; transform: translateX(-50%) translateY(-16px) scale(0.85); }
       to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
@@ -133,20 +150,20 @@
     .glass { background: rgba(28, 28, 30, 0.75); backdrop-filter: blur(28px) saturate(150%); -webkit-backdrop-filter: blur(28px) saturate(150%); border: 1px solid rgba(255, 255, 255, 0.12); }
     .glass-input { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); transition: all 0.3s; }
     
-    .rating-btn { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.4s cubic-bezier(0.32, 0.72, 0, 1); }
+    .rating-btn { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); transition: transform 0.44s var(--ios-spring), background-color 0.3s var(--ios-glide), color 0.3s var(--ios-glide), box-shadow 0.3s var(--ios-glide), border-color 0.3s var(--ios-glide); }
     .rating-btn.active { background: white; color: black; transform: scale(1.2); box-shadow: 0 0 20px rgba(255, 255, 255, 0.4); border-color: white; }
-    
+
     .btn-press {
       position: relative;
       overflow: hidden;
       transform: translate3d(0, 0, 0) scale(1);
       transition:
-        transform 0.42s cubic-bezier(0.18, 0.9, 0.22, 1),
-        opacity 0.32s ease,
-        box-shadow 0.42s cubic-bezier(0.18, 0.9, 0.22, 1),
-        background-color 0.32s ease,
-        border-color 0.32s ease,
-        color 0.32s ease;
+        transform 0.46s var(--ios-spring),
+        opacity 0.3s var(--ios-glide),
+        box-shadow 0.4s var(--ios-glide),
+        background-color 0.3s var(--ios-glide),
+        border-color 0.3s var(--ios-glide),
+        color 0.3s var(--ios-glide);
       outline: none;
       touch-action: manipulation;
       will-change: transform;
@@ -158,11 +175,16 @@
       background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.18), transparent 62%);
       opacity: 0;
       transform: scale(0.92);
-      transition: opacity 0.34s ease, transform 0.42s cubic-bezier(0.18, 0.9, 0.22, 1);
+      transition: opacity 0.32s var(--ios-glide), transform 0.44s var(--ios-spring);
       pointer-events: none;
     }
     .btn-press:hover::before { opacity: 0.55; transform: scale(1); }
-    .btn-press:active { transform: translate3d(0, 1px, 0) scale(0.965); opacity: 0.96; }
+    /* Тап — быстрый, упругий: резко вжимается, пружиной возвращается */
+    .btn-press:active {
+      transform: translate3d(0, 0.5px, 0) scale(0.955);
+      opacity: 0.97;
+      transition: transform 0.13s var(--ios-snappy), opacity 0.13s var(--ios-snappy);
+    }
     .btn-press:active::before { opacity: 0.82; transform: scale(1.04); transition-duration: 0.12s; }
     .btn-press:focus-visible { box-shadow: 0 0 0 2px var(--accent-red), 0 0 0 7px rgba(255, 0, 0, 0.12); outline: none; }
     .btn-press[disabled],
@@ -188,9 +210,40 @@
       top: var(--press-y, 50%);
       transform: translate(-50%, -50%) scale(0);
       pointer-events: none;
-      animation: pressRipple 0.72s cubic-bezier(0.18, 0.9, 0.22, 1) forwards;
+      animation: pressRipple 0.58s var(--ios-glide) forwards;
       z-index: 1;
     }
+
+    /* Морфящийся индикатор активной вкладки (iOS 26 tab bar) */
+    #tab-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.07);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(0, 0);
+      transition:
+        transform 0.5s var(--ios-spring),
+        width 0.5s var(--ios-spring),
+        height 0.5s var(--ios-spring),
+        opacity 0.3s var(--ios-glide);
+      z-index: 0;
+    }
+    #tab-indicator.ready { opacity: 1; }
+    body.light-theme #tab-indicator { background: rgba(0, 0, 0, 0.06); box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.05); }
+    nav button[data-act="switch-tab"] { position: relative; z-index: 1; }
+    /* Пружинный «поп» иконки выбранной вкладки (Lucide заменяет <i> на <svg>) */
+    nav button[data-act="switch-tab"] svg,
+    nav button[data-act="switch-tab"] i {
+      transition: transform 0.5s var(--ios-spring);
+      transform: scale(1);
+      transform-origin: 50% 50%;
+    }
+    nav button[data-act="switch-tab"].tab-active svg,
+    nav button[data-act="switch-tab"].tab-active i { transform: scale(1.16); }
 
     /* ========================================= */
     /* СВЕТЛАЯ ТЕМА (Полная инверсия стилей)     */
@@ -267,8 +320,14 @@
     #sort-controls > button { flex-shrink: 0; }
 
     /* Поиск жанра */
-    #genre-dropdown { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+    #genre-dropdown { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); transform-origin: 50% 0; }
+    #genre-dropdown:not(.hidden) { animation: ddPop 0.34s var(--ios-spring); }
+    @keyframes ddPop { from { opacity: 0; transform: translateY(-8px) scale(0.96); } }
     #genre-dropdown button:active { background: rgba(239,68,68,0.1); }
+
+    /* Закрытие welcome-экрана — масштаб + фейд (iOS-роспуск) */
+    #welcome-screen { transition: opacity 0.6s var(--ios-glide), transform 0.6s var(--ios-spring); }
+    #welcome-screen.opacity-0 { transform: scale(1.06); }
     #genre-search::placeholder { color: rgba(156,163,175,0.6); }
 
     body.light-theme .sort-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #374151; }
@@ -422,7 +481,7 @@
       opacity: 0;
       pointer-events: none;
       z-index: 15;
-      transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease;
+      transition: transform 0.46s var(--ios-spring), opacity 0.3s var(--ios-glide);
     }
     #ptr-indicator.ptr-pulling { transition: none; }
     #ptr-indicator.ptr-refreshing {
@@ -452,7 +511,7 @@
       border-radius: 999px;
       background: #fff;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-      transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+      transition: transform 0.5s var(--ios-spring);
     }
     .notif-switch.on { background: #dc2626; border-color: #dc2626; }
     .notif-switch.on .notif-switch-knob { transform: translateX(20px); }
