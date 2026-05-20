@@ -2084,30 +2084,17 @@
       renderReviews();
       updateReviewCharCount();
       showToast('Опубликовано!', 'success');
-      celebrate();
+      pulseNewReview(newRev.id);
     }
 
-    // Небольшой залп конфетти — отклик на успешную публикацию рецензии.
-    function celebrate() {
+    // Мягкая «пульсация» только что опубликованной карточки — сдержанный
+    // фидбэк об успешной публикации вместо конфетти-салюта.
+    function pulseNewReview(reviewId) {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      const colors = ['#ff0000', '#ffffff', '#fbbf24', '#fb7185'];
-      const count = 26;
-      for (let i = 0; i < count; i++) {
-        const piece = document.createElement('span');
-        piece.className = 'confetti-piece';
-        piece.style.background = colors[i % colors.length];
-        document.body.appendChild(piece);
-        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.6;
-        const dist = 130 + Math.random() * 170;
-        const dx = Math.cos(angle) * dist;
-        const dy = Math.sin(angle) * dist + 90;
-        const rot = Math.random() * 720 - 360;
-        const anim = piece.animate([
-          { transform: 'translate(-50%, -50%) rotate(0deg)', opacity: 1 },
-          { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${rot}deg)`, opacity: 0 }
-        ], { duration: 900 + Math.random() * 500, easing: 'cubic-bezier(0.18, 0.9, 0.22, 1)' });
-        anim.onfinish = () => piece.remove();
-      }
+      const card = document.querySelector(`[data-review-id="${escapeCssString(reviewId)}"]`);
+      if (!card) return;
+      card.classList.add('review-card-pulse');
+      card.addEventListener('animationend', () => card.classList.remove('review-card-pulse'), { once: true });
     }
 
     // Реакция «полезно» на рецензию — оптимистичный toggle с откатом при ошибке.
@@ -2262,7 +2249,7 @@
         const reacted = reactedSet.has(r.id);
         const reactionCount = typeof r.reactionCount === 'number' ? r.reactionCount : 0;
         const reactBtn = `<button data-act="toggle-reaction" data-id="${escapeHtml(r.id)}" aria-label="Полезная рецензия" class="btn-press shrink-0 flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${reacted ? 'bg-red-500/15 border border-red-500/25 text-red-400' : 'bg-white/5 border border-white/10 text-gray-400'}"><i data-lucide="thumbs-up" class="w-3 h-3"></i><span class="text-[10px] font-bold">${reactionCount}</span></button>`;
-        return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${Math.min(i, 12) * 36}ms">
+        return `<div data-review-id="${escapeHtml(r.id)}" class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${Math.min(i, 12) * 36}ms">
           <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" data-act="open-profile" data-user="${escapeHtml(r.author)}" data-author-id="${escapeHtml(r.authorId == null ? '' : r.authorId)}" data-username="${escapeHtml(r.authorUsername || '')}">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button data-act="open-confirm-review-delete" data-id="${escapeHtml(r.id)}" data-rel="${escapeHtml(r.relId)}" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
           <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span>${reactBtn}</div>

@@ -276,7 +276,8 @@
     body.light-theme .bg-black\/20 { background-color: rgba(0,0,0,0.05) !important; }
     
     body.light-theme .bg-black\/40 { background-color: rgba(255,255,255,0.9) !important; box-shadow: 0 2px 10px rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.05) !important; }
-    body.light-theme .bg-black\/40 i:not(.text-red-500) { stroke: #000; } 
+    body.light-theme .bg-black\/40 i:not(.text-red-500),
+    body.light-theme .bg-black\/40 svg:not(.text-red-500) { color: #000; }
     
     body.light-theme .bg-white.text-black { background-color: #000 !important; color: #fff !important; }
     body.light-theme .bg-white.text-black i { fill: #fff !important; stroke: #fff !important; }
@@ -432,18 +433,17 @@
       border-color: rgba(225, 29, 72, 0.22);
     }
 
-    /* Конфетти при публикации рецензии */
-    .confetti-piece {
-      position: fixed;
-      left: 50%;
-      top: 42%;
-      width: 9px;
-      height: 9px;
-      border-radius: 2px;
-      pointer-events: none;
-      z-index: 300;
-      will-change: transform, opacity;
+    /* Подсветка свежеопубликованной рецензии */
+    @keyframes newReviewPulse {
+      0%   { transform: scale(0.985); box-shadow: 0 0 0 0 rgba(239,68,68,0.45); }
+      45%  { transform: scale(1.012); box-shadow: 0 0 0 8px rgba(239,68,68,0.18); }
+      100% { transform: scale(1);     box-shadow: 0 0 0 0 rgba(239,68,68,0); }
     }
+    .review-card-pulse {
+      animation: newReviewPulse 640ms cubic-bezier(0.18, 0.9, 0.22, 1);
+      will-change: transform, box-shadow;
+    }
+    @media (prefers-reduced-motion: reduce) { .review-card-pulse { animation: none; } }
 
     /* Skeleton-загрузка */
     .skeleton-card {
