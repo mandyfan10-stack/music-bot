@@ -169,6 +169,12 @@
       touch-action: manipulation;
       will-change: transform;
     }
+    /* styles.css грузится после tailwind.css, поэтому одиночный .btn-press
+       перекрывал tailwind-утилиту .absolute (та же специфичность).
+       Двухклассовый селектор поднимает специфичность и возвращает
+       абсолютное позиционирование, например лайк-кнопке на карточке релиза. */
+    .btn-press.absolute { position: absolute; }
+    .btn-press.fixed { position: fixed; }
     .btn-press::before {
       content: "";
       position: absolute;
