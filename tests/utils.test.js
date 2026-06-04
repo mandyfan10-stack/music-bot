@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { cleanUsername, escapeHtml, escapeCssString, filterAndSortReleases } = require('../src/utils.js');
+const { cleanUsername, escapeHtml, escapeCssString, genId, filterAndSortReleases } = require('../src/utils.js');
 
 test('cleanUsername: should remove leading @ and convert to lowercase', () => {
   assert.strictEqual(cleanUsername('@User'), 'user');
@@ -69,6 +69,19 @@ test('escapeCssString: should escape selector string delimiters', () => {
 
 test('escapeCssString: should escape CSS line terminators', () => {
     assert.strictEqual(escapeCssString('a\nb\rc\f'), 'a\\A b\\D c\\C ');
+});
+
+// --- genId ---
+test('genId: returns a non-empty string', () => {
+    const id = genId();
+    assert.strictEqual(typeof id, 'string');
+    assert.ok(id.length > 0);
+});
+
+test('genId: consecutive calls do not collide', () => {
+    const ids = new Set();
+    for (let i = 0; i < 1000; i++) ids.add(genId());
+    assert.strictEqual(ids.size, 1000);
 });
 
 // --- filterAndSortReleases ---

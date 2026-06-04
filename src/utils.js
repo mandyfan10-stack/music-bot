@@ -20,6 +20,19 @@ function escapeCssString(str) {
     .replace(/\f/g, '\\C ');
 }
 
+// Глобально уникальный id для создаваемых сущностей (релизы, рецензии,
+// комментарии). На поле `id` в БД стоят unique-индексы, а Date.now() у двух
+// пользователей в одну миллисекунду совпадёт → коллизия и ложная ошибка вставки.
+// crypto.randomUUID — основной путь, фолбэк — для старых WebView без него.
+function genId() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch (e) { /* нет crypto — используем фолбэк ниже */ }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 // Чистая фильтрация и сортировка каталога релизов.
 // options:
 //   genre        — точный фильтр по жанру ('' = без фильтра)
@@ -71,6 +84,7 @@ if (typeof module !== 'undefined' && module.exports) {
     cleanUsername,
     escapeHtml,
     escapeCssString,
+    genId,
     filterAndSortReleases
   };
 }

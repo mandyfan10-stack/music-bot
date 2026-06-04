@@ -1692,7 +1692,7 @@
         } catch(e) {}
       }
       
-      const newRel = { id: Date.now().toString(), name: title, artist: artist, img: cover, link: currentPendingLink, genre: selectedGenreForAdd, timestamp: Date.now() };
+      const newRel = { id: genId(), name: title, artist: artist, img: cover, link: currentPendingLink, genre: selectedGenreForAdd, timestamp: Date.now() };
       
       // Отправка в БД Render (с обработкой ошибок)
       try {
@@ -2046,7 +2046,7 @@
       const objectiveRating = getCriteriaAverage(selectedCriteria);
       const finalRating = Math.round((objectiveRating + selectedRating) / 2 * 10) / 10;
       const newRev = {
-        id: Date.now().toString(),
+        id: genId(),
         relId: activeReleaseId,
         author: user.username,
         authorId: user.userId,
@@ -2181,7 +2181,7 @@
       if (text.length > COMMENT_MAX_LENGTH) return showToast(`Максимум ${COMMENT_MAX_LENGTH} символов`);
 
       const newComment = {
-        id: Date.now().toString(),
+        id: genId(),
         reviewId: reviewId,
         relId: activeReleaseId,
         text: text,
