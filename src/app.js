@@ -1202,11 +1202,6 @@
         user.isAuthenticated = !!data.currentUser.isAuthenticated;
         user.notificationsEnabled = data.currentUser.notificationsEnabled !== false;
         user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
-        // initData отправлена, но сервер не принял её — сессия Telegram устарела.
-        if (tg.initData && !user.isAuthenticated && !sessionExpiredWarned) {
-          sessionExpiredWarned = true;
-          showToast('Сессия Telegram устарела — переоткройте приложение');
-        }
       }
       applyUserRole();
       applyNotificationsToggle();
@@ -1273,7 +1268,11 @@
 
         // 2. Загружаем свежие данные с сервера Supabase
         try {
-            await authenticateWithSupabase();
+            const authOk = await authenticateWithSupabase();
+            if (tg.initData && !authOk && !sessionExpiredWarned) {
+              sessionExpiredWarned = true;
+              showToast('Сессия Telegram устарела — переоткройте приложение');
+            }
 
             const releasesPromise = supabase.from('releases').select('*').order('timestamp', { ascending: false }).limit(200);
             const reviewsPromise = supabase.from('reviews_view').select('*').order('timestamp', { ascending: false }).limit(1000);
