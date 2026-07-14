@@ -1256,6 +1256,11 @@
     }
 
     async function fetchDB() {
+        if (!supabase) {
+          console.error("Supabase client is not initialized.");
+          setSyncStatus('Нет соединения', 'warn');
+          return;
+        }
         setSyncStatus('Загрузка релизов', 'syncing');
 
         // 1. Мгновенно показываем кэш
