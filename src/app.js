@@ -1,3 +1,4 @@
+(function() {
     const tg = window.Telegram?.WebApp || {
       initData: '',
       initDataUnsafe: {},
@@ -2676,3 +2677,4 @@
 
     // Запуск синхронизации с БД Render + real-time long-poll
     fetchDB().finally(() => { if (!document.hidden) startSyncLoop(); });
+})();
