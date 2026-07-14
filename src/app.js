@@ -13,8 +13,22 @@
       });
     } catch (_) {}
 
-    const BACKEND_URL = "https://music-backend-qjvk.onrender.com";
-    // URL Mini App для deep-link шеринга (?startapp=<id>) — приходит из /api/data.
+    const SUPABASE_URL = "https://ftpofwybzvhvyukrshcm.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0cG9md3lienZodnl1a3JzaGNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5OTQ3NzEsImV4cCI6MjA5OTU3MDc3MX0.Ha6pDI9U8D_Dg6gQgggJ7UXduXHHlcHcK1Imi3dcwok";
+    const SUPABASE_AUTH_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/auth`;
+    const SUPABASE_PARSE_LINK_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/parse-link`;
+    const SUPABASE_SHARE_MESSAGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/share-message`;
+
+    let supabase = null;
+    try {
+      if (typeof window.supabase !== 'undefined') {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+    } catch (err) {
+      console.error("Failed to initialize Supabase client:", err);
+    }
+
+    // URL Mini App для deep-link шеринга (?startapp=<id>)
     let miniAppUrl = '';
 
     // Telegram initData — подписанная строка для серверной проверки
@@ -278,10 +292,10 @@
       user.notificationsEnabled = next;
       applyNotificationsToggle();
       try {
-        const res = await fetch(`${BACKEND_URL}/api/notifications/subscribe`, {
-          method: 'POST', headers: authHeaders(), body: JSON.stringify({ enabled: next })
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const { error } = await supabase
+          .from('notification_subscribers')
+          .upsert({ user_id: user.userId, username: user.username.replace('@', ''), chat_id: user.userId, enabled: next }, { onConflict: 'user_id' });
+        if (error) throw error;
         showToast(next ? 'Уведомления включены' : 'Уведомления выключены', 'success');
       } catch (e) {
         console.error('Notifications toggle error:', e);
@@ -401,8 +415,14 @@
 
       if (canShareMessage) {
         try {
-          const res = await fetch(`${BACKEND_URL}/api/releases/${encodeURIComponent(rel.id)}/share-message`, {
-            method: 'POST', headers: authHeaders()
+          const token = (await supabase.auth.getSession()).data.session?.access_token;
+          const res = await fetch(SUPABASE_SHARE_MESSAGE_FUNCTION_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token || ''}`
+            },
+            body: JSON.stringify({ releaseId: rel.id })
           });
           if (!res.ok) throw new Error('HTTP ' + res.status);
           const data = await res.json();
@@ -1074,15 +1094,14 @@
       if (!cleanName) return showToast('У пользователя нет @username');
       const isCurrentlyBlocked = blockedUsers.includes(cleanName);
       try {
-        const res = await fetch(`${BACKEND_URL}/api/block`, {
-          method: 'POST', headers: authHeaders(),
-          body: JSON.stringify({ username: cleanName, blocked: !isCurrentlyBlocked })
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
         if (isCurrentlyBlocked) {
+          const { error } = await supabase.from('blocked_users').delete().eq('username', cleanName);
+          if (error) throw error;
           blockedUsers = blockedUsers.filter(u => u !== cleanName);
           showToast(`@${cleanName} разблокирован`);
         } else {
+          const { error } = await supabase.from('blocked_users').insert({ username: cleanName, user_id: activeProfile.authorId || null });
+          if (error) throw error;
           blockedUsers.push(cleanName);
           showToast(`@${cleanName} заблокирован`);
         }
@@ -1096,11 +1115,8 @@
       if (!cleanName) return showToast('У пользователя нет @username');
       if (!confirm(`Удалить ВСЕ рецензии @${cleanName}?`)) return;
       try {
-        const res = await fetch(`${BACKEND_URL}/api/reviews/by-author/${encodeURIComponent(cleanName)}`, {
-          method: 'DELETE', headers: authHeaders()
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
+        const { error } = await supabase.from('reviews').delete().eq('authorUsername', cleanName);
+        if (error) throw error;
         const goneReviewIds = new Set(
           reviews.filter(r => cleanUsername(r.authorUsername || r.author) === cleanName).map(r => r.id)
         );
@@ -1199,6 +1215,46 @@
     }
 
     // Загрузка: кэш мгновенно → сервер фоном
+    let isAuthenticating = false;
+    async function authenticateWithSupabase() {
+      if (!supabase) return false;
+      if (user.isAuthenticated) return true;
+      if (!tg.initData) return false;
+
+      isAuthenticating = true;
+      try {
+        const res = await fetch(SUPABASE_AUTH_FUNCTION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: tg.initData })
+        });
+        if (!res.ok) throw new Error('Auth failed: ' + res.status);
+        const data = await res.json();
+
+        if (data.token) {
+          await supabase.auth.setSession({
+            access_token: data.token,
+            refresh_token: data.token
+          });
+
+          user.userId = data.user.userId;
+          user.username = data.user.username;
+          user.isAdmin = data.user.isAdmin;
+          user.isBlocked = data.user.isBlocked;
+          user.isAuthenticated = data.user.isAuthenticated;
+          user.role = data.user.isAdmin ? 'Создатель' : 'Пользователь';
+          applyUserRole();
+          applyNotificationsToggle();
+        }
+        return true;
+      } catch (err) {
+        console.error("Supabase authentication failed:", err);
+        return false;
+      } finally {
+        isAuthenticating = false;
+      }
+    }
+
     async function fetchDB() {
         setSyncStatus('Загрузка релизов', 'syncing');
 
@@ -1209,46 +1265,92 @@
           setSyncStatus('Обновляем релизы', 'syncing');
         }
 
-        // 2. Загружаем свежие данные с сервера
+        // 2. Загружаем свежие данные с сервера Supabase
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000);
+            await authenticateWithSupabase();
 
-            const res = await fetch(`${BACKEND_URL}/api/data`, {
-                signal: controller.signal,
-                headers: authHeaders()
-            });
-            clearTimeout(timeoutId);
+            const releasesPromise = supabase.from('releases').select('*').order('timestamp', { ascending: false }).limit(200);
+            const reviewsPromise = supabase.from('reviews_view').select('*').order('timestamp', { ascending: false }).limit(1000);
+            const commentsPromise = supabase.from('comments_view').select('*').order('timestamp', { ascending: false }).limit(2000);
 
-            if(!res.ok) throw new Error('HTTP ' + res.status);
-            const data = await res.json();
+            let likesPromise = Promise.resolve({ data: [] });
+            let reactionsPromise = Promise.resolve({ data: [] });
+            let subscriberPromise = Promise.resolve({ data: null });
+            let blockedUsersPromise = Promise.resolve({ data: [] });
+
+            if (user.isAuthenticated && user.userId) {
+              likesPromise = supabase.from('likes').select('release_id').eq('user_id', user.userId);
+              reactionsPromise = supabase.from('review_reactions').select('review_id').eq('user_id', user.userId);
+              subscriberPromise = supabase.from('notification_subscribers').select('enabled').eq('user_id', user.userId).maybeSingle();
+            }
+
+            if (user.isAdmin) {
+              blockedUsersPromise = supabase.from('blocked_users').select('username');
+            }
+
+            const [
+              releasesRes,
+              reviewsRes,
+              commentsRes,
+              likesRes,
+              reactionsRes,
+              subRes,
+              blockedRes
+            ] = await Promise.all([
+              releasesPromise,
+              reviewsPromise,
+              commentsPromise,
+              likesPromise,
+              reactionsPromise,
+              subscriberPromise,
+              blockedUsersPromise
+            ]);
+
+            if (releasesRes.error) throw releasesRes.error;
+            if (reviewsRes.error) throw reviewsRes.error;
+            if (commentsRes.error) throw commentsRes.error;
+
+            const likes = (likesRes.data || []).map(l => l.release_id);
+            const myReactions = (reactionsRes.data || []).map(r => r.review_id);
+            const blockedList = (blockedRes.data || []).map(b => b.username);
+
+            if (subRes.data) {
+              user.notificationsEnabled = subRes.data.enabled !== false;
+              applyNotificationsToggle();
+            }
+
+            const data = {
+              releases: releasesRes.data || [],
+              reviews: reviewsRes.data || [],
+              comments: commentsRes.data || [],
+              likes,
+              myReactions,
+              blockedUsers: blockedList,
+              currentUser: {
+                userId: user.userId,
+                displayName: user.username,
+                isAdmin: user.isAdmin,
+                isBlocked: user.isBlocked,
+                isAuthenticated: user.isAuthenticated,
+                notificationsEnabled: user.notificationsEnabled
+              }
+            };
 
             // Сохраняем в кэш и обновляем UI
             saveCache(data);
             applyData(data);
             setSyncStatus('Всё актуально', 'ok');
         } catch(e) {
-            if (e.name === 'AbortError') {
-                console.error("Сервер Render не успел проснуться за 60 секунд.");
-            } else {
-                console.error("Ошибка загрузки БД:", e.message || e);
-            }
+            console.error("Ошибка загрузки БД:", e.message || e);
             setSyncStatus(cached ? 'Оффлайн (кэш)' : 'Нет соединения', 'warn');
             if (!cached) showToast("Работаем в оффлайн-режиме (сервер недоступен)");
         }
     }
 
-    // --- REAL-TIME СИНХРОНИЗАЦИЯ (long-poll /api/sync/releases) ---
-    // Курсор — строка: токены (time_ns) превышают Number.MAX_SAFE_INTEGER,
-    // числом JS терял бы точность и переотдавал бы те же события в цикле.
     let syncCursor = '0';
     let syncLoopActive = false;
-    let syncAbortController = null;
-    let syncRetryTimer = null;
-    const SYNC_RETRY_BASE_MS = 5000, SYNC_RETRY_MAX_MS = 30000;
-    let syncRetryDelay = SYNC_RETRY_BASE_MS;
 
-    // Применяет инкрементальную дельту от сервера к локальному состоянию.
+    // Применяет инкрементальную дельту от Realtime/сервера к локальному состоянию.
     function applySyncDelta(data) {
       let changed = false;
 
@@ -1300,7 +1402,7 @@
         if (comments.length !== before) commentsChanged = true;
       });
 
-      // Удалённые рецензии/релизы уносят свои комментарии (каскад на сервере).
+      // Удалённые рецензии/релизы уносят свои комментарии (каскад).
       const goneReviewIds = new Set(data.deletedReviewIds || []);
       const goneReleaseIds = new Set(data.deletedReleaseIds || []);
       if (goneReviewIds.size || goneReleaseIds.size) {
@@ -1308,8 +1410,6 @@
         comments = comments.filter(c => !goneReviewIds.has(c.reviewId) && !goneReleaseIds.has(c.relId));
         if (comments.length !== before) commentsChanged = true;
       }
-
-      if (data.cursor != null && String(data.cursor) !== '0') syncCursor = String(data.cursor);
 
       if (commentsChanged) updateCommentsMap();
 
@@ -1330,46 +1430,142 @@
       }
     }
 
-    async function syncLoopTick() {
-      if (!syncLoopActive) return;
-      syncAbortController = new AbortController();
-      try {
-        const res = await fetch(
-          `${BACKEND_URL}/api/sync/releases?since=${syncCursor}&waitMs=25000`,
-          { headers: authHeaders(), signal: syncAbortController.signal }
-        );
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        applySyncDelta(data);
-        setSyncStatus('Всё актуально', 'ok');
-        syncRetryDelay = SYNC_RETRY_BASE_MS; // успех — сбрасываем backoff
-        if (syncLoopActive) {
-          // Сервер сам держит long-poll до 25 с. Небольшой зазор — защита от
-          // tight-loop, если сервер вдруг начнёт отвечать мгновенно.
-          syncRetryTimer = setTimeout(syncLoopTick, 600);
-        }
-      } catch (e) {
-        if (e.name === 'AbortError') return;
-        console.error('Sync error:', e.message || e);
-        setSyncStatus('Оффлайн (кэш)', 'warn');
-        if (syncLoopActive) {
-          // Экспоненциальный backoff: 5с → 10с → 20с → 30с (потолок).
-          syncRetryTimer = setTimeout(syncLoopTick, syncRetryDelay);
-          syncRetryDelay = Math.min(syncRetryDelay * 2, SYNC_RETRY_MAX_MS);
-        }
-      }
-    }
+    async function syncLoopTick() {}
+
+    let supabaseChannel = null;
 
     function startSyncLoop() {
-      if (syncLoopActive) return;
+      if (!supabase) return;
+      if (supabaseChannel) return;
       syncLoopActive = true;
-      syncLoopTick();
+      setSyncStatus('Синхронизация...', 'syncing');
+
+      supabaseChannel = supabase
+        .channel('public-db-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'releases' },
+          (payload) => {
+            console.log('Realtime releases change:', payload);
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              applySyncDelta({ releases: [payload.new] });
+            } else if (payload.eventType === 'DELETE') {
+              applySyncDelta({ deletedReleaseIds: [payload.old.id] });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'reviews' },
+          async (payload) => {
+            console.log('Realtime reviews change:', payload);
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const { data: rev } = await supabase.from('reviews_view').select('*').eq('id', payload.new.id).maybeSingle();
+              if (rev) {
+                applySyncDelta({ reviews: [rev] });
+              }
+            } else if (payload.eventType === 'DELETE') {
+              applySyncDelta({ deletedReviewIds: [payload.old.id] });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'review_comments' },
+          async (payload) => {
+            console.log('Realtime comments change:', payload);
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const { data: comm } = await supabase.from('comments_view').select('*').eq('id', payload.new.id).maybeSingle();
+              if (comm) {
+                applySyncDelta({ comments: [comm] });
+              }
+            } else if (payload.eventType === 'DELETE') {
+              applySyncDelta({ deletedCommentIds: [payload.old.id] });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'likes' },
+          (payload) => {
+            console.log('Realtime likes change:', payload);
+            if (user.userId) {
+              const uId = Number(payload.new?.user_id || payload.old?.user_id);
+              if (uId === Number(user.userId)) {
+                if (payload.eventType === 'INSERT') {
+                  likedSet.add(payload.new.release_id);
+                } else if (payload.eventType === 'DELETE') {
+                  likedSet.delete(payload.old.release_id);
+                }
+                renderReleases();
+                if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
+              }
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'review_reactions' },
+          async (payload) => {
+            console.log('Realtime review_reactions change:', payload);
+            const revId = payload.new?.review_id || payload.old?.review_id;
+            if (revId) {
+              const { data: rev } = await supabase.from('reviews_view').select('*').eq('id', revId).maybeSingle();
+              if (rev) {
+                applySyncDelta({ reviews: [rev] });
+              }
+            }
+            if (user.userId) {
+              const uId = Number(payload.new?.user_id || payload.old?.user_id);
+              if (uId === Number(user.userId)) {
+                if (payload.eventType === 'INSERT') {
+                  reactedSet.add(revId);
+                } else if (payload.eventType === 'DELETE') {
+                  reactedSet.delete(revId);
+                }
+                if (!document.getElementById('screen-feed').classList.contains('hidden')) renderFeed();
+              }
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'blocked_users' },
+          (payload) => {
+            console.log('Realtime blocked_users change:', payload);
+            if (payload.eventType === 'INSERT') {
+              if (!blockedUsers.includes(payload.new.username)) blockedUsers.push(payload.new.username);
+              if (payload.new.username === user.username.replace('@', '')) {
+                user.isBlocked = true;
+                showToast("Ваш аккаунт заблокирован администратором");
+                applyUserRole();
+              }
+            } else if (payload.eventType === 'DELETE') {
+              blockedUsers = blockedUsers.filter(u => u !== payload.old.username);
+              if (payload.old.username === user.username.replace('@', '')) {
+                user.isBlocked = false;
+                showToast("Ваш аккаунт разблокирован");
+                applyUserRole();
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('Supabase Realtime status:', status);
+          if (status === 'SUBSCRIBED') {
+            setSyncStatus('Всё актуально', 'ok');
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            setSyncStatus('Нет соединения', 'warn');
+          }
+        });
     }
 
     function stopSyncLoop() {
       syncLoopActive = false;
-      if (syncAbortController) syncAbortController.abort();
-      if (syncRetryTimer) { clearTimeout(syncRetryTimer); syncRetryTimer = null; }
+      if (supabaseChannel) {
+        supabase.removeChannel(supabaseChannel);
+        supabaseChannel = null;
+      }
     }
 
     // Пауза при скрытой вкладке, возобновление с последнего курсора.
@@ -1537,7 +1733,15 @@
     }
 
     async function fetchBackendParseData(link) {
-        const res = await fetch(`${BACKEND_URL}/api/parse_link`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ link }) });
+        const token = (await supabase.auth.getSession()).data.session?.access_token;
+        const res = await fetch(SUPABASE_PARSE_LINK_FUNCTION_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token || ''}`
+            },
+            body: JSON.stringify({ link })
+        });
         if (!res.ok) throw new Error('Backend Fail');
         const data = await res.json();
 
@@ -1694,10 +1898,9 @@
       
       const newRel = { id: genId(), name: title, artist: artist, img: cover, link: currentPendingLink, genre: selectedGenreForAdd, timestamp: Date.now() };
       
-      // Отправка в БД Render (с обработкой ошибок)
       try {
-        const saveRes = await fetch(`${BACKEND_URL}/api/releases`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(newRel) });
-        if (!saveRes.ok) throw new Error('HTTP ' + saveRes.status);
+        const { error } = await supabase.from('releases').insert([newRel]);
+        if (error) throw error;
       } catch(e) {
         console.error('Ошибка сохранения релиза:', e);
         showToast('Ошибка сохранения — попробуйте позже', 'error');
@@ -1744,20 +1947,20 @@
       else likedSet.delete(id);
       applyLikeState(id, isLiking);
 
-      // Отправка в БД Render с откатом при ошибке
-      fetch(`${BACKEND_URL}/api/likes`, {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({ releaseId: id, isLike: isLiking })
-      }).then(res => {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+      // Отправка в БД Supabase с откатом при ошибке
+      const likePromise = isLiking
+        ? supabase.from('likes').insert({ release_id: id, user_id: user.userId, username: user.username.replace('@', '') })
+        : supabase.from('likes').delete().match({ release_id: id, user_id: user.userId });
+
+      likePromise.then(({ error }) => {
+        if (error) throw error;
       }).catch(err => {
-        console.error('Like save error:', err);
+        console.error('Like save/delete error:', err);
         // Откат оптимистичного изменения
         if (isLiking) likedSet.delete(id);
         else likedSet.add(id);
         applyLikeState(id, !isLiking);
-        showToast('Не удалось сохранить лайк');
+        showToast('Не удалось обновить лайк');
       });
     }
 
@@ -1962,8 +2165,8 @@
       if (!pendingReviewDelete) return;
 
       try {
-        const res = await fetch(`${BACKEND_URL}/api/reviews/${pendingReviewDelete}`, { method: 'DELETE', headers: authHeaders() });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const { error } = await supabase.from('reviews').delete().eq('id', pendingReviewDelete);
+        if (error) throw error;
       } catch(e) {
         console.error('Ошибка удаления рецензии:', e);
         showToast('Ошибка удаления — попробуйте позже', 'error');
@@ -1996,8 +2199,8 @@
       if (!releaseToDelete) return;
       
       try {
-        const res = await fetch(`${BACKEND_URL}/api/releases/${releaseToDelete}`, { method: 'DELETE', headers: authHeaders() });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const { error } = await supabase.from('releases').delete().eq('id', releaseToDelete);
+        if (error) throw error;
       } catch(e) {
         console.error('Ошибка удаления релиза:', e);
         showToast('Ошибка удаления — попробуйте позже', 'error');
@@ -2062,9 +2265,23 @@
         timestamp: Date.now()
       };
 
+      const dbRev = {
+        id: newRev.id,
+        release_id: newRev.relId,
+        author_id: newRev.authorId,
+        author_username: newRev.authorUsername,
+        author_display_name: newRev.author,
+        text: newRev.text,
+        base_rating: newRev.baseRating,
+        criteria: newRev.criteria,
+        rating: newRev.rating,
+        objective_rating: newRev.objectiveRating,
+        timestamp: newRev.timestamp
+      };
+
       try {
-        const res = await fetch(`${BACKEND_URL}/api/reviews`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(newRev) });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const { error } = await supabase.from('reviews').insert([dbRev]);
+        if (error) throw error;
       } catch(e) {
         console.error('Ошибка сохранения рецензии:', e);
         showToast('Ошибка сохранения — попробуйте позже', 'error');
@@ -2113,13 +2330,17 @@
       renderReviews();
 
       try {
-        const res = await fetch(`${BACKEND_URL}/api/reviews/${encodeURIComponent(reviewId)}/react`, {
-          method: 'POST', headers: authHeaders(), body: JSON.stringify({ reacted })
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        if (typeof data.reactionCount === 'number') {
-          review.reactionCount = data.reactionCount;
+        const reactionPromise = reacted
+          ? supabase.from('review_reactions').insert({ review_id: reviewId, user_id: user.userId, username: user.username.replace('@', '') })
+          : supabase.from('review_reactions').delete().match({ review_id: reviewId, user_id: user.userId });
+
+        const { error } = await reactionPromise;
+        if (error) throw error;
+        
+        // Fetch updated reactionCount from database view
+        const { data: rev } = await supabase.from('reviews_view').select('reactionCount').eq('id', reviewId).maybeSingle();
+        if (rev && typeof rev.reactionCount === 'number') {
+          review.reactionCount = rev.reactionCount;
           renderReviews();
         }
       } catch (e) {
@@ -2199,12 +2420,19 @@
       updateCommentsMap();
       renderReviews();
 
+      const dbComment = {
+        id: newComment.id,
+        review_id: newComment.reviewId,
+        author_id: newComment.authorId,
+        author_username: newComment.authorUsername,
+        author_display_name: newComment.author,
+        text: newComment.text,
+        timestamp: newComment.timestamp
+      };
+
       try {
-        const res = await fetch(`${BACKEND_URL}/api/reviews/${encodeURIComponent(reviewId)}/comments`, {
-          method: 'POST', headers: authHeaders(),
-          body: JSON.stringify({ id: newComment.id, text: text })
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const { error } = await supabase.from('review_comments').insert([dbComment]);
+        if (error) throw error;
         showToast('Комментарий добавлен', 'success');
       } catch (e) {
         console.error('Comment add error:', e);
@@ -2225,10 +2453,8 @@
       updateCommentsMap();
       renderReviews();
       try {
-        const res = await fetch(`${BACKEND_URL}/api/comments/${encodeURIComponent(commentId)}`, {
-          method: 'DELETE', headers: authHeaders()
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const { error } = await supabase.from('review_comments').delete().eq('id', commentId);
+        if (error) throw error;
         showToast('Комментарий удалён', 'success');
       } catch (e) {
         console.error('Comment delete error:', e);
