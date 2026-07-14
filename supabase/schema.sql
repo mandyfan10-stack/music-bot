@@ -93,13 +93,14 @@ SELECT
     r.release_id as "relId",
     r.author_id as "authorId",
     r.author_username as "authorUsername",
-    r.author_display_name as "authorDisplayName",
+    r.author_display_name as "author",
     r.text,
     r.base_rating as "baseRating",
     r.criteria,
     r.rating,
     r.objective_rating as "objectiveRating",
     r.timestamp,
+    to_char(to_timestamp(r.timestamp / 1000.0) AT TIME ZONE 'UTC', 'DD.MM.YYYY') as "date",
     COALESCE((SELECT count(*)::int FROM public.review_reactions rr WHERE rr.review_id = r.id), 0) AS "reactionCount",
     EXISTS (SELECT 1 FROM public.admins a WHERE a.username = lower(r.author_username)) AS "authorIsAdmin"
 FROM public.reviews r;
@@ -111,9 +112,10 @@ SELECT
     c.review_id as "reviewId",
     c.author_id as "authorId",
     c.author_username as "authorUsername",
-    c.author_display_name as "authorDisplayName",
+    c.author_display_name as "author",
     c.text,
     c.timestamp,
+    to_char(to_timestamp(c.timestamp / 1000.0) AT TIME ZONE 'UTC', 'DD.MM.YYYY') as "date",
     EXISTS (SELECT 1 FROM public.admins a WHERE a.username = lower(c.author_username)) AS "authorIsAdmin"
 FROM public.review_comments c;
 
