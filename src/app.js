@@ -224,14 +224,35 @@
     let lastErrorToastTs = 0;
     function reportGlobalError(label, err) {
       console.error('[' + label + ']', err);
+      const msg = err?.message || String(err);
+      
+      let debugDiv = document.getElementById('visual-debug-console');
+      if (!debugDiv) {
+        debugDiv = document.createElement('div');
+        debugDiv.id = 'visual-debug-console';
+        debugDiv.style.cssText = 'position:fixed; bottom:10px; left:10px; right:10px; z-index:999999; background:rgba(255,0,0,0.9); color:white; padding:12px; border-radius:8px; font-family:monospace; font-size:11px; max-height:150px; overflow-y:auto; word-break:break-all; border:1px solid white;';
+        document.body.appendChild(debugDiv);
+      }
+      debugDiv.innerHTML += `<div><strong>[${label}]</strong> ${msg}</div>`;
+
       const now = Date.now();
       if (now - lastErrorToastTs > 8000) {
         lastErrorToastTs = now;
-        try { showToast('Что-то пошло не так'); } catch (_) {}
+        try { showToast('Ошибка: ' + msg.substring(0, 30)); } catch (_) {}
       }
     }
     window.addEventListener('error', (e) => reportGlobalError('error', e.error || e.message));
     window.addEventListener('unhandledrejection', (e) => reportGlobalError('promise', e.reason));
+
+    // Логируем параметры инициализации для диагностики
+    setTimeout(() => {
+      try {
+        const tgDataSnippet = tg.initData ? tg.initData.substring(0, 30) + '...' : 'empty';
+        reportGlobalError('debug-init', `username: "${user.username}", hasSupabase: ${typeof window.supabase !== 'undefined'}, tgInitData: ${tgDataSnippet}`);
+      } catch (e) {
+        reportGlobalError('debug-init-fail', e);
+      }
+    }, 200);
 
     // Фолбэк-обложка: событие error не всплывает — слушаем в фазе перехвата.
     document.addEventListener('error', (event) => {
