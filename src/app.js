@@ -49,7 +49,7 @@
       isAuthenticated: false,
       notificationsEnabled: true
     };
-    let blockedUsers = [];
+    let blockedUsers = [], blockedUserIds = new Set();
 
     // Заголовки авторизации для всех API-запросов
     function authHeaders(extra = {}) {
@@ -293,9 +293,9 @@
       user.notificationsEnabled = next;
       applyNotificationsToggle();
       try {
-        const { error } = await supabase
-          .from('notification_subscribers')
-          .upsert({ user_id: user.userId, username: user.username.replace('@', ''), chat_id: user.userId, enabled: next }, { onConflict: 'user_id' });
+        const { error } = await supabase.rpc('set_notification_enabled', {
+          p_enabled: next
+        });
         if (error) throw error;
         showToast(next ? 'Уведомления включены' : 'Уведомления выключены', 'success');
       } catch (e) {
@@ -1038,7 +1038,9 @@
         }
 
         // Проверяем блокировку профиля
-        const isProfileBlocked = blockedUsers.includes(profileCleanName);
+        const isProfileBlocked = profile.id != null
+          ? blockedUserIds.has(String(profile.id))
+          : blockedUsers.includes(profileCleanName);
         if (isProfileBlocked) {
             pRole.innerText = 'Заблокирован';
             pRole.className = "px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6";
@@ -1091,20 +1093,24 @@
     // --- АДМИН-ФУНКЦИИ: блокировка и удаление ---
     async function toggleBlockUser() {
       if (!activeProfile || !user.isAdmin) return;
+      if (activeProfile.id == null) return showToast('Не удалось определить Telegram ID пользователя');
+      const targetId = String(activeProfile.id);
       const cleanName = activeProfile.username || cleanUsername(activeProfile.displayName);
-      if (!cleanName) return showToast('У пользователя нет @username');
-      const isCurrentlyBlocked = blockedUsers.includes(cleanName);
+      const isCurrentlyBlocked = blockedUserIds.has(targetId);
       try {
+        const { error } = await supabase.rpc('admin_set_block', {
+          p_user_id: Number(activeProfile.id),
+          p_blocked: !isCurrentlyBlocked
+        });
+        if (error) throw error;
         if (isCurrentlyBlocked) {
-          const { error } = await supabase.from('blocked_users').delete().eq('username', cleanName);
-          if (error) throw error;
+          blockedUserIds.delete(targetId);
           blockedUsers = blockedUsers.filter(u => u !== cleanName);
-          showToast(`@${cleanName} разблокирован`);
+          showToast(`@${cleanName || targetId} разблокирован`);
         } else {
-          const { error } = await supabase.from('blocked_users').insert({ username: cleanName, user_id: activeProfile.authorId || null });
-          if (error) throw error;
-          blockedUsers.push(cleanName);
-          showToast(`@${cleanName} заблокирован`);
+          blockedUserIds.add(targetId);
+          if (cleanName && !blockedUsers.includes(cleanName)) blockedUsers.push(cleanName);
+          showToast(`@${cleanName || targetId} заблокирован`);
         }
         openProfileModal(activeProfile);
       } catch(e) { showToast('Ошибка: ' + e.message); }
@@ -1112,20 +1118,23 @@
 
     async function deleteAllReviewsByUser() {
       if (!activeProfile || !user.isAdmin) return;
-      const cleanName = activeProfile.username || cleanUsername(activeProfile.displayName);
-      if (!cleanName) return showToast('У пользователя нет @username');
-      if (!confirm(`Удалить ВСЕ рецензии @${cleanName}?`)) return;
+      if (activeProfile.id == null) return showToast('Не удалось определить Telegram ID пользователя');
+      const targetId = String(activeProfile.id);
+      const displayName = activeProfile.displayName || activeProfile.username || targetId;
+      if (!confirm(`Удалить ВСЕ рецензии ${displayName}?`)) return;
       try {
-        const { error } = await supabase.from('reviews').delete().eq('authorUsername', cleanName);
+        const { data: deleted, error } = await supabase.rpc('admin_delete_reviews', {
+          p_user_id: Number(activeProfile.id)
+        });
         if (error) throw error;
         const goneReviewIds = new Set(
-          reviews.filter(r => cleanUsername(r.authorUsername || r.author) === cleanName).map(r => r.id)
+          reviews.filter(r => String(r.authorId) === targetId).map(r => r.id)
         );
-        reviews = reviews.filter(r => cleanUsername(r.authorUsername || r.author) !== cleanName);
+        reviews = reviews.filter(r => String(r.authorId) !== targetId);
         updateReviewsMap();
         comments = comments.filter(c => !goneReviewIds.has(c.reviewId));
         updateCommentsMap();
-        showToast(`Удалено ${data.deleted} рецензий`);
+        showToast(`Удалено ${Number(deleted) || 0} рецензий`);
         openProfileModal(activeProfile);
       } catch(e) { showToast('Ошибка: ' + e.message); }
     }
@@ -1192,6 +1201,7 @@
       likedSet = new Set(data.likes || []);
       reactedSet = new Set(data.myReactions || []);
       blockedUsers = data.blockedUsers || [];
+      blockedUserIds = new Set((data.blockedUserIds || []).map(String));
       if (typeof data.miniAppUrl === 'string') miniAppUrl = data.miniAppUrl;
       if (data.syncCursor != null) syncCursor = String(data.syncCursor);
       if (data.currentUser) {
@@ -1290,7 +1300,7 @@
             }
 
             if (user.isAdmin) {
-              blockedUsersPromise = supabase.from('blocked_users').select('username');
+              blockedUsersPromise = supabase.from('blocked_users').select('user_id, username');
             }
 
             const [
@@ -1318,6 +1328,7 @@
             const likes = (likesRes.data || []).map(l => l.release_id);
             const myReactions = (reactionsRes.data || []).map(r => r.review_id);
             const blockedList = (blockedRes.data || []).map(b => b.username);
+            const blockedIds = (blockedRes.data || []).map(b => String(b.user_id));
 
             if (subRes.data) {
               user.notificationsEnabled = subRes.data.enabled !== false;
@@ -1331,6 +1342,7 @@
               likes,
               myReactions,
               blockedUsers: blockedList,
+              blockedUserIds: blockedIds,
               currentUser: {
                 userId: user.userId,
                 displayName: user.username,
@@ -1540,14 +1552,16 @@
             console.log('Realtime blocked_users change:', payload);
             if (payload.eventType === 'INSERT') {
               if (!blockedUsers.includes(payload.new.username)) blockedUsers.push(payload.new.username);
-              if (payload.new.username === user.username.replace('@', '')) {
+              blockedUserIds.add(String(payload.new.user_id));
+              if (String(payload.new.user_id) === String(user.userId)) {
                 user.isBlocked = true;
                 showToast("Ваш аккаунт заблокирован администратором");
                 applyUserRole();
               }
             } else if (payload.eventType === 'DELETE') {
               blockedUsers = blockedUsers.filter(u => u !== payload.old.username);
-              if (payload.old.username === user.username.replace('@', '')) {
+              blockedUserIds.delete(String(payload.old.user_id));
+              if (String(payload.old.user_id) === String(user.userId)) {
                 user.isBlocked = false;
                 showToast("Ваш аккаунт разблокирован");
                 applyUserRole();
@@ -2270,23 +2284,21 @@
         timestamp: Date.now()
       };
 
-      const dbRev = {
-        id: newRev.id,
-        release_id: newRev.relId,
-        author_id: newRev.authorId,
-        author_username: newRev.authorUsername,
-        author_display_name: newRev.author,
-        text: newRev.text,
-        base_rating: newRev.baseRating,
-        criteria: newRev.criteria,
-        rating: newRev.rating,
-        objective_rating: newRev.objectiveRating,
-        timestamp: newRev.timestamp
-      };
-
       try {
-        const { error } = await supabase.from('reviews').insert([dbRev]);
+        const { data: created, error } = await supabase.rpc('create_review', {
+          p_release_id: newRev.relId,
+          p_text: newRev.text,
+          p_base_rating: newRev.baseRating,
+          p_criteria: newRev.criteria
+        }).single();
         if (error) throw error;
+        newRev.id = created.id;
+        newRev.author = created.author_display_name;
+        newRev.authorId = created.author_id;
+        newRev.authorUsername = created.author_username;
+        newRev.rating = Number(created.rating);
+        newRev.objectiveRating = Number(created.objective_rating);
+        newRev.timestamp = Number(created.timestamp);
       } catch(e) {
         console.error('Ошибка сохранения рецензии:', e);
         showToast('Ошибка сохранения — попробуйте позже', 'error');
@@ -2425,19 +2437,17 @@
       updateCommentsMap();
       renderReviews();
 
-      const dbComment = {
-        id: newComment.id,
-        review_id: newComment.reviewId,
-        author_id: newComment.authorId,
-        author_username: newComment.authorUsername,
-        author_display_name: newComment.author,
-        text: newComment.text,
-        timestamp: newComment.timestamp
-      };
-
       try {
-        const { error } = await supabase.from('review_comments').insert([dbComment]);
+        const { data: created, error } = await supabase.rpc('create_comment', {
+          p_review_id: newComment.reviewId,
+          p_text: newComment.text
+        }).single();
         if (error) throw error;
+        newComment.id = created.id;
+        newComment.author = created.author_display_name;
+        newComment.authorId = created.author_id;
+        newComment.authorUsername = created.author_username;
+        newComment.timestamp = Number(created.timestamp);
         showToast('Комментарий добавлен', 'success');
       } catch (e) {
         console.error('Comment add error:', e);

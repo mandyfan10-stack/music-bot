@@ -1,10 +1,11 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.7";
 import { verify } from "https://deno.land/x/djwt@v2.9/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-telegram-init-data",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-telegram-init-data",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -26,10 +27,13 @@ serve(async (req) => {
     const token = authHeader.substring(7);
     const jwtSecret = Deno.env.get("SUPABASE_JWT_SECRET");
     if (!jwtSecret) {
-      return new Response(JSON.stringify({ error: "Missing SUPABASE_JWT_SECRET variable" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Missing SUPABASE_JWT_SECRET variable" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const signingKey = await crypto.subtle.importKey(
@@ -37,34 +41,43 @@ serve(async (req) => {
       new TextEncoder().encode(jwtSecret),
       { name: "HMAC", hash: "SHA-256" },
       false,
-      ["verify"]
+      ["verify"],
     );
 
     let payload;
     try {
       payload = await verify(token, signingKey);
     } catch {
-      return new Response(JSON.stringify({ error: "Invalid token signature" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Invalid token signature" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const telegramUserId = payload.sub; // User's Telegram ID
     if (!telegramUserId) {
-      return new Response(JSON.stringify({ error: "Missing user ID in token claims" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Missing user ID in token claims" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // 2. Parse Request
     const { releaseId } = await req.json();
     if (!releaseId) {
-      return new Response(JSON.stringify({ error: "Missing releaseId parameter" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Missing releaseId parameter" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // 3. Fetch Release Info
@@ -89,10 +102,13 @@ serve(async (req) => {
     const miniAppUrl = Deno.env.get("MINI_APP_URL");
 
     if (!botToken || !miniAppUrl) {
-      return new Response(JSON.stringify({ error: "Sharing is not configured on the server" }), {
-        status: 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Sharing is not configured on the server" }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const sep = miniAppUrl.includes("?") ? "&" : "?";
@@ -102,7 +118,9 @@ serve(async (req) => {
     const name = (release.name || "").trim() || "Релиз";
     const img = release.img || "";
     const caption = `🎵 ${artist} — ${name}`;
-    const replyMarkup = { inline_keyboard: [[{ text: "Открыть релиз", url: deepLink }]] };
+    const replyMarkup = {
+      inline_keyboard: [[{ text: "Открыть релиз", url: deepLink }]],
+    };
 
     let result = {};
     if (img.startsWith("http://") || img.startsWith("https://")) {
@@ -129,7 +147,8 @@ serve(async (req) => {
       };
     }
 
-    const apiUrl = `https://api.telegram.org/bot${botToken}/savePreparedInlineMessage`;
+    const apiUrl =
+      `https://api.telegram.org/bot${botToken}/savePreparedInlineMessage`;
     const tgPayload = {
       user_id: parseInt(telegramUserId, 10),
       result: result,
@@ -147,10 +166,15 @@ serve(async (req) => {
     const tgData = await tgRes.json();
     if (!tgRes.ok || !tgData.ok) {
       console.error("savePreparedInlineMessage failed:", tgData);
-      return new Response(JSON.stringify({ error: "Failed to prepare share message from Telegram Bot API" }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Failed to prepare share message from Telegram Bot API",
+        }),
+        {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const preparedMessageId = tgData.result?.id;

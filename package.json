@@ -5,7 +5,7 @@
   "description": "XXII SOUND — Telegram Mini App (frontend)",
   "scripts": {
     "build:css": "tailwindcss -c tailwind.config.js -i src/tailwind.input.css -o src/tailwind.css --minify",
-    "test": "node --test"
+    "test": "node --test tests/*.test.js"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.17"
