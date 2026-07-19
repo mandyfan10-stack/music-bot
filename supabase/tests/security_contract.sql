@@ -1,7 +1,20 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(21);
+
+select has_function(
+  'public',
+  'tr_send_release_notification',
+  array[]::text[],
+  'notification webhook function is installed'
+);
+select has_trigger(
+  'public',
+  'releases',
+  'tr_releases_insert_notification',
+  'release notification trigger is installed'
+);
 
 insert into public.releases (id, name, artist, link)
 values ('release-1', 'Release', 'Artist', 'https://example.com/release');
