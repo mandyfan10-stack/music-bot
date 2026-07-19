@@ -350,7 +350,8 @@ serve(async (req) => {
     }
 
     const token = authHeader.substring(7);
-    const jwtSecret = Deno.env.get("SUPABASE_JWT_SECRET");
+    const jwtSecret = Deno.env.get("JWT_SECRET") ||
+      Deno.env.get("SUPABASE_JWT_SECRET");
     if (!jwtSecret) {
       return new Response(
         JSON.stringify({ error: "Missing SUPABASE_JWT_SECRET variable" }),

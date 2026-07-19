@@ -12,6 +12,34 @@ export class JwtAuthError extends Error {
   }
 }
 
+// The Edge gateway must validate the JWT signature before this claim check.
+export function requireGatewayVerifiedRole(
+  authorization: string | null,
+  requiredRole: string,
+): JwtPayload {
+  if (!authorization?.startsWith("Bearer ")) {
+    throw new JwtAuthError("Unauthorized", 401);
+  }
+  const parts = authorization.slice(7).split(".");
+  if (parts.length !== 3) throw new JwtAuthError("Invalid token", 401);
+  try {
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const bytes = Uint8Array.from(
+      atob(padded),
+      (character) => character.charCodeAt(0),
+    );
+    const payload = JSON.parse(new TextDecoder().decode(bytes)) as JwtPayload;
+    if (payload.role !== requiredRole) {
+      throw new JwtAuthError(`${requiredRole} role required`, 403);
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof JwtAuthError) throw error;
+    throw new JwtAuthError("Invalid token", 401);
+  }
+}
+
 export async function verifyRequiredRole(
   authorization: string | null,
   jwtSecret: string | undefined,

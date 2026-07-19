@@ -8,6 +8,9 @@ This directory is the only active backend. The FastAPI and MongoDB implementatio
 - `20260719000100_identity_expand.sql` is the backwards-compatible expansion phase. It adds stable Telegram `user_id` columns and reports identity mappings that require operator review.
 - `20260719000200_server_api_expand.sql` is the server/API rollout phase. It stops on unresolved identity or duplicate-review data, then installs server-authoritative RPCs, current-table authorization, RLS, uniqueness, and delivery idempotency while retaining the legacy username columns.
 - `20260719000250_notification_webhook.sql` replaces the legacy anon webhook with a service-role call whose URL and key are read from Supabase Vault.
+- 20260719000275_security_advisor_fixes.sql pins helper search paths, removes client execution from the trigger, and adds an explicit deny policy for delivery claims.
+- 20260719000280_private_rls_helpers.sql moves SECURITY DEFINER implementations out of the exposed schema while retaining compatible invoker wrappers.
+- 20260719000290_policy_normalization.sql removes redundant permissive SELECT policies without changing effective access.
 - `20260719000300_identity_contract.sql` is the delayed contract phase. After seven stable days it makes stable Telegram IDs mandatory and switches the administrator/block primary keys.
 
 Never run the repository baseline against an existing production database. Pull the real production baseline first and mark the matching baseline migration as applied only after a zero schema diff.

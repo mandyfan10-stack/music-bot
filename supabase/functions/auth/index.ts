@@ -68,7 +68,8 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const jwtSecret = Deno.env.get("SUPABASE_JWT_SECRET");
+    const jwtSecret = Deno.env.get("JWT_SECRET") ||
+      Deno.env.get("SUPABASE_JWT_SECRET");
     if (!supabaseUrl || !supabaseServiceKey || !jwtSecret) {
       return jsonResponse({
         error: "Supabase authentication is not configured",

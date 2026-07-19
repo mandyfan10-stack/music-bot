@@ -3,7 +3,11 @@ import {
   assertRejects,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.9/mod.ts";
-import { JwtAuthError, verifyRequiredRole } from "./jwt_auth.ts";
+import {
+  JwtAuthError,
+  requireGatewayVerifiedRole,
+  verifyRequiredRole,
+} from "./jwt_auth.ts";
 
 async function tokenForRole(role: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
@@ -56,5 +60,25 @@ Deno.test("service-role webhook rejects missing and tampered tokens", async () =
     () => verifyRequiredRole(`Bearer ${tampered}`, "secret", "service_role"),
     JwtAuthError,
     "Invalid token",
+  );
+});
+
+Deno.test("gateway-verified webhook requires the service_role claim", async () => {
+  const serviceToken = await tokenForRole(
+    "service_role",
+    "unused-by-claim-check",
+  );
+  const payload = requireGatewayVerifiedRole(
+    `Bearer ${serviceToken}`,
+    "service_role",
+  );
+  assertEquals(payload.role, "service_role");
+
+  const anonToken = await tokenForRole("anon", "unused-by-claim-check");
+  await assertRejects(
+    async () =>
+      requireGatewayVerifiedRole(`Bearer ${anonToken}`, "service_role"),
+    JwtAuthError,
+    "role required",
   );
 });

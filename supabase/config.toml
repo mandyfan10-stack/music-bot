@@ -1,1 +1,4 @@
 project_id = "ftpofwybzvhvyukrshcm"
+
+[functions.send-notifications]
+verify_jwt = true
