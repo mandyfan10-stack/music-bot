@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.7";
-import { JwtAuthError, verifyRequiredRole } from "../_shared/jwt_auth.ts";
+import {
+  JwtAuthError,
+  requireGatewayVerifiedRole,
+} from "../_shared/jwt_auth.ts";
 
 serve(async (req) => {
   const jsonHeaders = { "Content-Type": "application/json" };
@@ -11,9 +14,8 @@ serve(async (req) => {
         headers: jsonHeaders,
       });
     }
-    await verifyRequiredRole(
+    requireGatewayVerifiedRole(
       req.headers.get("Authorization"),
-      Deno.env.get("SUPABASE_JWT_SECRET"),
       "service_role",
     );
 
