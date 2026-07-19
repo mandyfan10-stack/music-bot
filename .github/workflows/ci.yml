@@ -39,3 +39,15 @@ jobs:
           test -f supabase/functions/send-notifications/index.ts
           test -f supabase/functions/share-message/index.ts
       - run: deno check --frozen supabase/functions/*/index.ts
+      - run: deno fmt --check supabase/functions
+      - run: deno test --frozen supabase/functions/_shared/*_test.ts
+  supabase-database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+      - run: supabase db start
+      - run: supabase test db
