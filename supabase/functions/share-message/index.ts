@@ -160,7 +160,8 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("Error in share-message function:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -282,9 +282,10 @@ async function scrapeMetadataFromPage(urlStr: string): Promise<[string, string, 
       if (!genre) {
         const links = doc.querySelectorAll('a');
         for (const a of Array.from(links)) {
-          const cls = (a.getAttribute("class") || "").toLowerCase();
+          const linkElement = a as unknown as { getAttribute(name: string): string | null; textContent?: string | null };
+          const cls = (linkElement.getAttribute("class") || "").toLowerCase();
           if (cls.includes("genre")) {
-            genre = a.textContent || "";
+            genre = linkElement.textContent || "";
             if (genre) break;
           }
         }
@@ -343,9 +344,11 @@ serve(async (req) => {
       ["verify"]
     );
 
-    let payload;
+    let payload: {
+      app_metadata?: { is_admin?: boolean };
+    };
     try {
-      payload = await verify(token, signingKey);
+      payload = await verify(token, signingKey) as typeof payload;
     } catch {
       return new Response(JSON.stringify({ error: "Invalid token signature" }), {
         status: 401,
@@ -472,7 +475,8 @@ serve(async (req) => {
     );
   } catch (err) {
     console.error("Error in parse-link function:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

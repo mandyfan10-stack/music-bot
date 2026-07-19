@@ -115,7 +115,8 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("Error in send-notifications function:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
