@@ -45,7 +45,13 @@ Deno.test("service-role webhook rejects missing and tampered tokens", async () =
     "Unauthorized",
   );
   const valid = await tokenForRole("service_role", "secret");
-  const tampered = valid.slice(0, -1) + (valid.endsWith("a") ? "b" : "a");
+  const segments = valid.split(".");
+  const signatureIndex = Math.floor(segments[2].length / 2);
+  const signatureCharacter = segments[2][signatureIndex];
+  segments[2] = segments[2].slice(0, signatureIndex) +
+    (signatureCharacter === "a" ? "b" : "a") +
+    segments[2].slice(signatureIndex + 1);
+  const tampered = segments.join(".");
   await assertRejects(
     () => verifyRequiredRole(`Bearer ${tampered}`, "secret", "service_role"),
     JwtAuthError,
