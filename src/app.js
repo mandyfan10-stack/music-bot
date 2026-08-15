@@ -37,9 +37,17 @@
     // URL Mini App для deep-link шеринга (?startapp=<id>)
     let miniAppUrl = '';
 
+    // Динамические геттеры Telegram WebApp данных
+    function getTgInitData() {
+      return tg.initData || window.Telegram?.WebApp?.initData || '';
+    }
+    function getTgUser() {
+      return tg.initDataUnsafe?.user || window.Telegram?.WebApp?.initDataUnsafe?.user;
+    }
+
     // Telegram initData — подписанная строка для серверной проверки
-    const tgInitData = tg.initData || '';
-    const tgUser = tg.initDataUnsafe?.user;
+    const tgInitData = getTgInitData();
+    const tgUser = getTgUser();
 
     // Проверка режима локальной разработки (localhost / ?admin=true)
     const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -51,7 +59,7 @@
     let initialIsAuth = false;
     let initialUserId = (tgUser && tgUser.id) || null;
 
-    if ((isLocalhost || isExplicitAdmin) && !tg.initData) {
+    if ((isLocalhost || isExplicitAdmin) && !getTgInitData()) {
       localDisplayName = '@monetka_man';
       initialIsAdmin = true;
       initialIsAuth = true;
@@ -74,7 +82,7 @@
     function authHeaders(extra = {}) {
       return {
         'Content-Type': 'application/json',
-        'X-Telegram-Init-Data': tgInitData,
+        'X-Telegram-Init-Data': getTgInitData(),
         ...extra
       };
     }
@@ -1250,14 +1258,15 @@
         const session = (await supabase.auth.getSession()).data.session;
         if (session?.access_token) return true;
       }
-      if (!tg.initData) return false;
+      const currentInitData = getTgInitData();
+      if (!currentInitData) return false;
 
       isAuthenticating = true;
       try {
         const res = await fetch(SUPABASE_AUTH_FUNCTION_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: tg.initData })
+          body: JSON.stringify({ initData: currentInitData })
         });
         if (!res.ok) throw new Error('Auth failed: ' + res.status);
         const data = await res.json();
