@@ -1870,14 +1870,13 @@
         }
       }
 
-      await ensureValidAuthSession();
-      const token = (await supabase?.auth.getSession())?.data?.session?.access_token || currentAuthToken;
-      
       const res = await fetch(SUPABASE_PARSE_LINK_FUNCTION_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || ''}`
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'X-Telegram-Init-Data': getTgInitData()
         },
         body: JSON.stringify({ link })
       });

@@ -113,7 +113,22 @@ test('cleanTrackTitle: removes platform names and video suffixes', () => {
   assert.strictEqual(cleanTrackTitle('Macan - Самый пьяный округ в мире (Audio)'), 'Macan - Самый пьяный округ в мире');
 });
 
-// --- parseArtistAndTitle ---
+test('parseArtistAndTitle: handles Yandex Music SEO title format', () => {
+  const parsedAlbum = parseArtistAndTitle(
+    'ммлк1 альбом мистер модератор, lafkrat слушать онлайн бесплатно на Яндекс Музыке в хорошем качестве',
+    'https://music.yandex.ru/album/43309876'
+  );
+  assert.strictEqual(parsedAlbum.artist, 'мистер модератор, lafkrat');
+  assert.strictEqual(parsedAlbum.name, 'ммлк1');
+
+  const parsedTrack = parseArtistAndTitle(
+    'некрономикон трек мистер модератор, lafkrat слушать онлайн бесплатно на Яндекс Музыке в хорошем качестве',
+    'https://music.yandex.ru/album/43309876/track/154249627'
+  );
+  assert.strictEqual(parsedTrack.artist, 'мистер модератор, lafkrat');
+  assert.strictEqual(parsedTrack.name, 'некрономикон');
+});
+
 test('parseArtistAndTitle: handles Yandex Music track format', () => {
   const parsed = parseArtistAndTitle('Трек «EUPHORIA» (SALUKI) слушать онлайн на Яндекс Музыке', 'https://music.yandex.ru/album/25394013/track/112638848');
   assert.strictEqual(parsed.artist, 'SALUKI');

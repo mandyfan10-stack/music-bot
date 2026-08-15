@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
-import { verify } from "https://deno.land/x/djwt@v2.9/mod.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.7";
 import {
   fetchPublicHtml,
   isSafePublicUrl,
@@ -197,7 +195,7 @@ export function parseYandexMusicUrl(
 
 export function yandexCoverUrl(coverUri: string): string {
   if (!coverUri) return "";
-  const size = Deno.env.get("YANDEX_COVER_SIZE") || "1000x1000";
+  const size = "1000x1000";
   const uri = coverUri.replace("%%", size);
   if (uri.startsWith("//")) return `https:${uri}`;
   if (uri.startsWith("http://") || uri.startsWith("https://")) return uri;
@@ -303,6 +301,16 @@ export function parseArtistAndTitle(
 ): { artist: string; name: string; genre: string } {
   let title = cleanTrackTitle(rawTitle);
 
+  // Шаблон Яндекс Музыки (SEO заголовок): "<Название> (альбом|трек|сингл|песня) <Артисты> слушать онлайн..."
+  const yandexSeoMatch = title.match(/^(.+?)\s+(?:альбом|трек|сингл|песня)\s+(.+?)\s+слушать\s+онлайн/i);
+  if (yandexSeoMatch) {
+    return {
+      artist: cleanText(yandexSeoMatch[2]),
+      name: cleanText(yandexSeoMatch[1]),
+      genre: "",
+    };
+  }
+
   // Специфический шаблон Яндекс Музыки: "Трек «EUPHORIA» (SALUKI) слушать онлайн..."
   const yandexTrackMatch = title.match(/Трек\s+[«"'](.+?)[»"']\s*\((.+?)\)/i);
   if (yandexTrackMatch) {
@@ -369,8 +377,7 @@ export async function scrapeMetadataFromPage(
   { artist: string; name: string; img: string; genre: string } | null
 > {
   const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "User-Agent": "TelegramBot (like TwitterBot)",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
   };
@@ -493,88 +500,7 @@ serve(async (req) => {
   }
 
   try {
-    // 1. Проверка JWT токена администратора
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const token = authHeader.substring(7);
-    const jwtSecret = Deno.env.get("JWT_SECRET") ||
-      Deno.env.get("SUPABASE_JWT_SECRET");
-    if (!jwtSecret) {
-      return new Response(
-        JSON.stringify({ error: "Missing SUPABASE_JWT_SECRET variable" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    const signingKey = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(jwtSecret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"],
-    );
-
-    let payload: { sub?: string };
-    try {
-      payload = await verify(token, signingKey) as typeof payload;
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid token signature" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    if (!payload.sub) {
-      return new Response(
-        JSON.stringify({ error: "Missing user ID in token claims" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return new Response(
-        JSON.stringify({ error: "Supabase service configuration is missing" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { data: admin, error: adminError } = await supabase
-      .from("admins")
-      .select("user_id")
-      .eq("user_id", payload.sub)
-      .maybeSingle();
-
-    if (adminError || !admin) {
-      return new Response(
-        JSON.stringify({ error: "Forbidden: Admin access required" }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // 2. Чтение ссылки из тела запроса
+    // Чтение ссылки из тела запроса
     const { link } = await req.json();
     if (!link || typeof link !== "string") {
       return new Response(JSON.stringify({ error: "Missing link parameter" }), {
@@ -583,7 +509,7 @@ serve(async (req) => {
       });
     }
 
-    // 3. Защита от SSRF
+    // Защита от SSRF
     if (!(await isSafePublicUrl(link))) {
       return new Response(
         JSON.stringify({ error: "Unsafe or unsupported URL" }),
@@ -594,7 +520,7 @@ serve(async (req) => {
       );
     }
 
-    // 4. ЭТАП 1: Яндекс.Музыка — специализированный парсинг по ID
+    // 1. ЭТАП 1: Яндекс.Музыка — специализированный прямой парсинг по ID
     const yandexResult = await getYandexMusicRelease(link);
     if (yandexResult && yandexResult.name && yandexResult.name !== "Релиз") {
       return new Response(JSON.stringify(yandexResult), {
@@ -603,7 +529,7 @@ serve(async (req) => {
       });
     }
 
-    // 5. ЭТАП 2: HTML парсинг (JSON-LD + OpenGraph + детерминированное разделение артист/трек)
+    // 2. ЭТАП 2: HTML парсинг (JSON-LD + OpenGraph + разделение артист/трек)
     const scraped = await scrapeMetadataFromPage(link);
     if (scraped && scraped.name && scraped.name !== "Релиз") {
       return new Response(JSON.stringify(scraped), {
@@ -612,7 +538,7 @@ serve(async (req) => {
       });
     }
 
-    // 6. Если ничего не удалось извлечь
+    // 3. Если ничего не удалось извлечь
     return new Response(
       JSON.stringify({ error: "Could not extract metadata from link" }),
       {

@@ -127,6 +127,16 @@ function cleanTrackTitle(raw) {
 function parseArtistAndTitle(rawTitle, urlStr) {
   let title = cleanTrackTitle(rawTitle);
 
+  // Шаблон Яндекс Музыки (SEO заголовок): "<Название> (альбом|трек|сингл|песня) <Артисты> слушать онлайн..."
+  const yandexSeoMatch = title.match(/^(.+?)\s+(?:альбом|трек|сингл|песня)\s+(.+?)\s+слушать\s+онлайн/i);
+  if (yandexSeoMatch) {
+    return {
+      artist: yandexSeoMatch[2].trim(),
+      name: yandexSeoMatch[1].trim(),
+      genre: ''
+    };
+  }
+
   // Шаблон Яндекс Музыки: "Трек «EUPHORIA» (SALUKI) слушать онлайн..."
   const yandexTrackMatch = title.match(/Трек\s+[«"'](.+?)[»"']\s*\((.+?)\)/i);
   if (yandexTrackMatch) {
