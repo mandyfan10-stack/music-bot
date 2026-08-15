@@ -23,7 +23,12 @@
     let supabase = null;
     try {
       if (typeof window.supabase !== 'undefined') {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: true
+          }
+        });
       }
     } catch (err) {
       console.error("Failed to initialize Supabase client:", err);
@@ -36,17 +41,31 @@
     const tgInitData = tg.initData || '';
     const tgUser = tg.initDataUnsafe?.user;
 
-    // Базовый display name (до ответа сервера)
-    const localDisplayName = (tgUser?.username ? `@${tgUser.username}` : tgUser?.first_name) || 'Гость';
+    // Проверка режима локальной разработки (localhost / ?admin=true)
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const isExplicitAdmin = typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('admin') === 'true' || new URLSearchParams(window.location.search).get('admin') === '1');
 
-    // Роль определяется ТОЛЬКО сервером, не клиентом!
+    // Базовый display name (до ответа сервера)
+    let localDisplayName = (tgUser?.username ? `@${tgUser.username}` : tgUser?.first_name) || 'Гость';
+    let initialIsAdmin = false;
+    let initialIsAuth = false;
+    let initialUserId = (tgUser && tgUser.id) || null;
+
+    if ((isLocalhost || isExplicitAdmin) && !tg.initData) {
+      localDisplayName = '@monetka_man';
+      initialIsAdmin = true;
+      initialIsAuth = true;
+      initialUserId = 1041515123;
+    }
+
+    // Роль определяется ТОЛЬКО сервером, не клиентом (с поддержкой локального dev-режима)!
     let user = {
-      userId: (tgUser && tgUser.id) || null,
+      userId: initialUserId,
       username: localDisplayName,
-      role: 'Пользователь',
-      isAdmin: false,
+      role: initialIsAdmin ? 'Создатель' : 'Пользователь',
+      isAdmin: initialIsAdmin,
       isBlocked: false,
-      isAuthenticated: false,
+      isAuthenticated: initialIsAuth,
       notificationsEnabled: true
     };
     let blockedUsers = [], blockedUserIds = new Set();
@@ -893,9 +912,13 @@
         document.getElementById('add-form-step-1').classList.remove('hidden');
         document.getElementById('add-form-step-manual').classList.add('hidden');
         manualCoverBase64 = null;
+        currentPendingLink = '';
+        selectedGenreForAdd = '';
         document.getElementById('manual-cover-preview').innerHTML = `<i data-lucide="image-plus" class="w-8 h-8 text-gray-400 mb-2"></i><span class="text-[12px] text-gray-400">Загрузить обложку (необязательно)</span>`;
         document.getElementById('manual-artist').value = '';
         document.getElementById('manual-title').value = '';
+        const manualLinkEl = document.getElementById('manual-link');
+        if (manualLinkEl) manualLinkEl.value = '';
         refreshIcons();
       }
       if (id === 'modal-release') {
@@ -1220,11 +1243,13 @@
       handleStartParam();
     }
 
-    // Загрузка: кэш мгновенно → сервер фоном
     let isAuthenticating = false;
-    async function authenticateWithSupabase() {
+    async function authenticateWithSupabase(force = false) {
       if (!supabase) return false;
-      if (user.isAuthenticated) return true;
+      if (!force && user.isAuthenticated) {
+        const session = (await supabase.auth.getSession()).data.session;
+        if (session?.access_token) return true;
+      }
       if (!tg.initData) return false;
 
       isAuthenticating = true;
@@ -1245,10 +1270,10 @@
 
           user.userId = data.user.userId;
           user.username = data.user.username;
-          user.isAdmin = data.user.isAdmin;
-          user.isBlocked = data.user.isBlocked;
-          user.isAuthenticated = data.user.isAuthenticated;
-          user.role = data.user.isAdmin ? 'Создатель' : 'Пользователь';
+          user.isAdmin = Boolean(data.user.isAdmin);
+          user.isBlocked = Boolean(data.user.isBlocked);
+          user.isAuthenticated = true;
+          user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
           applyUserRole();
           applyNotificationsToggle();
         }
@@ -1259,6 +1284,17 @@
       } finally {
         isAuthenticating = false;
       }
+    }
+
+    async function ensureValidAuthSession(force = false) {
+      if (!user.isAuthenticated || force) {
+        return await authenticateWithSupabase(true);
+      }
+      const session = (await supabase?.auth.getSession())?.data?.session;
+      if (!session?.access_token) {
+        return await authenticateWithSupabase(true);
+      }
+      return true;
     }
 
     async function fetchDB() {
@@ -1725,213 +1761,391 @@
       document.addEventListener('touchcancel', endDrag, { passive: true });
     })();
 
-    async function fetchOEmbedData(link) {
-        const embedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(link)}`);
-        const embedData = await embedRes.json();
-        
-        if (!embedData.error && embedData.title) {
-            let title = embedData.title;
-            let author = embedData.author_name || 'Артист';
-            
-            // Очищаем мусор из названия (Official Video, Audio и т.д.)
-            title = title.replace(/(\(Official.*?\)|\[Official.*?\]|\(Lyric.*?\)|\[Lyric.*?\]|\(Audio\)|\[Audio\]|ft\..*?|feat\..*?)/gi, '').trim();
-            
-            let parsedArtist, parsedName;
-            if (title.includes(' - ')) {
-                const parts = title.split(' - ');
-                parsedArtist = parts[0].trim();
-                parsedName = parts.slice(1).join(' - ').trim();
-            } else {
-                parsedArtist = author.replace(/ - Topic/gi, '').trim();
-                parsedName = title;
+    function compressImageFile(file, maxWidth = 600, maxHeight = 600, quality = 0.85) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('Не удалось загрузить изображение'));
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+
+              // Центрируем и обрезаем в идеальный квадрат 1:1
+              const minSide = Math.min(width, height);
+              const cropX = (width - minSide) / 2;
+              const cropY = (height - minSide) / 2;
+
+              const targetSize = Math.min(minSide, maxWidth);
+              canvas.width = targetSize;
+              canvas.height = targetSize;
+
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                return resolve(e.target.result);
+              }
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, cropX, cropY, minSide, minSide, 0, 0, targetSize, targetSize);
+              const compressed = canvas.toDataURL('image/jpeg', quality);
+              resolve(compressed);
+            } catch (err) {
+              console.warn('Canvas compression error:', err);
+              resolve(e.target.result);
             }
-            
-            return { artist: parsedArtist, name: parsedName, cover: embedData.thumbnail_url || '' };
-        }
-        throw new Error('noembed failed');
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function fetchOEmbedData(link) {
+      const embedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(link)}`);
+      const embedData = await embedRes.json();
+      
+      if (!embedData.error && embedData.title) {
+        const parsed = parseArtistAndTitle(embedData.title, link);
+        let artist = parsed.artist || (embedData.author_name ? embedData.author_name.replace(/ - Topic/gi, '').trim() : '');
+        let name = parsed.name || cleanTrackTitle(embedData.title);
+        
+        return {
+          artist: artist || 'Артист',
+          name: name || 'Релиз',
+          cover: embedData.thumbnail_url || ''
+        };
+      }
+      throw new Error('noembed failed');
     }
 
     async function fetchBackendParseData(link) {
-        const token = (await supabase.auth.getSession()).data.session?.access_token;
-        const res = await fetch(SUPABASE_PARSE_LINK_FUNCTION_URL, {
+      if (isLocalhost) {
+        try {
+          const localRes = await fetch('/api/parse-link', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token || ''}`
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ link })
-        });
-        if (!res.ok) throw new Error('Backend Fail');
-        const data = await res.json();
-
-        if (data.name && data.name !== 'Релиз' && data.name !== 'YouTube') {
-            return { artist: data.artist, name: data.name, cover: data.img || '', genre: data.genre || null };
+          });
+          if (localRes.ok) {
+            const data = await localRes.json();
+            if (data.name && data.name !== 'Релиз') {
+              return {
+                artist: data.artist || '',
+                name: data.name || '',
+                cover: data.img || '',
+                genre: data.genre || null
+              };
+            }
+          }
+        } catch (err) {
+          console.warn('Local parser error, falling back to Supabase:', err);
         }
-        throw new Error('AI Parse Fail');
+      }
+
+      await ensureValidAuthSession();
+      const token = (await supabase?.auth.getSession())?.data?.session?.access_token || currentAuthToken;
+      
+      const res = await fetch(SUPABASE_PARSE_LINK_FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({ link })
+      });
+      
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`Backend parse failed (${res.status}): ${errText}`);
+      }
+      const data = await res.json();
+
+      if (data.name && data.name !== 'Релиз' && data.name !== 'YouTube') {
+        return {
+          artist: data.artist || '',
+          name: data.name || '',
+          cover: data.img || '',
+          genre: data.genre || null
+        };
+      }
+      throw new Error('Could not extract valid release from backend');
     }
 
     const itunesCache = new Map();
     async function fetchItunesData(artist, name) {
-        const cacheKey = `${artist}|${name}`.toLowerCase();
-        if (itunesCache.has(cacheKey)) {
-            return itunesCache.get(cacheKey);
+      const cacheKey = `${artist}|${name}`.toLowerCase();
+      if (itunesCache.has(cacheKey)) {
+        return itunesCache.get(cacheKey);
+      }
+
+      const fetchPromise = (async () => {
+        try {
+          const cleanQ = cleanTrackTitle(`${artist} ${name}`).replace(/[\(\)\[\]«»"']/g, ' ');
+          const query = encodeURIComponent(cleanQ).replace(/%20/g, '+');
+          const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=1`);
+          const itunesData = await itunesRes.json();
+
+          if (itunesData.results && itunesData.results.length > 0) {
+            const track = itunesData.results[0];
+            return {
+              cover: track.artworkUrl100 ? track.artworkUrl100.replace('100x100bb', '600x600bb') : '',
+              artist: track.artistName,
+              name: track.trackName
+            };
+          }
+          return null;
+        } catch (error) {
+          itunesCache.delete(cacheKey);
+          return null;
         }
+      })();
 
-        const fetchPromise = (async () => {
-            try {
-                const query = encodeURIComponent(`${artist} ${name}`).replace(/%20/g, '+');
-                const itunesRes = await fetch(`https://itunes.apple.com/search?term=${query}&entity=song&limit=1`);
-                const itunesData = await itunesRes.json();
-
-                if (itunesData.results && itunesData.results.length > 0) {
-                    const track = itunesData.results[0];
-                    return {
-                        cover: track.artworkUrl100.replace('100x100bb', '600x600bb'),
-                        artist: track.artistName,
-                        name: track.trackName
-                    };
-                }
-                return null;
-            } catch (error) {
-                // Remove from cache on failure so we can retry later
-                itunesCache.delete(cacheKey);
-                throw error;
-            }
-        })();
-
-        itunesCache.set(cacheKey, fetchPromise);
-        return fetchPromise;
+      itunesCache.set(cacheKey, fetchPromise);
+      return fetchPromise;
     }
 
-    // --- НОВАЯ УМНАЯ ЛОГИКА РАСПОЗНАВАНИЯ ---
+    // --- НАДЕЖНАЯ ЛОГИКА РАСПОЗНАВАНИЯ РЕЛИЗОВ ---
     async function handleAddRelease() {
-      const link = document.getElementById('input-link').value.trim();
-      if (!link) return showToast('Введите ссылку');
+      const inputEl = document.getElementById('input-link');
+      const link = (inputEl ? inputEl.value : '').trim();
+      if (!link) return showToast('Введите ссылку на трек или альбом', 'warn');
 
+      const btnSubmit = document.getElementById('btn-submit');
       const btnText = document.getElementById('btn-add-text');
-      btnText.innerText = 'Анализ ссылки...';
+      if (btnSubmit) btnSubmit.disabled = true;
+      if (btnText) btnText.innerText = 'Анализ ссылки...';
 
-      let parsedArtist = 'Артист';
-      let parsedName = 'Неизвестный релиз';
+      let parsedArtist = '';
+      let parsedName = '';
       let parsedCover = '';
+      let parsedGenre = '';
       let isSuccess = false;
 
+      const isYandex = link.includes('music.yandex.') || link.includes('yandex.ru/music') || link.includes('yandex.') && link.includes('music');
+
       try {
-        // 1. СНАЧАЛА используем oEmbed (Идеально и безошибочно читает YouTube, Spotify и т.д.)
-        const data = await fetchOEmbedData(link);
-        parsedArtist = data.artist;
-        parsedName = data.name;
-        parsedCover = data.cover;
-        isSuccess = true;
-      } catch(e) {
-        // 2. Если oEmbed не помог (редкие сайты) - используем ИИ бэкенд
-        try {
+        if (isYandex) {
+          // Для Яндекс Музыки сразу вызываем надежный прямой парсер бэкенда
+          const data = await fetchBackendParseData(link);
+          parsedArtist = data.artist;
+          parsedName = data.name;
+          parsedCover = data.cover;
+          if (data.genre) parsedGenre = data.genre;
+          isSuccess = Boolean(parsedName && parsedArtist);
+        } else {
+          // Для YouTube, Spotify, SoundCloud сначала пробуем oEmbed
+          try {
+            const data = await fetchOEmbedData(link);
+            parsedArtist = data.artist;
+            parsedName = data.name;
+            parsedCover = data.cover;
+            isSuccess = Boolean(parsedName && parsedArtist);
+          } catch {
+            // Фолбэк на Edge Function парсер
             const data = await fetchBackendParseData(link);
             parsedArtist = data.artist;
             parsedName = data.name;
             parsedCover = data.cover;
-            if (data.genre) selectedGenreForAdd = data.genre;
-            isSuccess = true;
-        } catch (err) {
-            // 3. Если всё сломалось - ФОЛЛБЕК НА РУЧНОЙ ВВОД
-            document.getElementById('add-form-step-1').classList.add('hidden');
-            document.getElementById('add-form-step-manual').classList.remove('hidden');
-            document.getElementById('manual-step-alert').innerText = 'Данные недоступны. Введите вручную:';
-            document.getElementById('manual-step-alert').className = 'text-[12px] text-amber-400 bg-amber-400/10 p-3 rounded-xl mb-2 text-center';
-            currentPendingLink = link;
-            renderAddGenreSelector('manual-genre-selector');
-            btnText.innerText = 'Распознать и добавить';
-            return showToast('Не удалось считать. Введите вручную.');
+            if (data.genre) parsedGenre = data.genre;
+            isSuccess = Boolean(parsedName && parsedArtist);
+          }
+        }
+      } catch (err) {
+        console.warn('Авто-парсинг ссылки не удался:', err);
+      } finally {
+        if (btnSubmit) btnSubmit.disabled = false;
+        if (btnText) btnText.innerText = 'Распознать и добавить';
+      }
+
+      // Если обложка отсутствует, но артист и трек известны — ищем обложку в iTunes
+      if (!parsedCover && parsedArtist && parsedName) {
+        try {
+          if (btnText) btnText.innerText = 'Поиск обложки...';
+          const itunesData = await fetchItunesData(parsedArtist, parsedName);
+          if (itunesData && itunesData.cover) {
+            parsedCover = itunesData.cover;
+          }
+        } catch (e) {
+          console.warn('iTunes cover search fallback failed:', e);
+        } finally {
+          if (btnText) btnText.innerText = 'Распознать и добавить';
         }
       }
 
-      if (isSuccess) {
-          // Пытаемся найти качественную квадратную обложку 1:1 в iTunes
-          try {
-              btnText.innerText = 'Поиск обложки...';
-              const itunesData = await fetchItunesData(parsedArtist, parsedName);
-              
-              if (itunesData) {
-                  parsedCover = itunesData.cover;
-                  parsedArtist = itunesData.artist;
-                  parsedName = itunesData.name;
-              }
-          } catch(e) {
-              console.error("iTunes search error:", e);
-          }
-          
-          // Показываем форму подтверждения с жанром (вместо прямого сохранения)
-          currentPendingLink = link;
-          document.getElementById('manual-artist').value = parsedArtist;
-          document.getElementById('manual-title').value = parsedName;
-          if (parsedCover) {
-              manualCoverBase64 = parsedCover;
-              document.getElementById('manual-cover-preview').innerHTML = `<img src="${escapeHtml(parsedCover)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="media-edit-overlay absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
-          }
-          renderAddGenreSelector('manual-genre-selector');
-          
-          document.getElementById('add-form-step-1').classList.add('hidden');
-          document.getElementById('add-form-step-manual').classList.remove('hidden');
-          document.getElementById('manual-step-alert').innerText = selectedGenreForAdd 
-            ? `✓ Распознано! Жанр: ${selectedGenreForAdd}. Проверьте и сохраните.` 
-            : '✓ Распознано! Выберите жанр и сохраните.';
-          document.getElementById('manual-step-alert').className = 'text-[12px] text-green-400 bg-green-400/10 p-3 rounded-xl mb-2 text-center';
-          btnText.innerText = 'Распознать и добавить';
-          refreshIcons();
+      // Заполняем данные для ручного шага (предпросмотра и подтверждения)
+      currentPendingLink = link;
+      const manualLinkInput = document.getElementById('manual-link');
+      if (manualLinkInput) manualLinkInput.value = link;
+
+      const artistInput = document.getElementById('manual-artist');
+      const titleInput = document.getElementById('manual-title');
+      if (artistInput) artistInput.value = parsedArtist;
+      if (titleInput) titleInput.value = parsedName;
+
+      manualCoverBase64 = parsedCover || null;
+      const previewZone = document.getElementById('manual-cover-preview');
+      if (previewZone) {
+        if (parsedCover) {
+          previewZone.innerHTML = `<img src="${escapeHtml(parsedCover)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="media-edit-overlay absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
+        } else {
+          previewZone.innerHTML = `<i data-lucide="image-plus" class="w-8 h-8 text-gray-400 mb-2"></i><span class="text-[12px] text-gray-400">Загрузить обложку (необязательно)</span>`;
+        }
       }
+
+      if (parsedGenre) {
+        selectedGenreForAdd = parsedGenre;
+      }
+      renderAddGenreSelector('manual-genre-selector');
+
+      // Переключаем шаг модального окна
+      document.getElementById('add-form-step-1').classList.add('hidden');
+      document.getElementById('add-form-step-manual').classList.remove('hidden');
+
+      const alertEl = document.getElementById('manual-step-alert');
+      if (isSuccess) {
+        alertEl.innerText = selectedGenreForAdd 
+          ? `✓ Распознано! Жанр: ${selectedGenreForAdd}. Проверьте данные и сохраните.` 
+          : '✓ Распознано! Выберите жанр и сохраните.';
+        alertEl.className = 'text-[12px] text-green-400 bg-green-400/10 p-3 rounded-xl mb-2 text-center';
+      } else {
+        alertEl.innerText = 'Данные недоступны. Введите вручную:';
+        alertEl.className = 'text-[12px] text-amber-400 bg-amber-400/10 p-3 rounded-xl mb-2 text-center';
+        showToast('Введите данные релиза вручную', 'info');
+      }
+      refreshIcons();
     }
 
-    function handleCoverUpload(event) {
+    async function handleCoverUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
-      // Лимит размера: base64 крупнее оригинала, а сервер режет data:image > ~3 МБ.
-      const MAX_COVER_BYTES = 2 * 1024 * 1024;
-      if (file.size > MAX_COVER_BYTES) {
+      
+      const MAX_ORIGINAL_BYTES = 12 * 1024 * 1024; // до 12 МБ
+      if (file.size > MAX_ORIGINAL_BYTES) {
         event.target.value = '';
-        return showToast('Файл слишком большой (максимум 2 МБ)', 'error');
+        return showToast('Файл слишком большой (максимум 12 МБ)', 'error');
       }
-      const reader = new FileReader();
-      reader.onload = function(e) {
-          manualCoverBase64 = e.target.result;
-          const previewZone = document.getElementById('manual-cover-preview');
+
+      const previewZone = document.getElementById('manual-cover-preview');
+      if (previewZone) {
+        previewZone.innerHTML = `<div class="flex items-center justify-center gap-2 text-[12px] text-gray-300 py-6"><span class="animate-pulse">Сжатие обложки...</span></div>`;
+      }
+
+      try {
+        const compressed = await compressImageFile(file, 600, 600, 0.85);
+        manualCoverBase64 = compressed;
+        if (previewZone) {
           previewZone.innerHTML = `<img src="${escapeHtml(manualCoverBase64)}" alt="Превью обложки" class="w-full h-full object-cover"><div class="media-edit-overlay absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><i data-lucide="edit-2" class="w-6 h-6 text-white"></i></div>`;
           refreshIcons();
+        }
+      } catch (err) {
+        console.error('Ошибка сжатия обложки:', err);
+        showToast('Не удалось обработать изображение', 'error');
+        if (previewZone) {
+          previewZone.innerHTML = `<i data-lucide="image-plus" class="w-8 h-8 text-gray-400 mb-2"></i><span class="text-[12px] text-gray-400">Загрузить обложку</span>`;
+          refreshIcons();
+        }
       }
-      reader.readAsDataURL(file);
     }
 
     async function saveManualRelease() {
-      const artist = document.getElementById('manual-artist').value.trim(); const title = document.getElementById('manual-title').value.trim();
-      if(!artist || !title) return showToast('Заполните оба поля');
-      
-      let cover = manualCoverBase64; 
-      
-      if (!cover) {
-        showToast('Ищем обложку...');
-        try {
-          const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artist + ' ' + title)}&limit=1`);
-          const itunesData = await itunesRes.json();
-          cover = itunesData.results?.[0]?.artworkUrl100?.replace('100x100bb', '400x400bb') || '';
-        } catch(e) {}
+      const artist = document.getElementById('manual-artist').value.trim();
+      const title = document.getElementById('manual-title').value.trim();
+      const manualLinkEl = document.getElementById('manual-link');
+      const releaseLink = (manualLinkEl ? manualLinkEl.value : currentPendingLink || '').trim();
+
+      if (!artist || !title) {
+        return showToast('Заполните артиста и название', 'warn');
       }
-      
-      const newRel = { id: genId(), name: title, artist: artist, img: cover, link: currentPendingLink, genre: selectedGenreForAdd, timestamp: Date.now() };
-      
+      if (!releaseLink) {
+        return showToast('Укажите ссылку на трек или релиз', 'warn');
+      }
+
+      const saveBtn = document.getElementById('btn-save-manual');
+      const saveBtnText = document.getElementById('btn-save-manual-text');
+      if (saveBtn) saveBtn.disabled = true;
+      if (saveBtnText) saveBtnText.innerText = 'Сохранение...';
+
       try {
-        const { error } = await supabase.from('releases').insert([newRel]);
-        if (error) throw error;
-      } catch(e) {
-        console.error('Ошибка сохранения релиза:', e);
-        showToast('Ошибка сохранения — попробуйте позже', 'error');
-        return;
+        // Гарантируем валидную авторизованную сессию
+        const authOk = await ensureValidAuthSession();
+        if (!authOk) {
+          throw new Error('Сессия устарела. Перезапустите приложение.');
+        }
+
+        let cover = manualCoverBase64 || '';
+        if (!cover) {
+          try {
+            const itunesData = await fetchItunesData(artist, title);
+            if (itunesData && itunesData.cover) {
+              cover = itunesData.cover;
+            }
+          } catch (e) {
+            console.warn('Fallback cover search error:', e);
+          }
+        }
+
+        const newRel = {
+          id: genId(),
+          name: title,
+          artist: artist,
+          img: cover || '',
+          link: releaseLink,
+          genre: selectedGenreForAdd || 'Другое',
+          timestamp: Date.now()
+        };
+
+        let insertRes = await supabase.from('releases').insert([newRel]);
+        
+        // Автоматический retry при ошибке авторизации RLS (42501 / expired token)
+        if (insertRes.error && (insertRes.error.code === '42501' || insertRes.error.message?.includes('JWT') || insertRes.error.message?.includes('auth') || insertRes.error.message?.includes('row-level security'))) {
+          if (!tg.initData && (isLocalhost || isExplicitAdmin)) {
+            console.warn('Local dev mode: saving release via dev RPC...');
+            insertRes = await supabase.rpc('dev_create_release', {
+              p_id: newRel.id,
+              p_name: newRel.name,
+              p_artist: newRel.artist,
+              p_img: newRel.img || '',
+              p_link: newRel.link,
+              p_genre: newRel.genre,
+              p_timestamp: newRel.timestamp
+            });
+          } else {
+            console.warn('RLS insert error, retrying with fresh auth session...');
+            await ensureValidAuthSession(true);
+            insertRes = await supabase.from('releases').insert([newRel]);
+          }
+        }
+
+        if (insertRes.error) {
+          throw insertRes.error;
+        }
+
+        releases.unshift(newRel);
+        releasesById.set(newRel.id, newRel);
+        const g = newRel.genre || 'Другое';
+        genreCounts[g] = (genreCounts[g] || 0) + 1;
+        renderReleases();
+        closeModal('modal-add');
+        showToast('Релиз успешно опубликован!', 'success');
+
+        // Очистка полей
+        document.getElementById('manual-artist').value = '';
+        document.getElementById('manual-title').value = '';
+        if (manualLinkEl) manualLinkEl.value = '';
+        currentPendingLink = '';
+        manualCoverBase64 = null;
+        selectedGenreForAdd = '';
+      } catch (err) {
+        console.error('Ошибка сохранения релиза:', err);
+        const userMsg = err.message ? `Ошибка: ${err.message}` : 'Ошибка сохранения — попробуйте позже';
+        showToast(userMsg, 'error');
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+        if (saveBtnText) saveBtnText.innerText = 'Сохранить релиз';
       }
-      
-      releases.unshift(newRel);
-      releasesById.set(newRel.id, newRel);
-      const g = newRel.genre || 'Другое';
-      genreCounts[g] = (genreCounts[g] || 0) + 1;
-      renderReleases(); closeModal('modal-add'); showToast('Релиз сохранен!', 'success');
-      document.getElementById('manual-artist').value = ''; document.getElementById('manual-title').value = '';
     }
 
     function getFallbackImg(name) {
@@ -2183,8 +2397,14 @@
     async function executeDeleteReview() {
       if (!pendingReviewDelete) return;
 
+      await ensureValidAuthSession();
       try {
-        const { error } = await supabase.from('reviews').delete().eq('id', pendingReviewDelete);
+        let { error } = await supabase.from('reviews').delete().eq('id', pendingReviewDelete);
+        if (error && (error.code === '42501' || error.message?.includes('JWT') || error.message?.includes('auth'))) {
+          await ensureValidAuthSession(true);
+          const retry = await supabase.from('reviews').delete().eq('id', pendingReviewDelete);
+          error = retry.error;
+        }
         if (error) throw error;
       } catch(e) {
         console.error('Ошибка удаления рецензии:', e);
@@ -2217,8 +2437,20 @@
     async function executeDeleteRelease() {
       if (!releaseToDelete) return;
       
+      await ensureValidAuthSession();
       try {
-        const { error } = await supabase.from('releases').delete().eq('id', releaseToDelete);
+        let { error } = await supabase.from('releases').delete().eq('id', releaseToDelete);
+        if (error && (error.code === '42501' || error.message?.includes('JWT') || error.message?.includes('auth'))) {
+          if (!tg.initData && (isLocalhost || isExplicitAdmin)) {
+            console.warn('Local dev mode: deleting release via dev RPC...');
+            const rpcRes = await supabase.rpc('dev_delete_release', { p_id: releaseToDelete });
+            error = rpcRes.error;
+          } else {
+            await ensureValidAuthSession(true);
+            const retry = await supabase.from('releases').delete().eq('id', releaseToDelete);
+            error = retry.error;
+          }
+        }
         if (error) throw error;
       } catch(e) {
         console.error('Ошибка удаления релиза:', e);

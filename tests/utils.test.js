@@ -1,6 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { cleanUsername, escapeHtml, escapeCssString, genId, filterAndSortReleases } = require('../src/utils.js');
+const {
+  cleanUsername,
+  escapeHtml,
+  escapeCssString,
+  genId,
+  normalizeGenre,
+  cleanTrackTitle,
+  parseArtistAndTitle,
+  filterAndSortReleases
+} = require('../src/utils.js');
 
 test('cleanUsername: should remove leading @ and convert to lowercase', () => {
   assert.strictEqual(cleanUsername('@User'), 'user');
@@ -82,6 +91,51 @@ test('genId: consecutive calls do not collide', () => {
     const ids = new Set();
     for (let i = 0; i < 1000; i++) ids.add(genId());
     assert.strictEqual(ids.size, 1000);
+});
+
+// --- normalizeGenre ---
+test('normalizeGenre: correctly maps russian and english genres', () => {
+  assert.strictEqual(normalizeGenre('rusrap'), 'Рэп');
+  assert.strictEqual(normalizeGenre('trap'), 'Трэп');
+  assert.strictEqual(normalizeGenre('rusrock'), 'Рок');
+  assert.strictEqual(normalizeGenre('ruspop'), 'Поп');
+  assert.strictEqual(normalizeGenre('electronics'), 'Электронная');
+  assert.strictEqual(normalizeGenre('r&b'), 'R&B');
+  assert.strictEqual(normalizeGenre('unknown_genre_xyz'), 'Другое');
+  assert.strictEqual(normalizeGenre(''), '');
+});
+
+// --- cleanTrackTitle ---
+test('cleanTrackTitle: removes platform names and video suffixes', () => {
+  assert.strictEqual(cleanTrackTitle('SALUKI - EUPHORIA (Official Video)'), 'SALUKI - EUPHORIA');
+  assert.strictEqual(cleanTrackTitle('OG Buda - Слёзы [Премьера клипа] | YouTube'), 'OG Buda - Слёзы');
+  assert.strictEqual(cleanTrackTitle('Big Baby Tape - Like A G6 (Lyric Video) - Spotify'), 'Big Baby Tape - Like A G6');
+  assert.strictEqual(cleanTrackTitle('Macan - Самый пьяный округ в мире (Audio)'), 'Macan - Самый пьяный округ в мире');
+});
+
+// --- parseArtistAndTitle ---
+test('parseArtistAndTitle: handles Yandex Music track format', () => {
+  const parsed = parseArtistAndTitle('Трек «EUPHORIA» (SALUKI) слушать онлайн на Яндекс Музыке', 'https://music.yandex.ru/album/25394013/track/112638848');
+  assert.strictEqual(parsed.artist, 'SALUKI');
+  assert.strictEqual(parsed.name, 'EUPHORIA');
+});
+
+test('parseArtistAndTitle: handles Yandex Music album format', () => {
+  const parsed = parseArtistAndTitle('Альбом «WILD EA$T» (SALUKI) слушать онлайн на Яндекс Музыке', 'https://music.yandex.ru/album/25394013');
+  assert.strictEqual(parsed.artist, 'SALUKI');
+  assert.strictEqual(parsed.name, 'WILD EA$T');
+});
+
+test('parseArtistAndTitle: handles standard Artist - Track format', () => {
+  const parsed = parseArtistAndTitle('SALUKI — EUPHORIA (Official Video)', 'https://youtube.com/watch?v=123');
+  assert.strictEqual(parsed.artist, 'SALUKI');
+  assert.strictEqual(parsed.name, 'EUPHORIA');
+});
+
+test('parseArtistAndTitle: handles Track by Artist format', () => {
+  const parsed = parseArtistAndTitle('EUPHORIA by SALUKI', 'https://open.spotify.com/track/123');
+  assert.strictEqual(parsed.artist, 'SALUKI');
+  assert.strictEqual(parsed.name, 'EUPHORIA');
 });
 
 // --- filterAndSortReleases ---

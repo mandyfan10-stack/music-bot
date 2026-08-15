@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com https://telegram.org https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://ftpofwybzvhvyukrshcm.supabase.co wss://ftpofwybzvhvyukrshcm.supabase.co https://noembed.com https://itunes.apple.com https://ui-avatars.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://telegram.org https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://unpkg.com https://ftpofwybzvhvyukrshcm.supabase.co wss://ftpofwybzvhvyukrshcm.supabase.co https://noembed.com https://itunes.apple.com https://ui-avatars.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>XXII SOUND - TG App</title>
   <script src="src/supabase.min.js?v=2"></script>
-  <script src="https://unpkg.com/lucide@1.8.0" integrity="sha384-+8nbzwDAyu5kAjqtR/XKxIgPHQD2TflvbZgeDZn5t3JP+OOogNH1jXnfel8ZAgzS" crossorigin="anonymous"></script>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="src/lucide.min.js?v=2"></script>
+  <script src="src/telegram-web-app.js?v=2"></script>
   <script src="src/utils.js?v=2"></script>
 
   <!-- Tailwind собран заранее (npm run build:css) — рантайм-компилятора CDN больше нет -->
@@ -206,14 +206,15 @@
 
         <input id="manual-artist" aria-label="Имя артиста" type="text" placeholder="Имя артиста" class="w-full glass-input rounded-2xl px-4 py-3 text-[14px] text-white outline-none focus:ring-1 ring-red-500/50">
         <input id="manual-title" aria-label="Название релиза" type="text" placeholder="Название релиза" class="w-full glass-input rounded-2xl px-4 py-3 text-[14px] text-white outline-none focus:ring-1 ring-red-500/50">
+        <input id="manual-link" aria-label="Ссылка на трек или клип" type="url" placeholder="Ссылка на трек или клип" class="w-full glass-input rounded-2xl px-4 py-3 text-[14px] text-white outline-none focus:ring-1 ring-red-500/50">
         
         <div>
           <label class="text-[12px] text-gray-400 block mb-2 pl-1">Жанр</label>
           <div id="manual-genre-selector" class="flex flex-wrap gap-2"></div>
         </div>
 
-        <button data-act="save-manual-release" class="btn-press w-full py-4 bg-white text-black font-bold rounded-2xl flex items-center justify-center gap-2">
-          Сохранить релиз
+        <button id="btn-save-manual" data-act="save-manual-release" class="btn-press w-full py-4 bg-white text-black font-bold rounded-2xl flex items-center justify-center gap-2 transition-opacity disabled:opacity-50">
+          <span id="btn-save-manual-text">Сохранить релиз</span>
         </button>
       </div>
     </div>

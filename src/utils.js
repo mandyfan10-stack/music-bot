@@ -33,13 +33,158 @@ function genId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+const GENRE_MAP = {
+  'rusrap': 'Рэп',
+  'rap': 'Рэп',
+  'рэп': 'Рэп',
+  'hip hop': 'Хип-хоп',
+  'hip-hop': 'Хип-хоп',
+  'hiphop': 'Хип-хоп',
+  'хип-хоп': 'Хип-хоп',
+  'хипхоп': 'Хип-хоп',
+  'trap': 'Трэп',
+  'трэп': 'Трэп',
+  'drill': 'Трэп',
+  'дрил': 'Трэп',
+  'дрилл': 'Трэп',
+  'phonk': 'Трэп',
+  'фонк': 'Трэп',
+  'cloud rap': 'Рэп',
+  'lo-fi': 'Хип-хоп',
+  'lofi': 'Хип-хоп',
+  'r&b': 'R&B',
+  'rnb': 'R&B',
+  'рнб': 'R&B',
+  'soul': 'R&B',
+  'соул': 'R&B',
+  'urban': 'R&B',
+  'ruspop': 'Поп',
+  'pop': 'Поп',
+  'поп': 'Поп',
+  'synthpop': 'Поп',
+  'rusrock': 'Рок',
+  'rock': 'Рок',
+  'рок': 'Рок',
+  'indie': 'Рок',
+  'инди': 'Рок',
+  'alternative': 'Рок',
+  'альтернатива': 'Рок',
+  'punk': 'Рок',
+  'панк': 'Рок',
+  'post-punk': 'Рок',
+  'grunge': 'Рок',
+  'pop-punk': 'Рок',
+  'electronics': 'Электронная',
+  'electronic': 'Электронная',
+  'электроника': 'Электронная',
+  'электронная': 'Электронная',
+  'edm': 'Электронная',
+  'dance': 'Электронная',
+  'club': 'Электронная',
+  'house': 'Электронная',
+  'techno': 'Электронная',
+  'trance': 'Электронная',
+  'dubstep': 'Электронная',
+  'dnb': 'Электронная',
+  'metal': 'Метал',
+  'метал': 'Метал',
+  'heavy metal': 'Метал',
+  'metalcore': 'Метал',
+  'hardrock': 'Метал',
+  'jazz': 'Джаз',
+  'джаз': 'Джаз',
+  'blues': 'Джаз',
+  'блюз': 'Джаз'
+};
+
+function normalizeGenre(raw) {
+  if (!raw) return '';
+  const low = String(raw).trim().toLowerCase().replace(/_/g, '-');
+  if (GENRE_MAP[low]) return GENRE_MAP[low];
+  for (const [key, val] of Object.entries(GENRE_MAP)) {
+    if (low === key || low.includes(key)) return val;
+  }
+  return 'Другое';
+}
+
+function cleanTrackTitle(raw) {
+  let title = (raw || '').replace(/\s+/g, ' ').trim();
+  title = title.replace(
+    /\s*\|\s*(Spotify|Apple Music|YouTube Music|YouTube|Yandex Music|Яндекс Музыка|VK Музыка|SoundCloud|Bandcamp)\s*$/i,
+    ''
+  );
+  title = title.replace(
+    /\s*[-–—]\s*(Spotify|Apple Music|YouTube Music|YouTube|Yandex Music|Яндекс Музыка|VK Музыка|SoundCloud|Bandcamp)\s*$/i,
+    ''
+  );
+  title = title.replace(
+    /\s*(\(Official\s*(Music\s*)?Video\)|\[Official\s*(Music\s*)?Video\]|\(Official\s*Audio\)|\(Audio\)|\(Lyric\s*Video\)|\(Lyrics\)|\(Visualizer\)|\[Audio\]|\[Премьера\s*клипа\]|\[Клип\]|\(Премьера\s*клипа\)|\(Клип\)|\(Mood\s*Video\))\s*$/gi,
+    ''
+  );
+  return title.trim();
+}
+
+function parseArtistAndTitle(rawTitle, urlStr) {
+  let title = cleanTrackTitle(rawTitle);
+
+  // Шаблон Яндекс Музыки: "Трек «EUPHORIA» (SALUKI) слушать онлайн..."
+  const yandexTrackMatch = title.match(/Трек\s+[«"'](.+?)[»"']\s*\((.+?)\)/i);
+  if (yandexTrackMatch) {
+    return {
+      artist: yandexTrackMatch[2].trim(),
+      name: yandexTrackMatch[1].trim(),
+      genre: ''
+    };
+  }
+
+  // Шаблон Яндекс Музыки: "Альбом «WILD EA$T» (SALUKI)..."
+  const yandexAlbumMatch = title.match(/Альбом\s+[«"'](.+?)[»"']\s*\((.+?)\)/i);
+  if (yandexAlbumMatch) {
+    return {
+      artist: yandexAlbumMatch[2].trim(),
+      name: yandexAlbumMatch[1].trim(),
+      genre: ''
+    };
+  }
+
+  // Шаблон "Track by Artist"
+  const byMatch = title.match(/^(.+?)\s+by\s+(.+)$/i);
+  if (byMatch) {
+    return {
+      artist: byMatch[2].trim(),
+      name: byMatch[1].trim(),
+      genre: ''
+    };
+  }
+
+  // Разделители "Artist - Track"
+  for (const separator of [' - ', ' – ', ' — ', ' : ']) {
+    if (title.includes(separator)) {
+      const parts = title.split(separator);
+      return {
+        artist: parts[0].trim(),
+        name: parts.slice(1).join(separator).trim(),
+        genre: ''
+      };
+    }
+  }
+
+  try {
+    const url = new URL(urlStr || '');
+    const pathName = decodeURIComponent(url.pathname.replace(/\/$/, '').split('/').pop() || '')
+      .replace(/[-_]/g, ' ')
+      .trim();
+    return {
+      artist: '',
+      name: title || pathName || 'Релиз',
+      genre: ''
+    };
+  } catch {
+    return { artist: '', name: title || 'Релиз', genre: '' };
+  }
+}
+
 // Чистая фильтрация и сортировка каталога релизов.
-// options:
-//   genre        — точный фильтр по жанру ('' = без фильтра)
-//   query        — текстовый поиск по name/artist/genre ('' = без поиска)
-//   sortMode     — 'new' | 'rating-desc' | 'rating-asc' | 'reviews'
-//   avgRating    — функция (id) => число (средний рейтинг релиза)
-//   reviewCount  — функция (id) => число (кол-во рецензий релиза)
 function filterAndSortReleases(releases, options) {
   const opts = options || {};
   const genre = opts.genre || '';
@@ -85,6 +230,9 @@ if (typeof module !== 'undefined' && module.exports) {
     escapeHtml,
     escapeCssString,
     genId,
+    normalizeGenre,
+    cleanTrackTitle,
+    parseArtistAndTitle,
     filterAndSortReleases
   };
 }

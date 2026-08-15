@@ -16,87 +16,174 @@ const corsHeaders = {
 };
 
 const GENRE_MAP: Record<string, string> = {
+  // Рэп / Хип-хоп / Трэп
+  "rusrap": "Рэп",
   "rap": "Рэп",
+  "рэп": "Рэп",
   "hip hop": "Хип-хоп",
   "hip-hop": "Хип-хоп",
   "hiphop": "Хип-хоп",
+  "хип-хоп": "Хип-хоп",
+  "хипхоп": "Хип-хоп",
   "trap": "Трэп",
+  "трэп": "Трэп",
+  "drill": "Трэп",
+  "дрил": "Трэп",
+  "дрилл": "Трэп",
+  "phonk": "Трэп",
+  "фонк": "Трэп",
+  "cloud rap": "Рэп",
+  "lo-fi": "Хип-хоп",
+  "lofi": "Хип-хоп",
+
+  // R&B / Soul
   "r&b": "R&B",
   "rnb": "R&B",
-  "pop": "Поп",
-  "rock": "Рок",
-  "electronic": "Электронная",
-  "edm": "Электронная",
-  "jazz": "Джаз",
-  "metal": "Метал",
-  "рэп": "Рэп",
-  "хип-хоп": "Хип-хоп",
-  "трэп": "Трэп",
-  "поп": "Поп",
-  "рок": "Рок",
-  "электронная": "Электронная",
-  "джаз": "Джаз",
-  "метал": "Метал",
-  "indie": "Рок",
-  "alternative": "Рок",
+  "рнб": "R&B",
   "soul": "R&B",
-  "drill": "Трэп",
-  "phonk": "Трэп",
-  "lo-fi": "Хип-хоп",
+  "соул": "R&B",
+  "urban": "R&B",
+
+  // Поп
+  "ruspop": "Поп",
+  "pop": "Поп",
+  "поп": "Поп",
+  "synthpop": "Поп",
+  "синти-поп": "Поп",
+  "k-pop": "Поп",
+  "dance pop": "Поп",
+
+  // Рок
+  "rusrock": "Рок",
+  "rock": "Рок",
+  "рок": "Рок",
+  "indie": "Рок",
+  "инди": "Рок",
+  "alternative": "Рок",
+  "альтернатива": "Рок",
+  "punk": "Рок",
+  "панк": "Рок",
+  "post-punk": "Рок",
+  "пост-панк": "Рок",
+  "grunge": "Рок",
+  "поп-панк": "Рок",
+  "pop-punk": "Рок",
+
+  // Электронная
+  "electronics": "Электронная",
+  "electronic": "Электронная",
+  "электроника": "Электронная",
+  "электронная": "Электронная",
+  "edm": "Электронная",
+  "dance": "Электронная",
+  "танцевальная": "Электронная",
+  "club": "Электронная",
+  "house": "Электронная",
+  "хаус": "Электронная",
+  "techno": "Электронная",
+  "техно": "Электронная",
+  "trance": "Электронная",
+  "транс": "Электронная",
+  "dubstep": "Электронная",
+  "дабстеп": "Электронная",
+  "dnb": "Электронная",
+  "drum and bass": "Электронная",
+
+  // Метал
+  "metal": "Метал",
+  "метал": "Метал",
+  "heavy metal": "Метал",
+  "metalcore": "Метал",
+  "hardrock": "Метал",
+  "хард-рок": "Метал",
+
+  // Джаз
+  "jazz": "Джаз",
+  "джаз": "Джаз",
+  "blues": "Джаз",
+  "блюз": "Джаз",
 };
 
-function normalizeGenre(raw: string): string {
+export function normalizeGenre(raw: string): string {
   if (!raw) return "";
-  const low = raw.trim().toLowerCase();
+  const low = raw.trim().toLowerCase().replace(/_/g, "-");
   if (GENRE_MAP[low]) return GENRE_MAP[low];
   for (const [key, val] of Object.entries(GENRE_MAP)) {
-    if (low.includes(key)) return val;
+    if (low === key || low.includes(key)) return val;
   }
   return "Другое";
 }
 
-function cleanAiText(
-  value: string | unknown,
-  fallback: string,
-  maxLength = 120,
-): string {
+export function cleanText(value: string | unknown, fallback = "", maxLength = 120): string {
   const rawValue = typeof value === "string" && value.trim() ? value : fallback;
   let cleaned = String(rawValue || "").replace(/\s+/g, " ").trim();
-  // Remove wrapping quotes
-  cleaned = cleaned.replace(/^["'`]|["'`]$/g, "");
+  // Remove wrapping quotes and brackets
+  cleaned = cleaned.replace(/^["'«`]|["'»`]$/g, "").trim();
   return cleaned.substring(0, maxLength);
 }
 
-function parseYandexMusicUrl(urlStr: string) {
+// Удаление мусора платформ из названий треков / клипов
+export function cleanTrackTitle(raw: string): string {
+  let title = (raw || "").replace(/\s+/g, " ").trim();
+  title = title.replace(
+    /\s*\|\s*(Spotify|Apple Music|YouTube Music|YouTube|Yandex Music|Яндекс Музыка|VK Музыка|SoundCloud|Bandcamp)\s*$/i,
+    "",
+  );
+  title = title.replace(
+    /\s*[-–—]\s*(Spotify|Apple Music|YouTube Music|YouTube|Yandex Music|Яндекс Музыка|VK Музыка|SoundCloud|Bandcamp)\s*$/i,
+    "",
+  );
+  // Очистка типовых YouTube/VK суффиксов
+  title = title.replace(
+    /\s*(\(Official\s*(Music\s*)?Video\)|\[Official\s*(Music\s*)?Video\]|\(Official\s*Audio\)|\(Audio\)|\(Lyric\s*Video\)|\(Lyrics\)|\(Visualizer\)|\[Audio\]|\[Премьера\s*клипа\]|\[Клип\]|\(Премьера\s*клипа\)|\(Клип\)|\(Mood\s*Video\))\s*$/gi,
+    "",
+  );
+  return title.trim();
+}
+
+export function parseYandexMusicUrl(urlStr: string): { track_id?: string; album_id?: string } | null {
   try {
     const url = new URL(urlStr);
     const host = url.hostname.toLowerCase();
-    if (host !== "music.yandex.ru" && host !== "music.yandex.com") return null;
+    const isYandex = host === "music.yandex.ru" ||
+      host === "music.yandex.com" ||
+      host === "music.yandex.by" ||
+      host === "music.yandex.kz" ||
+      host === "music.yandex.uz" ||
+      host.endsWith(".yandex.ru") ||
+      host.endsWith(".yandex.com") ||
+      host.endsWith(".yandex.by") ||
+      host.endsWith(".yandex.kz") ||
+      host.endsWith(".yandex.uz");
 
+    if (!isYandex) return null;
+
+    const result: { track_id?: string; album_id?: string } = {};
+
+    // 1. Проверяем query-параметры (?track=123)
+    const trackParam = url.searchParams.get("track");
+    if (trackParam && /^\d+$/.test(trackParam)) {
+      result.track_id = trackParam;
+    }
+
+    // 2. Проверяем сегменты пути (/album/123/track/456 или /track/456 или /album/123)
     const parts = url.pathname.split("/").filter(Boolean);
-    const result: Record<string, string> = {};
-
     for (let i = 0; i < parts.length; i++) {
-      if (
-        (parts[i] === "album" || parts[i] === "track") && i + 1 < parts.length
-      ) {
-        const val = parts[i + 1];
-        if (/^\d+$/.test(val)) {
-          result[`${parts[i]}_id`] = val;
-        }
+      if (parts[i] === "track" && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
+        result.track_id = parts[i + 1];
+      }
+      if (parts[i] === "album" && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
+        result.album_id = parts[i + 1];
       }
     }
-    const trackId = url.searchParams.get("track");
-    if (trackId && /^\d+$/.test(trackId)) {
-      result["track_id"] = trackId;
-    }
+
     return Object.keys(result).length > 0 ? result : null;
   } catch {
     return null;
   }
 }
 
-function yandexCoverUrl(coverUri: string): string {
+export function yandexCoverUrl(coverUri: string): string {
   if (!coverUri) return "";
   const size = Deno.env.get("YANDEX_COVER_SIZE") || "1000x1000";
   const uri = coverUri.replace("%%", size);
@@ -105,28 +192,32 @@ function yandexCoverUrl(coverUri: string): string {
   return `https://${uri}`;
 }
 
-function joinYandexNames(items: Array<{ name?: string }> | unknown): string {
+export function joinNames(items: Array<{ name?: string }> | unknown): string {
   if (!Array.isArray(items)) return "";
   const names = items
-    .map((
-      item,
-    ) => (item && typeof item === "object" && "name" in item
-      ? String(item.name).trim()
-      : "")
-    )
+    .map((item) => (item && typeof item === "object" && "name" in item ? String(item.name).trim() : ""))
     .filter(Boolean);
   return Array.from(new Set(names)).join(", ");
 }
 
-async function getYandexMusicRelease(urlStr: string) {
+export async function getYandexMusicRelease(urlStr: string) {
   const ids = parseYandexMusicUrl(urlStr);
   if (!ids) return null;
 
-  const apiBase = Deno.env.get("YANDEX_MUSIC_API_BASE") ||
-    "https://api.music.yandex.net";
-  const headers = { "User-Agent": "Mozilla/5.0", "Accept": "application/json" };
+  const apiBase = Deno.env.get("YANDEX_MUSIC_API_BASE") || "https://api.music.yandex.net";
+  const token = Deno.env.get("YANDEX_MUSIC_TOKEN");
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+  };
+  if (token) {
+    headers["Authorization"] = `OAuth ${token}`;
+  }
 
   try {
+    // Если есть track_id — запрашиваем конкретный трек
     if (ids.track_id) {
       const res = await fetch(`${apiBase}/tracks/${ids.track_id}`, {
         headers,
@@ -136,25 +227,26 @@ async function getYandexMusicRelease(urlStr: string) {
       if (res.ok) {
         const data = await res.json();
         const track = data.result?.[0];
-        if (track) {
+        if (track && track.title) {
           const album = track.albums?.[0] || {};
-          const artist = joinYandexNames(track.artists) ||
-            joinYandexNames(album.artists) || joinYandexNames(album.labels);
+          const artist = joinNames(track.artists) ||
+            joinNames(album.artists) ||
+            joinNames(album.labels);
           const img = yandexCoverUrl(
-            track.coverUri || track.ogImage || album.coverUri ||
-              album.ogImage || "",
+            track.coverUri || track.ogImage || album.coverUri || album.ogImage || "",
           );
-          const genre = track.genre || album.genre || "";
+          const rawGenre = track.genre || album.genre || "";
           return {
-            artist: cleanAiText(artist, "Артист"),
-            name: cleanAiText(track.title, "Релиз"),
+            artist: cleanText(artist, "Артист"),
+            name: cleanText(cleanTrackTitle(track.title), "Релиз"),
             img,
-            genre: normalizeGenre(genre),
+            genre: normalizeGenre(rawGenre),
           };
         }
       }
     }
 
+    // Если есть только album_id — запрашиваем альбом
     if (ids.album_id) {
       const res = await fetch(`${apiBase}/albums/${ids.album_id}/with-tracks`, {
         headers,
@@ -165,17 +257,16 @@ async function getYandexMusicRelease(urlStr: string) {
         const data = await res.json();
         const album = data.result || {};
         if (album.title) {
-          const artist = joinYandexNames(album.artists) ||
-            joinYandexNames(album.labels);
+          const artist = joinNames(album.artists) || joinNames(album.labels);
           const img = yandexCoverUrl(
             album.coverUri || album.ogImage || album.cover?.uri || "",
           );
-          const genre = album.genre || "";
+          const rawGenre = album.genre || "";
           return {
-            artist: cleanAiText(artist, "Артист"),
-            name: cleanAiText(album.title, "Релиз"),
+            artist: cleanText(artist, "Артист"),
+            name: cleanText(album.title, "Релиз"),
             img,
-            genre: normalizeGenre(genre),
+            genre: normalizeGenre(rawGenre),
           };
         }
       }
@@ -186,151 +277,166 @@ async function getYandexMusicRelease(urlStr: string) {
   return null;
 }
 
-function guessReleaseFromTitle(rawTitle: string, link: string) {
-  let title = (rawTitle || "").replace(/\s+/g, " ").trim();
-  title = title.replace(
-    /\s*\|\s*(Spotify|Apple Music|YouTube Music|Yandex Music|Яндекс Музыка)\s*$/i,
-    "",
-  );
-  title = title.replace(
-    /\s*[-–—]\s*(Spotify|Apple Music|YouTube Music|Yandex Music|Яндекс Музыка)\s*$/i,
-    "",
-  );
+// Универсальное разбиение заголовка на Артист и Название
+export function parseArtistAndTitle(rawTitle: string, urlStr: string): { artist: string; name: string; genre: string } {
+  let title = cleanTrackTitle(rawTitle);
 
-  const byMatch = title.match(/(.+?)\s+by\s+(.+)$/i);
-  if (byMatch) {
+  // Специфический шаблон Яндекс Музыки: "Трек «EUPHORIA» (SALUKI) слушать онлайн..."
+  const yandexTrackMatch = title.match(/Трек\s+[«"'](.+?)[»"']\s*\((.+?)\)/i);
+  if (yandexTrackMatch) {
     return {
-      artist: byMatch[2].trim(),
-      name: byMatch[1].trim(),
+      artist: cleanText(yandexTrackMatch[2]),
+      name: cleanText(yandexTrackMatch[1]),
       genre: "",
     };
   }
 
-  for (const separator of [" - ", " – ", " — "]) {
+  // Специфический шаблон Яндекс Музыки: "Альбом «WILD EA$T» (SALUKI)..."
+  const yandexAlbumMatch = title.match(/Альбом\s+[«"'](.+?)[»"']\s*\((.+?)\)/i);
+  if (yandexAlbumMatch) {
+    return {
+      artist: cleanText(yandexAlbumMatch[2]),
+      name: cleanText(yandexAlbumMatch[1]),
+      genre: "",
+    };
+  }
+
+  // Шаблон "Track by Artist" (Spotify / Apple)
+  const byMatch = title.match(/^(.+?)\s+by\s+(.+)$/i);
+  if (byMatch) {
+    return {
+      artist: cleanText(byMatch[2]),
+      name: cleanText(byMatch[1]),
+      genre: "",
+    };
+  }
+
+  // Стандартные разделители "Artist - Track"
+  for (const separator of [" - ", " – ", " — ", " : "]) {
     if (title.includes(separator)) {
       const parts = title.split(separator);
       return {
-        artist: parts[0].trim(),
-        name: parts[1].trim(),
+        artist: cleanText(parts[0]),
+        name: cleanText(parts.slice(1).join(separator)),
         genre: "",
       };
     }
   }
 
+  // Фолбэк на путь URL
   try {
-    const url = new URL(link);
-    const pathName = decodeURIComponent(
-      url.pathname.replace(/\/$/, "").split("/").pop() || "",
-    )
-      .replace(/-/g, " ")
+    const url = new URL(urlStr);
+    const pathName = decodeURIComponent(url.pathname.replace(/\/$/, "").split("/").pop() || "")
+      .replace(/[-_]/g, " ")
       .trim();
     return {
       artist: "",
-      name: title || pathName,
+      name: cleanText(title || pathName, "Релиз"),
       genre: "",
     };
   } catch {
-    return { artist: "", name: title, genre: "" };
+    return { artist: "", name: cleanText(title, "Релиз"), genre: "" };
   }
 }
 
-async function scrapeMetadataFromPage(
+export async function scrapeMetadataFromPage(
   urlStr: string,
-): Promise<[string, string, string]> {
+): Promise<{ artist: string; name: string; img: string; genre: string } | null> {
   const headers = {
     "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
   };
 
   try {
-    const { html: htmlText, finalUrl: currentUrl } = await fetchPublicHtml(
-      urlStr,
-      { headers },
-    );
+    const { html: htmlText, finalUrl: currentUrl } = await fetchPublicHtml(urlStr, { headers });
     const doc = new DOMParser().parseFromString(htmlText, "text/html");
-    if (!doc) return ["", "", ""];
+    if (!doc) return null;
 
-    const ogTitle = doc.querySelector('meta[property="og:title"]')
-      ?.getAttribute("content");
-    const title = ogTitle || doc.querySelector("title")?.textContent || "";
+    let parsedArtist = "";
+    let parsedName = "";
+    let parsedImg = "";
+    let parsedGenre = "";
 
-    let img = "";
-    const ogImage = doc.querySelector('meta[property="og:image"]')
-      ?.getAttribute("content");
-    if (ogImage) {
-      const candidateImg = new URL(ogImage.trim(), currentUrl).toString();
-      if (
-        candidateImg.startsWith("https://") &&
-        (await isSafePublicUrl(candidateImg))
-      ) {
-        img = candidateImg;
+    // 1. Поиск микроразметки JSON-LD (внедряется Яндексом, Spotify, Apple, YouTube)
+    const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of Array.from(scripts)) {
+      try {
+        const text = script.textContent || "";
+        const ld = JSON.parse(text);
+        const item = ld["@graph"]?.[0] || ld;
+
+        if (item) {
+          if (item.name && typeof item.name === "string") {
+            parsedName = item.name;
+          }
+          if (item.byArtist) {
+            if (typeof item.byArtist === "string") parsedArtist = item.byArtist;
+            else if (typeof item.byArtist?.name === "string") parsedArtist = item.byArtist.name;
+            else if (Array.isArray(item.byArtist)) {
+              parsedArtist = item.byArtist.map((a: { name?: string }) => a.name || "").filter(Boolean).join(", ");
+            }
+          }
+          if (item.image) {
+            const rawImg = typeof item.image === "string" ? item.image : item.image?.url;
+            if (rawImg) parsedImg = rawImg;
+          }
+          if (item.genre) {
+            parsedGenre = Array.isArray(item.genre) ? item.genre.join(", ") : String(item.genre);
+          }
+          if (parsedName && parsedArtist) break;
+        }
+      } catch {
+        // Продолжаем поиск
       }
     }
 
-    let genre = "";
+    // 2. OpenGraph теги
+    const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute("content") ||
+      doc.querySelector('meta[name="twitter:title"]')?.getAttribute("content") ||
+      doc.querySelector("title")?.textContent || "";
+
+    const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute("content") ||
+      doc.querySelector('meta[name="twitter:image"]')?.getAttribute("content");
+
+    if (ogImage && !parsedImg) {
+      const candidateImg = new URL(ogImage.trim(), currentUrl).toString();
+      if (candidateImg.startsWith("https://") && (await isSafePublicUrl(candidateImg))) {
+        parsedImg = candidateImg;
+      }
+    }
+
     for (const prop of ["og:music:genre", "music:genre", "genre"]) {
-      const content =
-        doc.querySelector(`meta[property="${prop}"]`)?.getAttribute(
-          "content",
-        ) ||
+      const content = doc.querySelector(`meta[property="${prop}"]`)?.getAttribute("content") ||
         doc.querySelector(`meta[name="${prop}"]`)?.getAttribute("content");
-      if (content) {
-        genre = content.trim();
+      if (content && !parsedGenre) {
+        parsedGenre = content.trim();
         break;
       }
     }
 
-    if (urlStr.includes("music.yandex")) {
-      // Try JSON-LD
-      const scripts = doc.querySelectorAll(
-        'script[type="application/ld+json"]',
-      );
-      for (const script of scripts) {
-        try {
-          const ld = JSON.parse(script.textContent || "");
-          const g = ld.genre || ld["@graph"]?.[0]?.genre;
-          if (g) {
-            genre = Array.isArray(g) ? g.join(", ") : String(g);
-            break;
-          }
-        } catch {
-          // ignore
-        }
-      }
-      if (!genre) {
-        const links = doc.querySelectorAll("a");
-        for (const a of Array.from(links)) {
-          const linkElement = a as unknown as {
-            getAttribute(name: string): string | null;
-            textContent?: string | null;
-          };
-          const cls = (linkElement.getAttribute("class") || "").toLowerCase();
-          if (cls.includes("genre")) {
-            genre = linkElement.textContent || "";
-            if (genre) break;
-          }
-        }
-      }
+    // Обработка обложки Яндекса, если она содержит %%
+    if (parsedImg.includes("avatars.yandex.net")) {
+      parsedImg = yandexCoverUrl(parsedImg);
     }
 
-    if (urlStr.includes("spotify.com") && !genre) {
-      const ogDesc = doc.querySelector('meta[property="og:description"]')
-        ?.getAttribute("content");
-      if (ogDesc) {
-        const parts = ogDesc.split(/\s*[·•]\s*/);
-        if (parts.length >= 2) {
-          const candidate = parts[parts.length - 1].trim().replace(/\.$/, "");
-          if (candidate.length < 30 && !/^\d+$/.test(candidate)) {
-            genre = candidate;
-          }
-        }
-      }
+    // Если JSON-LD не дал готового артиста/названия — разбиваем заголовок
+    if (!parsedName || !parsedArtist) {
+      const split = parseArtistAndTitle(ogTitle, currentUrl);
+      if (!parsedArtist) parsedArtist = split.artist;
+      if (!parsedName) parsedName = split.name;
     }
 
-    return [title.trim(), img, cleanAiText(genre, "", 60)];
+    return {
+      artist: cleanText(parsedArtist),
+      name: cleanText(parsedName),
+      img: parsedImg,
+      genre: normalizeGenre(parsedGenre),
+    };
   } catch (err) {
-    console.error("Scraping failed:", err);
-    return ["", "", ""];
+    console.warn("HTML Scraping failed:", err);
+    return null;
   }
 }
 
@@ -340,7 +446,7 @@ serve(async (req) => {
   }
 
   try {
-    // 1. Verify Admin Role
+    // 1. Проверка JWT токена администратора
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -350,15 +456,11 @@ serve(async (req) => {
     }
 
     const token = authHeader.substring(7);
-    const jwtSecret = Deno.env.get("JWT_SECRET") ||
-      Deno.env.get("SUPABASE_JWT_SECRET");
+    const jwtSecret = Deno.env.get("JWT_SECRET") || Deno.env.get("SUPABASE_JWT_SECRET");
     if (!jwtSecret) {
       return new Response(
         JSON.stringify({ error: "Missing SUPABASE_JWT_SECRET variable" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -376,20 +478,14 @@ serve(async (req) => {
     } catch {
       return new Response(
         JSON.stringify({ error: "Invalid token signature" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     if (!payload.sub) {
       return new Response(
         JSON.stringify({ error: "Missing user ID in token claims" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -398,10 +494,7 @@ serve(async (req) => {
     if (!supabaseUrl || !supabaseServiceKey) {
       return new Response(
         JSON.stringify({ error: "Supabase service configuration is missing" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -410,152 +503,53 @@ serve(async (req) => {
       .select("user_id")
       .eq("user_id", payload.sub)
       .maybeSingle();
-    if (adminError) {
-      console.error("Admin lookup failed:", adminError);
-      return new Response(
-        JSON.stringify({ error: "Could not verify admin access" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-    if (!admin) {
+
+    if (adminError || !admin) {
       return new Response(
         JSON.stringify({ error: "Forbidden: Admin access required" }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // 2. Parse Request
+    // 2. Чтение ссылки из тела запроса
     const { link } = await req.json();
-    if (!link) {
+    if (!link || typeof link !== "string") {
       return new Response(JSON.stringify({ error: "Missing link parameter" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // 3. SSRF Check
+    // 3. Защита от SSRF
     if (!(await isSafePublicUrl(link))) {
       return new Response(
         JSON.stringify({ error: "Unsafe or unsupported URL" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // 4. Try Yandex API First
+    // 4. ЭТАП 1: Яндекс.Музыка — специализированный парсинг по ID
     const yandexResult = await getYandexMusicRelease(link);
-    if (yandexResult) {
+    if (yandexResult && yandexResult.name && yandexResult.name !== "Релиз") {
       return new Response(JSON.stringify(yandexResult), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (link.includes("music.yandex.ru") || link.includes("music.yandex.com")) {
-      return new Response(
-        JSON.stringify({ error: "Could not fetch Yandex Music metadata" }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // 5. Scrape HTML metadata
-    const [rawTitle, foundImage, rawGenre] = await scrapeMetadataFromPage(link);
-    if (!rawTitle) {
-      return new Response(
-        JSON.stringify({ error: "Could not read release metadata from link" }),
-        {
-          status: 422,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    const detectedGenre = normalizeGenre(rawGenre);
-
-    // 6. Call Groq AI Fallback
-    let result = { artist: "", name: "", genre: detectedGenre };
-    const guessed = guessReleaseFromTitle(rawTitle, link);
-
-    const groqApiKey = Deno.env.get("GROQ_API_KEY");
-    if (groqApiKey) {
-      const groqModel = Deno.env.get("GROQ_MODEL_PRIMARY") ||
-        "llama-3.3-70b-versatile";
-      const systemPrompt =
-        `Extract a music release from the page title or URL. Return only compact JSON with string keys: artist, name${
-          detectedGenre ? "" : ", genre"
-        }. Use only the provided page title. Do not invent missing data. Remove platform names, marketing words, and quotes.`;
-
-      try {
-        const aiRes = await fetch(
-          "https://api.groq.com/openai/v1/chat/completions",
-          {
-            method: "POST",
-            signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
-            headers: {
-              "Authorization": `Bearer ${groqApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: groqModel,
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: rawTitle },
-              ],
-              response_format: { type: "json_object" },
-              temperature: 0,
-              max_tokens: 160,
-            }),
-          },
-        );
-
-        if (aiRes.ok) {
-          const aiData = await aiRes.json();
-          const parsedAi = JSON.parse(
-            aiData.choices?.[0]?.message?.content || "{}",
-          );
-
-          result.artist = cleanAiText(parsedAi.artist, guessed.artist, 120);
-          result.name = cleanAiText(parsedAi.name, guessed.name, 160);
-
-          const g = parsedAi.genre || "";
-          result.genre = detectedGenre || normalizeGenre(g);
-        } else {
-          console.warn("Groq API returned non-OK status:", aiRes.status);
-          result.artist = guessed.artist;
-          result.name = guessed.name;
-        }
-      } catch (err) {
-        console.warn("Groq AI API error:", err);
-        result.artist = guessed.artist;
-        result.name = guessed.name;
-      }
-    } else {
-      result.artist = guessed.artist;
-      result.name = guessed.name;
-    }
-
-    return new Response(
-      JSON.stringify({
-        artist: result.artist,
-        name: result.name,
-        img: foundImage,
-        genre: result.genre,
-      }),
-      {
+    // 5. ЭТАП 2: HTML парсинг (JSON-LD + OpenGraph + детерминированное разделение артист/трек)
+    const scraped = await scrapeMetadataFromPage(link);
+    if (scraped && scraped.name && scraped.name !== "Релиз") {
+      return new Response(JSON.stringify(scraped), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
+      });
+    }
+
+    // 6. Если ничего не удалось извлечь
+    return new Response(
+      JSON.stringify({ error: "Could not extract metadata from link" }),
+      { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     console.error("Error in parse-link function:", err);
