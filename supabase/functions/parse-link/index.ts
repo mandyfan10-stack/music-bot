@@ -114,7 +114,11 @@ export function normalizeGenre(raw: string): string {
   return "Другое";
 }
 
-export function cleanText(value: string | unknown, fallback = "", maxLength = 120): string {
+export function cleanText(
+  value: string | unknown,
+  fallback = "",
+  maxLength = 120,
+): string {
   const rawValue = typeof value === "string" && value.trim() ? value : fallback;
   let cleaned = String(rawValue || "").replace(/\s+/g, " ").trim();
   // Remove wrapping quotes and brackets
@@ -141,7 +145,9 @@ export function cleanTrackTitle(raw: string): string {
   return title.trim();
 }
 
-export function parseYandexMusicUrl(urlStr: string): { track_id?: string; album_id?: string } | null {
+export function parseYandexMusicUrl(
+  urlStr: string,
+): { track_id?: string; album_id?: string } | null {
   try {
     const url = new URL(urlStr);
     const host = url.hostname.toLowerCase();
@@ -169,10 +175,16 @@ export function parseYandexMusicUrl(urlStr: string): { track_id?: string; album_
     // 2. Проверяем сегменты пути (/album/123/track/456 или /track/456 или /album/123)
     const parts = url.pathname.split("/").filter(Boolean);
     for (let i = 0; i < parts.length; i++) {
-      if (parts[i] === "track" && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
+      if (
+        parts[i] === "track" && i + 1 < parts.length &&
+        /^\d+$/.test(parts[i + 1])
+      ) {
         result.track_id = parts[i + 1];
       }
-      if (parts[i] === "album" && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
+      if (
+        parts[i] === "album" && i + 1 < parts.length &&
+        /^\d+$/.test(parts[i + 1])
+      ) {
         result.album_id = parts[i + 1];
       }
     }
@@ -195,7 +207,11 @@ export function yandexCoverUrl(coverUri: string): string {
 export function joinNames(items: Array<{ name?: string }> | unknown): string {
   if (!Array.isArray(items)) return "";
   const names = items
-    .map((item) => (item && typeof item === "object" && "name" in item ? String(item.name).trim() : ""))
+    .map((item) =>
+      item && typeof item === "object" && "name" in item
+        ? String(item.name).trim()
+        : ""
+    )
     .filter(Boolean);
   return Array.from(new Set(names)).join(", ");
 }
@@ -204,7 +220,8 @@ export async function getYandexMusicRelease(urlStr: string) {
   const ids = parseYandexMusicUrl(urlStr);
   if (!ids) return null;
 
-  const apiBase = Deno.env.get("YANDEX_MUSIC_API_BASE") || "https://api.music.yandex.net";
+  const apiBase = Deno.env.get("YANDEX_MUSIC_API_BASE") ||
+    "https://api.music.yandex.net";
   const token = Deno.env.get("YANDEX_MUSIC_TOKEN");
   const headers: Record<string, string> = {
     "User-Agent":
@@ -233,7 +250,8 @@ export async function getYandexMusicRelease(urlStr: string) {
             joinNames(album.artists) ||
             joinNames(album.labels);
           const img = yandexCoverUrl(
-            track.coverUri || track.ogImage || album.coverUri || album.ogImage || "",
+            track.coverUri || track.ogImage || album.coverUri ||
+              album.ogImage || "",
           );
           const rawGenre = track.genre || album.genre || "";
           return {
@@ -257,7 +275,8 @@ export async function getYandexMusicRelease(urlStr: string) {
         const data = await res.json();
         const album = data.result || {};
         if (album.title) {
-          const artist = joinNames(album.artists) || joinNames(album.labels);
+          const artist = joinNames(album.artists) ||
+            joinNames(album.labels);
           const img = yandexCoverUrl(
             album.coverUri || album.ogImage || album.cover?.uri || "",
           );
@@ -278,7 +297,10 @@ export async function getYandexMusicRelease(urlStr: string) {
 }
 
 // Универсальное разбиение заголовка на Артист и Название
-export function parseArtistAndTitle(rawTitle: string, urlStr: string): { artist: string; name: string; genre: string } {
+export function parseArtistAndTitle(
+  rawTitle: string,
+  urlStr: string,
+): { artist: string; name: string; genre: string } {
   let title = cleanTrackTitle(rawTitle);
 
   // Специфический шаблон Яндекс Музыки: "Трек «EUPHORIA» (SALUKI) слушать онлайн..."
@@ -326,7 +348,9 @@ export function parseArtistAndTitle(rawTitle: string, urlStr: string): { artist:
   // Фолбэк на путь URL
   try {
     const url = new URL(urlStr);
-    const pathName = decodeURIComponent(url.pathname.replace(/\/$/, "").split("/").pop() || "")
+    const pathName = decodeURIComponent(
+      url.pathname.replace(/\/$/, "").split("/").pop() || "",
+    )
       .replace(/[-_]/g, " ")
       .trim();
     return {
@@ -350,7 +374,10 @@ export async function scrapeMetadataFromPage(
   };
 
   try {
-    const { html: htmlText, finalUrl: currentUrl } = await fetchPublicHtml(urlStr, { headers });
+    const { html: htmlText, finalUrl: currentUrl } = await fetchPublicHtml(
+      urlStr,
+      { headers },
+    );
     const doc = new DOMParser().parseFromString(htmlText, "text/html");
     if (!doc) return null;
 
@@ -373,17 +400,25 @@ export async function scrapeMetadataFromPage(
           }
           if (item.byArtist) {
             if (typeof item.byArtist === "string") parsedArtist = item.byArtist;
-            else if (typeof item.byArtist?.name === "string") parsedArtist = item.byArtist.name;
-            else if (Array.isArray(item.byArtist)) {
-              parsedArtist = item.byArtist.map((a: { name?: string }) => a.name || "").filter(Boolean).join(", ");
+            else if (typeof item.byArtist?.name === "string") {
+              parsedArtist = item.byArtist.name;
+            } else if (Array.isArray(item.byArtist)) {
+              parsedArtist = item.byArtist
+                .map((a: { name?: string }) => a.name || "")
+                .filter(Boolean)
+                .join(", ");
             }
           }
           if (item.image) {
-            const rawImg = typeof item.image === "string" ? item.image : item.image?.url;
+            const rawImg = typeof item.image === "string"
+              ? item.image
+              : item.image?.url;
             if (rawImg) parsedImg = rawImg;
           }
           if (item.genre) {
-            parsedGenre = Array.isArray(item.genre) ? item.genre.join(", ") : String(item.genre);
+            parsedGenre = Array.isArray(item.genre)
+              ? item.genre.join(", ")
+              : String(item.genre);
           }
           if (parsedName && parsedArtist) break;
         }
@@ -393,22 +428,32 @@ export async function scrapeMetadataFromPage(
     }
 
     // 2. OpenGraph теги
-    const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute("content") ||
-      doc.querySelector('meta[name="twitter:title"]')?.getAttribute("content") ||
+    const ogTitle =
+      doc.querySelector('meta[property="og:title"]')?.getAttribute("content") ||
+      doc.querySelector('meta[name="twitter:title"]')?.getAttribute(
+        "content",
+      ) ||
       doc.querySelector("title")?.textContent || "";
 
-    const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute("content") ||
+    const ogImage =
+      doc.querySelector('meta[property="og:image"]')?.getAttribute("content") ||
       doc.querySelector('meta[name="twitter:image"]')?.getAttribute("content");
 
     if (ogImage && !parsedImg) {
       const candidateImg = new URL(ogImage.trim(), currentUrl).toString();
-      if (candidateImg.startsWith("https://") && (await isSafePublicUrl(candidateImg))) {
+      if (
+        candidateImg.startsWith("https://") &&
+        (await isSafePublicUrl(candidateImg))
+      ) {
         parsedImg = candidateImg;
       }
     }
 
     for (const prop of ["og:music:genre", "music:genre", "genre"]) {
-      const content = doc.querySelector(`meta[property="${prop}"]`)?.getAttribute("content") ||
+      const content =
+        doc.querySelector(`meta[property="${prop}"]`)?.getAttribute(
+          "content",
+        ) ||
         doc.querySelector(`meta[name="${prop}"]`)?.getAttribute("content");
       if (content && !parsedGenre) {
         parsedGenre = content.trim();
@@ -456,11 +501,15 @@ serve(async (req) => {
     }
 
     const token = authHeader.substring(7);
-    const jwtSecret = Deno.env.get("JWT_SECRET") || Deno.env.get("SUPABASE_JWT_SECRET");
+    const jwtSecret = Deno.env.get("JWT_SECRET") ||
+      Deno.env.get("SUPABASE_JWT_SECRET");
     if (!jwtSecret) {
       return new Response(
         JSON.stringify({ error: "Missing SUPABASE_JWT_SECRET variable" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -478,14 +527,20 @@ serve(async (req) => {
     } catch {
       return new Response(
         JSON.stringify({ error: "Invalid token signature" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     if (!payload.sub) {
       return new Response(
         JSON.stringify({ error: "Missing user ID in token claims" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -494,7 +549,10 @@ serve(async (req) => {
     if (!supabaseUrl || !supabaseServiceKey) {
       return new Response(
         JSON.stringify({ error: "Supabase service configuration is missing" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -507,7 +565,10 @@ serve(async (req) => {
     if (adminError || !admin) {
       return new Response(
         JSON.stringify({ error: "Forbidden: Admin access required" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -524,7 +585,10 @@ serve(async (req) => {
     if (!(await isSafePublicUrl(link))) {
       return new Response(
         JSON.stringify({ error: "Unsafe or unsupported URL" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -549,7 +613,10 @@ serve(async (req) => {
     // 6. Если ничего не удалось извлечь
     return new Response(
       JSON.stringify({ error: "Could not extract metadata from link" }),
-      { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      {
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (err) {
     console.error("Error in parse-link function:", err);
