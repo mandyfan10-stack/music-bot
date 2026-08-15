@@ -1,4 +1,4 @@
-// Telegram WebApp SDK Helper & Resilient Fallback
+// Telegram WebApp SDK Safe Fallback
 (function() {
   if (typeof window === 'undefined') return;
 
@@ -42,36 +42,52 @@
     return unsafe;
   }
 
+  // 1. Если официальный SDK Telegram WebApp уже загружен — сохраняем его и НЕ перезаписываем!
+  if (window.Telegram && window.Telegram.WebApp) {
+    var twa = window.Telegram.WebApp;
+    // Если нативный SDK не распарсил initData (например, при специфическом URL hash), помогаем ему:
+    if (!twa.initData) {
+      var hashData = parseHashInitData();
+      if (hashData) {
+        try {
+          twa.initData = hashData;
+          if (!twa.initDataUnsafe || Object.keys(twa.initDataUnsafe).length === 0) {
+            twa.initDataUnsafe = parseInitDataUnsafe(hashData);
+          }
+        } catch (_) {}
+      }
+    }
+    return;
+  }
+
+  // 2. Инициализируем фолбэк ТОЛЬКО если Telegram SDK отсутствует
   if (!window.Telegram) {
     window.Telegram = {};
   }
 
-  var existing = window.Telegram.WebApp || {};
-  var rawInitData = existing.initData || parseHashInitData();
-  var parsedUnsafe = (existing.initDataUnsafe && Object.keys(existing.initDataUnsafe).length > 0)
-    ? existing.initDataUnsafe
-    : parseInitDataUnsafe(rawInitData);
+  var rawFallbackData = parseHashInitData();
+  var unsafeFallbackData = parseInitDataUnsafe(rawFallbackData);
 
   window.Telegram.WebApp = {
-    initData: rawInitData,
-    initDataUnsafe: parsedUnsafe,
-    version: existing.version || '7.0',
-    platform: existing.platform || 'unknown',
-    colorScheme: existing.colorScheme || 'dark',
-    themeParams: existing.themeParams || {},
-    isExpanded: existing.isExpanded !== undefined ? existing.isExpanded : true,
-    viewportHeight: existing.viewportHeight || window.innerHeight,
-    viewportStableHeight: existing.viewportStableHeight || window.innerHeight,
-    headerColor: existing.headerColor || '#000000',
-    backgroundColor: existing.backgroundColor || '#000000',
-    BackButton: existing.BackButton || {
+    initData: rawFallbackData,
+    initDataUnsafe: unsafeFallbackData,
+    version: '7.0',
+    platform: 'unknown',
+    colorScheme: 'dark',
+    themeParams: {},
+    isExpanded: true,
+    viewportHeight: window.innerHeight,
+    viewportStableHeight: window.innerHeight,
+    headerColor: '#000000',
+    backgroundColor: '#000000',
+    BackButton: {
       isVisible: false,
       onClick: function(cb) { this._cb = cb; return this; },
       offClick: function(cb) { this._cb = null; return this; },
       show: function() { this.isVisible = true; return this; },
       hide: function() { this.isVisible = false; return this; }
     },
-    MainButton: existing.MainButton || {
+    MainButton: {
       text: 'CONTINUE',
       color: '#ff0000',
       textColor: '#ffffff',
@@ -85,30 +101,16 @@
       enable: function() { this.isActive = true; return this; },
       disable: function() { this.isActive = false; return this; }
     },
-    HapticFeedback: existing.HapticFeedback || {
+    HapticFeedback: {
       impactOccurred: function() {},
       notificationOccurred: function() {},
       selectionChanged: function() {}
     },
-    ready: function() {
-      if (typeof existing.ready === 'function') existing.ready();
-    },
-    expand: function() {
-      if (typeof existing.expand === 'function') existing.expand();
-    },
-    close: function() {
-      if (typeof existing.close === 'function') existing.close();
-    },
-    sendData: function(data) {
-      if (typeof existing.sendData === 'function') existing.sendData(data);
-    },
-    openLink: function(url) {
-      if (typeof existing.openLink === 'function') existing.openLink(url);
-      else window.open(url, '_blank');
-    },
-    openTelegramLink: function(url) {
-      if (typeof existing.openTelegramLink === 'function') existing.openTelegramLink(url);
-      else window.open(url, '_blank');
-    }
+    ready: function() {},
+    expand: function() {},
+    close: function() {},
+    sendData: function() {},
+    openLink: function(url) { window.open(url, '_blank'); },
+    openTelegramLink: function(url) { window.open(url, '_blank'); }
   };
 })();

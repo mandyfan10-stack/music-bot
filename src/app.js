@@ -284,24 +284,40 @@
         }, 700);
     }
 
+    function syncUserWithTelegram() {
+      const currentTgUser = getTgUser();
+      if (currentTgUser && (!user.isAuthenticated || !user.userId)) {
+        user.userId = currentTgUser.id;
+        user.username = currentTgUser.username ? `@${currentTgUser.username}` : (currentTgUser.first_name || 'Гость');
+      }
+    }
+
     // Обновление UI после получения роли с сервера
     function applyUserRole() {
-      document.getElementById('user-name').innerText = user.username;
+      syncUserWithTelegram();
+      const userNameEl = document.getElementById('user-name');
+      if (userNameEl) userNameEl.innerText = user.username;
+      const welcomeNameEl = document.getElementById('welcome-user-name');
+      if (welcomeNameEl) welcomeNameEl.innerText = user.username;
       const headerRoleEl = document.getElementById('user-role');
-      headerRoleEl.innerText = user.isAdmin ? 'Создатель' : 'Пользователь';
-      if (user.isAdmin) {
-        headerRoleEl.classList.remove('text-gray-500');
-        headerRoleEl.classList.add('text-red-500', 'font-bold');
-        document.getElementById('btn-add-release').classList.remove('hidden');
-      } else {
-        headerRoleEl.classList.add('text-gray-500');
-        headerRoleEl.classList.remove('text-red-500', 'font-bold');
-        document.getElementById('btn-add-release').classList.add('hidden');
+      if (headerRoleEl) {
+        headerRoleEl.innerText = user.isAdmin ? 'Создатель' : 'Пользователь';
+        if (user.isAdmin) {
+          headerRoleEl.classList.remove('text-gray-500');
+          headerRoleEl.classList.add('text-red-500', 'font-bold');
+          document.getElementById('btn-add-release')?.classList.remove('hidden');
+        } else {
+          headerRoleEl.classList.add('text-gray-500');
+          headerRoleEl.classList.remove('text-red-500', 'font-bold');
+          document.getElementById('btn-add-release')?.classList.add('hidden');
+        }
       }
       if (user.isBlocked) {
         showToast('Ваш аккаунт заблокирован. Только чтение.');
       }
     }
+
+    applyUserRole();
 
     // Отражает текущее состояние подписки на push в переключателе «Настроек».
     function applyNotificationsToggle() {
