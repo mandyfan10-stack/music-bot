@@ -302,7 +302,9 @@ export function parseArtistAndTitle(
   let title = cleanTrackTitle(rawTitle);
 
   // Шаблон Яндекс Музыки (SEO заголовок): "<Название> (альбом|трек|сингл|песня) <Артисты> слушать онлайн..."
-  const yandexSeoMatch = title.match(/^(.+?)\s+(?:альбом|трек|сингл|песня)\s+(.+?)\s+слушать\s+онлайн/i);
+  const yandexSeoMatch = title.match(
+    /^(.+?)\s+(?:альбом|трек|сингл|песня)\s+(.+?)\s+слушать\s+онлайн/i,
+  );
   if (yandexSeoMatch) {
     return {
       artist: cleanText(yandexSeoMatch[2]),
