@@ -1,1 +1,10 @@
 node_modules/
+.env
+.env.*
+!.env.example
+.supabase/
+supabase/.temp/
+_site/
+production-*.sql
+*-public-schema.sql
+*-public-data.sql

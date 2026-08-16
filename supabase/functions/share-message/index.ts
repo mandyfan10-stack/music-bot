@@ -13,6 +13,12 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     // 1. Verify User Session
@@ -58,10 +64,14 @@ serve(async (req) => {
       );
     }
 
-    const telegramUserId = payload.sub; // User's Telegram ID
-    if (!telegramUserId) {
+    const telegramUserId = Number(payload.sub);
+    if (
+      payload.role !== "authenticated" ||
+      !Number.isSafeInteger(telegramUserId) ||
+      telegramUserId <= 0
+    ) {
       return new Response(
-        JSON.stringify({ error: "Missing user ID in token claims" }),
+        JSON.stringify({ error: "Invalid user token claims" }),
         {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -70,8 +80,8 @@ serve(async (req) => {
     }
 
     // 2. Parse Request
-    const { releaseId } = await req.json();
-    if (!releaseId) {
+    const { releaseId, prepare = true } = await req.json();
+    if (!releaseId || typeof releaseId !== "string") {
       return new Response(
         JSON.stringify({ error: "Missing releaseId parameter" }),
         {
@@ -99,10 +109,9 @@ serve(async (req) => {
       });
     }
 
-    const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     const miniAppUrl = Deno.env.get("MINI_APP_URL");
 
-    if (!botToken || !miniAppUrl) {
+    if (!miniAppUrl) {
       return new Response(
         JSON.stringify({ error: "Sharing is not configured on the server" }),
         {
@@ -113,7 +122,29 @@ serve(async (req) => {
     }
 
     const sep = miniAppUrl.includes("?") ? "&" : "?";
-    const deepLink = `${miniAppUrl}${sep}startapp=${release.id}`;
+    const deepLink = `${miniAppUrl}${sep}startapp=${
+      encodeURIComponent(release.id)
+    }`;
+
+    // Older Telegram clients cannot call WebApp.shareMessage, but they can
+    // still share the canonical Mini App deep-link returned by this endpoint.
+    if (prepare === false) {
+      return new Response(JSON.stringify({ deepLink }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    if (!botToken) {
+      return new Response(
+        JSON.stringify({ error: "Telegram sharing is not configured" }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
     const artist = (release.artist || "").trim() || "Артист";
     const name = (release.name || "").trim() || "Релиз";
@@ -151,7 +182,7 @@ serve(async (req) => {
     const apiUrl =
       `https://api.telegram.org/bot${botToken}/savePreparedInlineMessage`;
     const tgPayload = {
-      user_id: parseInt(telegramUserId, 10),
+      user_id: telegramUserId,
       result: result,
       allow_user_chats: true,
       allow_group_chats: true,
@@ -162,6 +193,7 @@ serve(async (req) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(tgPayload),
+      signal: AbortSignal.timeout(10_000),
     });
 
     const tgData = await tgRes.json();
@@ -179,7 +211,7 @@ serve(async (req) => {
     }
 
     const preparedMessageId = tgData.result?.id;
-    return new Response(JSON.stringify({ preparedMessageId }), {
+    return new Response(JSON.stringify({ preparedMessageId, deepLink }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

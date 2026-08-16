@@ -18,9 +18,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm test
       - run: node --check src/app.js
       - run: node --check src/utils.js
+      - run: node --check server.js
+      - run: npm run build:css
+      - run: git diff --exit-code -- src/tailwind.css
 
   supabase-functions:
     runs-on: ubuntu-latest

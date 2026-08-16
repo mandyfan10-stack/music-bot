@@ -1,7 +1,9 @@
 name: Deploy static content to Pages
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: ["main"]
 
   # Allows you to run this workflow manually from the Actions tab
@@ -21,6 +23,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -28,6 +31,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -40,9 +45,13 @@ jobs:
 
       - name: Verify frontend
         run: |
+          npm audit --audit-level=high
           npm test
           node --check src/app.js
           node --check src/utils.js
+          node --check server.js
+          npm run build:css
+          git diff --exit-code -- src/tailwind.css
 
       - name: Stage public site
         shell: bash

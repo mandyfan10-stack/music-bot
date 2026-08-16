@@ -33,6 +33,31 @@ function genId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// В офлайн-кэш попадают только публичные данные каталога. Лайки, реакции,
+// блокировки и профиль текущего пользователя намеренно исключены, чтобы
+// данные одного Telegram-аккаунта не показывались другому в том же WebView.
+function getPublicCacheData(data) {
+  const source = data && typeof data === 'object' ? data : {};
+  return {
+    releases: Array.isArray(source.releases) ? source.releases : [],
+    reviews: Array.isArray(source.reviews) ? source.reviews : [],
+    comments: Array.isArray(source.comments) ? source.comments : []
+  };
+}
+
+// Серверный deep-link предпочтительнее ссылки на музыкальную площадку, но
+// обе ссылки должны быть обычными HTTP(S) URL.
+function getShareTarget(serverDeepLink, releaseLink) {
+  for (const candidate of [serverDeepLink, releaseLink]) {
+    if (!candidate) continue;
+    try {
+      const url = new URL(String(candidate));
+      if (url.protocol === 'http:' || url.protocol === 'https:') return url.href;
+    } catch (_) {}
+  }
+  return '';
+}
+
 const GENRE_MAP = {
   'rusrap': 'Рэп',
   'rap': 'Рэп',
@@ -240,6 +265,8 @@ if (typeof module !== 'undefined' && module.exports) {
     escapeHtml,
     escapeCssString,
     genId,
+    getPublicCacheData,
+    getShareTarget,
     normalizeGenre,
     cleanTrackTitle,
     parseArtistAndTitle,

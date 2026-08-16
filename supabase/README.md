@@ -12,11 +12,17 @@ This directory is the only active backend. The FastAPI and MongoDB implementatio
 - 20260719000280_private_rls_helpers.sql moves SECURITY DEFINER implementations out of the exposed schema while retaining compatible invoker wrappers.
 - 20260719000290_policy_normalization.sql removes redundant permissive SELECT policies without changing effective access.
 - `20260719000300_identity_contract.sql` is the delayed contract phase. After seven stable days it makes stable Telegram IDs mandatory and switches the administrator/block primary keys.
+- `20260816074509_protect_private_reactions_and_counts.sql` makes raw like and
+  reaction identities owner-only, keeps aggregate reaction counts public,
+  declares the Realtime publication in migrations, removes legacy development
+  RPCs that bypassed RLS, and prevents count updates from changing review
+  ownership.
 
 Never run the repository baseline against an existing production database. Pull the real production baseline first and mark the matching baseline migration as applied only after a zero schema diff.
 
-The latest redacted production inventory and gate results are recorded in
-[`PRODUCTION_BASELINE.md`](PRODUCTION_BASELINE.md).
+The dated, redacted production inventory and gate results are recorded in
+[`PRODUCTION_BASELINE.md`](PRODUCTION_BASELINE.md). It is historical evidence,
+not a substitute for checking hosted migration history before a rollout.
 
 ## Local validation
 
@@ -95,6 +101,10 @@ Validate with distinct anon, normal, blocked, and admin sessions:
 - metadata parsing rejects localhost, private/documentation IPv4, IPv6 loopback/link-local/ULA, DNS failure, a private redirect, oversized HTML, and non-HTML content.
 
 Store only these values in Supabase/GitHub Secrets: Telegram bot token, Supabase JWT/service keys, Groq key, and webhook credentials. Never put values in committed config or logs.
+
+The `auth` function deliberately has `verify_jwt = false` in `config.toml`:
+Telegram initData is its bootstrap credential and is signature-verified inside
+the function. Do not deploy it with the default gateway JWT requirement.
 
 Before testing notifications on each hosted project, create or update the Vault
 secrets without committing their values:

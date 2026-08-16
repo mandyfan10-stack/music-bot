@@ -23,14 +23,19 @@ async function hmac(
   keyData: Uint8Array,
   payload: Uint8Array,
 ): Promise<ArrayBuffer> {
+  // Copy into owned ArrayBuffers. This keeps WebCrypto typing compatible with
+  // both Deno 2.4/TypeScript 5 and newer runtimes where Uint8Array may wrap a
+  // SharedArrayBuffer and is therefore not accepted as BufferSource.
+  const keyBuffer = Uint8Array.from(keyData).buffer;
+  const payloadBuffer = Uint8Array.from(payload).buffer;
   const key = await crypto.subtle.importKey(
     "raw",
-    keyData,
+    keyBuffer,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
   );
-  return crypto.subtle.sign("HMAC", key, payload);
+  return crypto.subtle.sign("HMAC", key, payloadBuffer);
 }
 
 function toHex(buffer: ArrayBuffer): string {

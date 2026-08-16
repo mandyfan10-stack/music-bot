@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(32);
 
 select has_function(
   'public',
@@ -14,6 +14,27 @@ select has_trigger(
   'releases',
   'tr_releases_insert_notification',
   'release notification trigger is installed'
+);
+
+select is(
+  (
+    select count(*)
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'dev_create_release'
+  ),
+  0::bigint,
+  'unauthenticated development release creation RPC is absent'
+);
+select is(
+  (
+    select count(*)
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'dev_delete_release'
+  ),
+  0::bigint,
+  'unauthenticated development release deletion RPC is absent'
 );
 
 insert into public.releases (id, name, artist, link)
@@ -91,6 +112,28 @@ select is(
   'like username is overwritten from JWT metadata'
 );
 
+insert into public.review_reactions (review_id, user_id, username)
+values (
+  (select id from public.reviews where release_id = 'release-1'),
+  999,
+  'forged'
+);
+select is(
+  (select user_id from public.review_reactions limit 1),
+  200::bigint,
+  'reaction user ID is overwritten from JWT sub'
+);
+select is(
+  (select "reactionCount" from public.reviews_view where "relId" = 'release-1'),
+  1,
+  'public review view exposes the aggregate reaction count'
+);
+select is(
+  (select author_id from public.reviews where release_id = 'release-1'),
+  200::bigint,
+  'reaction-count maintenance preserves review ownership'
+);
+
 reset role;
 insert into public.blocked_users (user_id, username) values (200, 'alice');
 set local role authenticated;
@@ -128,6 +171,21 @@ select is(
   0::bigint,
   'a regular user cannot enumerate blocked users'
 );
+select is(
+  (select count(*) from public.likes),
+  0::bigint,
+  'a regular user cannot enumerate another user likes'
+);
+select is(
+  (select count(*) from public.review_reactions),
+  0::bigint,
+  'a regular user cannot enumerate another user reactions'
+);
+select is(
+  (select "reactionCount" from public.reviews_view where "relId" = 'release-1'),
+  1,
+  'aggregate reaction counts remain visible to regular users'
+);
 
 reset role;
 insert into public.admins (user_id, username) values (100, 'owner');
@@ -163,6 +221,21 @@ select ok(
 
 reset role;
 set local role anon;
+select is(
+  (select count(*) from public.likes),
+  0::bigint,
+  'anonymous users cannot enumerate like identities'
+);
+select is(
+  (select count(*) from public.review_reactions),
+  0::bigint,
+  'anonymous users cannot enumerate reaction identities'
+);
+select is(
+  (select "reactionCount" from public.reviews_view where "relId" = 'release-1'),
+  1,
+  'aggregate reaction counts remain publicly readable'
+);
 select throws_ok(
   $$select public.create_comment('missing-review', 'anonymous')$$,
   '42501',

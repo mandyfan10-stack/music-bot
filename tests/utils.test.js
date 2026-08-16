@@ -5,6 +5,8 @@ const {
   escapeHtml,
   escapeCssString,
   genId,
+  getPublicCacheData,
+  getShareTarget,
   normalizeGenre,
   cleanTrackTitle,
   parseArtistAndTitle,
@@ -91,6 +93,45 @@ test('genId: consecutive calls do not collide', () => {
     const ids = new Set();
     for (let i = 0; i < 1000; i++) ids.add(genId());
     assert.strictEqual(ids.size, 1000);
+});
+
+test('getPublicCacheData: excludes account-specific and privileged state', () => {
+  const cached = getPublicCacheData({
+    releases: [{ id: 'r1' }],
+    reviews: [{ id: 'v1' }],
+    comments: [{ id: 'c1' }],
+    likes: ['r1'],
+    myReactions: ['v1'],
+    blockedUsers: ['private-user'],
+    blockedUserIds: ['123'],
+    currentUser: { userId: 123, isAdmin: true }
+  });
+  assert.deepStrictEqual(cached, {
+    releases: [{ id: 'r1' }],
+    reviews: [{ id: 'v1' }],
+    comments: [{ id: 'c1' }]
+  });
+});
+
+test('getPublicCacheData: normalizes malformed cache arrays', () => {
+  assert.deepStrictEqual(getPublicCacheData({ releases: null }), {
+    releases: [], reviews: [], comments: []
+  });
+});
+
+test('getShareTarget: prefers a valid server deep-link', () => {
+  assert.strictEqual(
+    getShareTarget('https://t.me/example/app?startapp=r1', 'https://music.example/r1'),
+    'https://t.me/example/app?startapp=r1'
+  );
+});
+
+test('getShareTarget: falls back to release URL and rejects unsafe schemes', () => {
+  assert.strictEqual(
+    getShareTarget('javascript:alert(1)', 'https://music.example/r1'),
+    'https://music.example/r1'
+  );
+  assert.strictEqual(getShareTarget('data:text/html,x', 'file:///tmp/release'), '');
 });
 
 // --- normalizeGenre ---

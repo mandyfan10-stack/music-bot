@@ -5,6 +5,11 @@ import {
   isSafePublicUrl,
   METADATA_TIMEOUT_MS,
 } from "../_shared/network_security.ts";
+import {
+  JwtAuthError,
+  requireGatewayVerifiedRole,
+} from "../_shared/jwt_auth.ts";
+import { verifyTelegramInitData } from "../_shared/telegram_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +17,31 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-telegram-init-data",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+async function requireParserAccess(req: Request): Promise<void> {
+  try {
+    requireGatewayVerifiedRole(
+      req.headers.get("Authorization"),
+      "authenticated",
+    );
+    return;
+  } catch (error) {
+    // Compatibility for already-deployed clients: the gateway accepts the
+    // public legacy anon JWT, but the request must additionally prove that it
+    // came from a genuine, recent Telegram Mini App session.
+    if (!(error instanceof JwtAuthError) || error.status !== 403) throw error;
+  }
+
+  const initData = req.headers.get("X-Telegram-Init-Data") || "";
+  const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN") || "";
+  const maxAge = Number(Deno.env.get("INIT_DATA_MAX_AGE") || "86400");
+  try {
+    if (!initData || !botToken) throw new Error("Missing Telegram proof");
+    await verifyTelegramInitData(initData, botToken, maxAge);
+  } catch {
+    throw new JwtAuthError("Authenticated Telegram user required", 403);
+  }
+}
 
 const GENRE_MAP: Record<string, string> = {
   // Рэп / Хип-хоп / Трэп
@@ -500,8 +530,18 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
+    // The gateway validates the JWT signature. The handler then requires an
+    // authenticated application role or a signature-verified Telegram session.
+    await requireParserAccess(req);
+
     // Чтение ссылки из тела запроса
     const { link } = await req.json();
     if (!link || typeof link !== "string") {
@@ -549,6 +589,12 @@ serve(async (req) => {
       },
     );
   } catch (err) {
+    if (err instanceof JwtAuthError) {
+      return new Response(JSON.stringify({ error: err.message }), {
+        status: err.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     console.error("Error in parse-link function:", err);
     const message = err instanceof Error ? err.message : String(err);
     return new Response(JSON.stringify({ error: message }), {

@@ -34,9 +34,6 @@
       console.error("Failed to initialize Supabase client:", err);
     }
 
-    // URL Mini App для deep-link шеринга (?startapp=<id>)
-    let miniAppUrl = '';
-
     // Динамические геттеры Telegram WebApp данных
     function getTgInitData() {
       return tg.initData || window.Telegram?.WebApp?.initData || '';
@@ -45,47 +42,28 @@
       return tg.initDataUnsafe?.user || window.Telegram?.WebApp?.initDataUnsafe?.user;
     }
 
-    // Telegram initData — подписанная строка для серверной проверки
-    const tgInitData = getTgInitData();
+    // Telegram user используется только для раннего отображения имени.
     const tgUser = getTgUser();
 
-    // Проверка режима локальной разработки (localhost / ?admin=true)
+    // Локальный сервер используется только для статических файлов и парсера.
+    // Администраторские права, в том числе локально, выдаёт только Supabase.
     const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    const isExplicitAdmin = typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('admin') === 'true' || new URLSearchParams(window.location.search).get('admin') === '1');
 
     // Базовый display name (до ответа сервера)
     let localDisplayName = (tgUser?.username ? `@${tgUser.username}` : tgUser?.first_name) || 'Гость';
-    let initialIsAdmin = false;
-    let initialIsAuth = false;
     let initialUserId = (tgUser && tgUser.id) || null;
 
-    if ((isLocalhost || isExplicitAdmin) && !getTgInitData()) {
-      localDisplayName = '@monetka_man';
-      initialIsAdmin = true;
-      initialIsAuth = true;
-      initialUserId = 1041515123;
-    }
-
-    // Роль определяется ТОЛЬКО сервером, не клиентом (с поддержкой локального dev-режима)!
+    // Роль определяется только сервером.
     let user = {
       userId: initialUserId,
       username: localDisplayName,
-      role: initialIsAdmin ? 'Создатель' : 'Пользователь',
-      isAdmin: initialIsAdmin,
+      role: 'Пользователь',
+      isAdmin: false,
       isBlocked: false,
-      isAuthenticated: initialIsAuth,
+      isAuthenticated: false,
       notificationsEnabled: true
     };
     let blockedUsers = [], blockedUserIds = new Set();
-
-    // Заголовки авторизации для всех API-запросов
-    function authHeaders(extra = {}) {
-      return {
-        'Content-Type': 'application/json',
-        'X-Telegram-Init-Data': getTgInitData(),
-        ...extra
-      };
-    }
 
     function tgHaptic(style = 'light') {
       try {
@@ -425,17 +403,11 @@
       }
     }
 
-    // Deep-link на Mini App, открывающий этот релиз (?startapp=<id>).
-    function releaseDeepLink(relId) {
-      if (!miniAppUrl) return '';
-      const sep = miniAppUrl.includes('?') ? '&' : '?';
-      return `${miniAppUrl}${sep}startapp=${encodeURIComponent(relId)}`;
-    }
-
-    // Фолбэк-шеринг для клиентов без tg.shareMessage: пересылаем deep-link в бота
-    // (а не ссылку на стороннюю площадку).
-    function shareReleaseLink(rel) {
-      const link = releaseDeepLink(rel.id);
+    // Фолбэк для клиентов без tg.shareMessage. Edge Function возвращает
+    // канонический deep-link Mini App; при недоступном сервере остаётся ссылка
+    // на сам релиз, поэтому кнопка никогда не становится бесполезной.
+    function shareReleaseLink(rel, serverDeepLink = '') {
+      const link = getShareTarget(serverDeepLink, rel.link);
       if (!link) return showToast('Шеринг недоступен');
       const text = `${rel.artist} — ${rel.name}`;
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
@@ -457,28 +429,30 @@
       const canShareMessage = typeof tg.shareMessage === 'function'
         && parseFloat(tg.version || '0') >= 8;
 
-      if (canShareMessage) {
-        try {
-          const token = (await supabase.auth.getSession()).data.session?.access_token;
-          const res = await fetch(SUPABASE_SHARE_MESSAGE_FUNCTION_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token || ''}`
-            },
-            body: JSON.stringify({ releaseId: rel.id })
-          });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const data = await res.json();
-          if (!data.preparedMessageId) throw new Error('No preparedMessageId');
+      try {
+        const token = (await supabase?.auth.getSession())?.data?.session?.access_token;
+        if (!token) throw new Error('No authenticated session');
+        const res = await fetch(SUPABASE_SHARE_MESSAGE_FUNCTION_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ releaseId: rel.id, prepare: canShareMessage })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        if (canShareMessage && data.preparedMessageId) {
           tg.shareMessage(data.preparedMessageId, (sent) => {
             if (sent) showToast('Отправлено', 'success');
           });
           return;
-        } catch (e) {
-          console.error('shareMessage error:', e);
-          // Фолбэк ниже.
         }
+        shareReleaseLink(rel, data.deepLink);
+        return;
+      } catch (e) {
+        console.error('Share preparation error:', e);
       }
       shareReleaseLink(rel);
     }
@@ -487,7 +461,7 @@
     let startParamHandled = false;
     function handleStartParam() {
       if (startParamHandled) return;
-      const param = tg.initDataUnsafe?.start_param;
+      const param = tg.initDataUnsafe?.start_param || window.Telegram?.WebApp?.initDataUnsafe?.start_param;
       if (!param) { startParamHandled = true; return; }
       if (releasesById.has(param)) {
         startParamHandled = true;
@@ -906,6 +880,7 @@
 
     function openModal(id) {
       const m = document.getElementById(id); m.classList.remove('hidden');
+      m.setAttribute('aria-hidden', 'false');
       const c = m.querySelector('.modal-container');
       const o = m.querySelector('.modal-overlay');
       // Сброс возможных остатков inline-стилей от свайпа.
@@ -928,6 +903,7 @@
       const c = m.querySelector('.modal-container');
       const o = m.querySelector('.modal-overlay');
       m.classList.add('hidden');
+      m.setAttribute('aria-hidden', 'true');
       c.classList.remove('slide-down-modal', 'slide-up-modal');
       o.classList.remove('fade-out', 'fade-in');
       c.style.transform = ''; c.style.transition = '';
@@ -969,6 +945,12 @@
       o.classList.remove('fade-in'); o.classList.add('fade-out');
       setTimeout(() => finalizeModalClose(id), 460);
     }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || openModalStack.length === 0) return;
+      event.preventDefault();
+      closeModal(openModalStack[openModalStack.length - 1]);
+    });
 
     // Принадлежит ли рецензия пользователю. authorId приходит с сервера и
     // надёжен; displayName — фолбэк для старых записей без authorId.
@@ -1201,16 +1183,14 @@
     }
 
     // --- КЭШИРОВАНИЕ: мгновенный старт из localStorage ---
-    const CACHE_KEY = 'xxii_cache_v2';
+    const CACHE_KEY = 'xxii_public_cache_v3';
     const CACHE_TTL_MS = 15 * 60 * 1000;
 
     function saveCache(data) {
       try {
-        // currentUser (роль/блокировка) не кэшируем — статус может устареть.
-        const { currentUser, ...cacheable } = data;
         const payload = {
           savedAt: Date.now(),
-          data: cacheable
+          data: getPublicCacheData(data)
         };
         localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
       } catch(e) {}
@@ -1218,19 +1198,15 @@
 
     function loadCache() {
       try {
+        // v2 мог содержать приватные данные другого Telegram-пользователя.
+        localStorage.removeItem('xxii_cache_v2');
         const raw = JSON.parse(localStorage.getItem(CACHE_KEY));
         if (!raw) return null;
-
-        // Старый формат не содержал timestamp, поэтому не показываем потенциально вечные stale-данные.
-        if (Array.isArray(raw.releases) || Array.isArray(raw.reviews)) {
-          localStorage.removeItem(CACHE_KEY);
-          return null;
-        }
 
         if (!raw.savedAt || !raw.data) return null;
         if (Date.now() - raw.savedAt > CACHE_TTL_MS) return null;
 
-        return raw.data;
+        return getPublicCacheData(raw.data);
       } catch(e) {
         return null;
       }
@@ -1249,8 +1225,6 @@
       reactedSet = new Set(data.myReactions || []);
       blockedUsers = data.blockedUsers || [];
       blockedUserIds = new Set((data.blockedUserIds || []).map(String));
-      if (typeof data.miniAppUrl === 'string') miniAppUrl = data.miniAppUrl;
-      if (data.syncCursor != null) syncCursor = String(data.syncCursor);
       if (data.currentUser) {
         if (data.currentUser.userId != null) user.userId = data.currentUser.userId;
         user.username = data.currentUser.displayName || user.username;
@@ -1263,13 +1237,16 @@
       applyUserRole();
       applyNotificationsToggle();
       renderReleases();
-      switchTab('home');
+      if (!activeTabId) switchTab('home');
+      else if (activeTabId === 'likes') renderLikes();
+      else if (activeTabId === 'feed') renderFeed();
       handleStartParam();
     }
 
-    let isAuthenticating = false;
+    let authenticationPromise = null;
     async function authenticateWithSupabase(force = false) {
       if (!supabase) return false;
+      if (authenticationPromise) return authenticationPromise;
       if (!force && user.isAuthenticated) {
         const session = (await supabase.auth.getSession()).data.session;
         if (session?.access_token) return true;
@@ -1277,8 +1254,8 @@
       const currentInitData = getTgInitData();
       if (!currentInitData) return false;
 
-      isAuthenticating = true;
-      try {
+      authenticationPromise = (async () => {
+        try {
         const res = await fetch(SUPABASE_AUTH_FUNCTION_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1303,12 +1280,13 @@
           applyNotificationsToggle();
         }
         return true;
-      } catch (err) {
-        console.error("Supabase authentication failed:", err);
-        return false;
-      } finally {
-        isAuthenticating = false;
-      }
+        } catch (err) {
+          console.error("Supabase authentication failed:", err);
+          return false;
+        }
+      })();
+      try { return await authenticationPromise; }
+      finally { authenticationPromise = null; }
     }
 
     async function ensureValidAuthSession(force = false) {
@@ -1425,9 +1403,6 @@
         }
     }
 
-    let syncCursor = '0';
-    let syncLoopActive = false;
-
     // Применяет инкрементальную дельту от Realtime/сервера к локальному состоянию.
     function applySyncDelta(data) {
       let changed = false;
@@ -1508,14 +1483,11 @@
       }
     }
 
-    async function syncLoopTick() {}
-
     let supabaseChannel = null;
 
     function startSyncLoop() {
       if (!supabase) return;
       if (supabaseChannel) return;
-      syncLoopActive = true;
       setSyncStatus('Синхронизация...', 'syncing');
 
       supabaseChannel = supabase
@@ -1641,7 +1613,6 @@
     }
 
     function stopSyncLoop() {
-      syncLoopActive = false;
       if (supabaseChannel) {
         supabase.removeChannel(supabaseChannel);
         supabaseChannel = null;
@@ -1870,12 +1841,16 @@
         }
       }
 
+      await ensureValidAuthSession();
+      const parserToken = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!parserToken) throw new Error('Telegram session is required for metadata parsing');
+
       const res = await fetch(SUPABASE_PARSE_LINK_FUNCTION_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${parserToken}`,
           'X-Telegram-Init-Data': getTgInitData()
         },
         body: JSON.stringify({ link })
@@ -2123,24 +2098,11 @@
 
         let insertRes = await supabase.from('releases').insert([newRel]);
         
-        // Автоматический retry при ошибке авторизации RLS (42501 / expired token)
+        // Автоматический retry при ошибке авторизации RLS (42501 / expired token).
         if (insertRes.error && (insertRes.error.code === '42501' || insertRes.error.message?.includes('JWT') || insertRes.error.message?.includes('auth') || insertRes.error.message?.includes('row-level security'))) {
-          if (!tg.initData && (isLocalhost || isExplicitAdmin)) {
-            console.warn('Local dev mode: saving release via dev RPC...');
-            insertRes = await supabase.rpc('dev_create_release', {
-              p_id: newRel.id,
-              p_name: newRel.name,
-              p_artist: newRel.artist,
-              p_img: newRel.img || '',
-              p_link: newRel.link,
-              p_genre: newRel.genre,
-              p_timestamp: newRel.timestamp
-            });
-          } else {
-            console.warn('RLS insert error, retrying with fresh auth session...');
-            await ensureValidAuthSession(true);
-            insertRes = await supabase.from('releases').insert([newRel]);
-          }
+          console.warn('RLS insert error, retrying with fresh auth session...');
+          await ensureValidAuthSession(true);
+          insertRes = await supabase.from('releases').insert([newRel]);
         }
 
         if (insertRes.error) {
@@ -2197,6 +2159,8 @@
 
     function toggleLikeAPI(e, id) {
       e.stopPropagation();
+      if (!user.isAuthenticated) return showToast('Войдите через Telegram');
+      if (user.isBlocked) return showToast('Ваш аккаунт заблокирован');
       const isLiking = !likedSet.has(id);
 
       // Оптимистично обновляем UI
@@ -2465,15 +2429,9 @@
       try {
         let { error } = await supabase.from('releases').delete().eq('id', releaseToDelete);
         if (error && (error.code === '42501' || error.message?.includes('JWT') || error.message?.includes('auth'))) {
-          if (!tg.initData && (isLocalhost || isExplicitAdmin)) {
-            console.warn('Local dev mode: deleting release via dev RPC...');
-            const rpcRes = await supabase.rpc('dev_delete_release', { p_id: releaseToDelete });
-            error = rpcRes.error;
-          } else {
-            await ensureValidAuthSession(true);
-            const retry = await supabase.from('releases').delete().eq('id', releaseToDelete);
-            error = retry.error;
-          }
+          await ensureValidAuthSession(true);
+          const retry = await supabase.from('releases').delete().eq('id', releaseToDelete);
+          error = retry.error;
         }
         if (error) throw error;
       } catch(e) {
@@ -2919,6 +2877,6 @@
     }
     renderSkeletonGrid();
 
-    // Запуск синхронизации с БД Render + real-time long-poll
+    // Первичная загрузка из Supabase и последующая Realtime-синхронизация.
     fetchDB().finally(() => { if (!document.hidden) startSyncLoop(); });
 })();

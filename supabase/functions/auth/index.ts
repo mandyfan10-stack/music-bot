@@ -99,17 +99,6 @@ serve(async (req) => {
     }
     const isAdmin = Boolean(adminRecord);
 
-    const { error: subscriberError } = await supabase
-      .from("notification_subscribers")
-      .upsert({
-        user_id: userId,
-        username: cleanUsername,
-        chat_id: userId,
-      }, { onConflict: "user_id" });
-    if (subscriberError) {
-      console.error("Subscriber registration failed:", subscriberError);
-    }
-
     const signingKey = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(jwtSecret),
@@ -134,6 +123,24 @@ serve(async (req) => {
       },
       signingKey,
     );
+
+    // Subscriber RLS and its server-fields trigger require the Telegram user's
+    // JWT. Keep privileged role lookups on the service client above, then run
+    // this account-owned write with the freshly issued user token.
+    const userSupabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { error: subscriberError } = await userSupabase
+      .from("notification_subscribers")
+      .upsert({
+        user_id: userId,
+        username: cleanUsername,
+        chat_id: userId,
+      }, { onConflict: "user_id" });
+    if (subscriberError) {
+      console.error("Subscriber registration failed:", subscriberError);
+    }
 
     return jsonResponse({
       token: jwt,

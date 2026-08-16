@@ -19,6 +19,7 @@ npm ci
 npm test
 node --check src/app.js
 node --check src/utils.js
+node --check server.js
 deno check --frozen supabase/functions/*/index.ts
 deno fmt --check supabase/functions
 deno test --frozen supabase/functions/_shared/*_test.ts
@@ -27,6 +28,9 @@ deno test --frozen supabase/functions/_shared/*_test.ts
 Database migrations and the staging-first rollout procedure are documented in
 [supabase/README.md](supabase/README.md). Production schema changes are never
 deployed automatically by CI.
+
+`supabase/schema.sql` is intentionally non-executable. The ordered migration
+files are the only repository source of truth for database state.
 
 GitHub Pages publishes a staged `_site` artifact containing only `index.html`
 and `src/`. Backend source and repository metadata are never included in the

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://telegram.org https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://unpkg.com https://ftpofwybzvhvyukrshcm.supabase.co wss://ftpofwybzvhvyukrshcm.supabase.co https://noembed.com https://itunes.apple.com https://ui-avatars.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://ftpofwybzvhvyukrshcm.supabase.co wss://ftpofwybzvhvyukrshcm.supabase.co https://noembed.com https://itunes.apple.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <script src="src/supabase.min.js?v=2"></script>
   <script src="src/lucide.min.js?v=2"></script>
@@ -178,14 +178,14 @@
     <button data-act="switch-tab" data-tab="settings" id="tab-settings" class="flex flex-col items-center gap-1 text-gray-500 btn-press transition-colors"><i data-lucide="settings" class="w-6 h-6"></i><span class="text-[10px] font-medium">Опции</span></button>
   </nav>
 
-  <div id="modal-add" class="fixed inset-0 z-50 hidden flex flex-col justify-end">
+  <div id="modal-add" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="modal-add-title" class="fixed inset-0 z-50 hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" data-act="close-modal" data-modal="modal-add"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container max-h-[92vh] overflow-y-auto hide-scrollbar">
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6"></div>
       
       <div class="flex flex-col items-center mb-6 text-center">
         <div class="w-12 h-12 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-3"><i data-lucide="link" class="w-6 h-6"></i></div>
-        <h2 class="text-xl font-semibold text-white">Новый релиз</h2>
+        <h2 id="modal-add-title" class="text-xl font-semibold text-white">Новый релиз</h2>
       </div>
       
       <div id="add-form-step-1" class="space-y-4">
@@ -220,7 +220,7 @@
     </div>
   </div>
 
-  <div id="modal-release" class="fixed inset-0 z-50 hidden flex flex-col justify-end">
+  <div id="modal-release" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="rel-title" class="fixed inset-0 z-50 hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" data-act="close-modal" data-modal="modal-release"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container max-h-[92vh] overflow-y-auto hide-scrollbar flex-col">
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
@@ -251,14 +251,14 @@
     </div>
   </div>
 
-  <div id="modal-confirm-delete" class="fixed inset-0 z-[70] hidden flex flex-col justify-end">
+  <div id="modal-confirm-delete" role="alertdialog" aria-modal="true" aria-hidden="true" aria-labelledby="confirm-delete-title" class="fixed inset-0 z-[70] hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" data-act="close-modal" data-modal="modal-confirm-delete"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container text-center flex-col">
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
       <div class="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
         <i data-lucide="trash-2" class="w-8 h-8"></i>
       </div>
-      <h3 class="text-xl font-bold text-white mb-2">Удалить релиз?</h3>
+      <h3 id="confirm-delete-title" class="text-xl font-bold text-white mb-2">Удалить релиз?</h3>
       <p class="text-[13px] text-gray-400 mb-8">Это действие необратимо. Все рецензии и оценки также будут удалены из базы.</p>
       <div class="flex gap-3">
         <button data-act="close-modal" data-modal="modal-confirm-delete" class="btn-press flex-1 py-3.5 bg-white/10 text-white font-bold rounded-2xl border border-white/10">Отмена</button>
@@ -267,14 +267,14 @@
     </div>
   </div>
 
-  <div id="modal-confirm-review-delete" class="fixed inset-0 z-[75] hidden flex flex-col justify-end">
+  <div id="modal-confirm-review-delete" role="alertdialog" aria-modal="true" aria-hidden="true" aria-labelledby="confirm-review-delete-title" class="fixed inset-0 z-[75] hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" data-act="close-modal" data-modal="modal-confirm-review-delete"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container text-center flex-col">
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
       <div class="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
         <i data-lucide="trash-2" class="w-8 h-8"></i>
       </div>
-      <h3 class="text-xl font-bold text-white mb-2">Удалить рецензию?</h3>
+      <h3 id="confirm-review-delete-title" class="text-xl font-bold text-white mb-2">Удалить рецензию?</h3>
       <p class="text-[13px] text-gray-400 mb-8">После удаления вы сможете опубликовать рецензию на этот трек заново.</p>
       <div class="flex gap-3">
         <button data-act="close-modal" data-modal="modal-confirm-review-delete" class="btn-press flex-1 py-3.5 bg-white/10 text-white font-bold rounded-2xl border border-white/10">Отмена</button>
@@ -283,7 +283,7 @@
     </div>
   </div>
 
-  <div id="modal-profile" class="fixed inset-0 z-[60] hidden flex flex-col justify-end">
+  <div id="modal-profile" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="profile-name" class="fixed inset-0 z-[60] hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" data-act="close-modal" data-modal="modal-profile"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container text-center max-h-[92vh] overflow-y-auto hide-scrollbar flex-col">
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>

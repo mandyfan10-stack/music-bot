@@ -54,9 +54,49 @@ admin revocation. Notification probes returned 401 without auth, 403 for anon,
 200 for service-role on a non-delivery event, and created no delivery rows.
 Supabase Security Advisors report no findings.
 
-## Delayed contract phase
+## Delayed contract phase (status recorded 2026-07-19)
 
 `20260719000300_identity_contract.sql` is not applied. Do not apply it before
 seven stable days have elapsed and production telemetry has been reviewed. The
 earliest planned review date is 2026-07-26. Roll schema issues forward; do not
 run destructive down-migrations.
+
+The section above is the historical 2026-07-19 record. Current hosted state is
+recorded in the dated rollout note below.
+
+## Production privacy and runtime rollout (2026-08-16)
+
+The Supabase integration reported the project as `ACTIVE_HEALTHY` on Postgres
+17. Migration `20260816074509_protect_private_reactions_and_counts` is applied
+and its version matches the repository filename.
+
+The rollout repaired the hosted drift found by the preflight audit:
+
+- removed the unauthenticated `SECURITY DEFINER` development RPCs;
+- replaced public raw like/reaction reads with owner-only policies;
+- backfilled and verified public aggregate reaction counts (7 stored and 7 raw,
+  with zero mismatches);
+- published all six application tables required by Supabase Realtime;
+- kept both public views as `security_invoker=true` and the review trigger
+  enabled.
+
+Deployed Edge Function versions are `auth` v12 (`verify_jwt=false`, Telegram
+signature bootstrap), `parse-link` v16 (`verify_jwt=true` plus either an
+internal `authenticated` role check or signature-verified Telegram initData for
+already-deployed clients), `share-message` v12 (`verify_jwt=true` plus its
+signature/claim checks), and `send-notifications` v11 (`verify_jwt=true`). The
+auth subscriber upsert now runs with the newly issued user JWT instead of the
+service-role request context.
+
+Transactional RLS probes confirmed that anon and an unrelated authenticated
+user cannot enumerate like/reaction identities, while aggregate counts remain
+visible. A rolled-back subscriber probe confirmed the user-context upsert and
+server-owned Telegram identity fields. HTTP probes returned 401 without auth,
+403/401 for anon JWTs on the two user functions, and the auth endpoint returned
+200 for CORS preflight, 400 for an invalid payload, and 405 for GET. Supabase
+Security Advisors report no findings after the rollout.
+
+Performance Advisors retain only informational notices for two currently
+unused indexes and the fixed Auth connection allocation. Keep the indexes until
+representative query statistics justify removal; revisit the Auth allocation
+when changing compute size.

@@ -82,7 +82,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:tailwindcss@^3.4.17"
+        "npm:tailwindcss@3.4.19"
       ]
     }
   }

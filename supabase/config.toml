@@ -1,4 +1,15 @@
 project_id = "ftpofwybzvhvyukrshcm"
 
+[functions.auth]
+# Telegram initData is the credential for this bootstrap endpoint. The
+# function verifies its HMAC signature before issuing the application JWT.
+verify_jwt = false
+
+[functions.parse-link]
+verify_jwt = true
+
+[functions.share-message]
+verify_jwt = true
+
 [functions.send-notifications]
 verify_jwt = true
