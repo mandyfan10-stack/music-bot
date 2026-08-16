@@ -5,6 +5,12 @@ project_id = "ftpofwybzvhvyukrshcm"
 # function verifies its HMAC signature before issuing the application JWT.
 verify_jwt = false
 
+[functions.release-cover]
+# Cover uploads independently verify signed Telegram initData and the live
+# admins table before using the service role. There is no Supabase JWT yet when
+# this endpoint is called during release creation.
+verify_jwt = false
+
 [functions.parse-link]
 verify_jwt = true
 

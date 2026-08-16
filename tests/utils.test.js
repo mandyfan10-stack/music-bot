@@ -6,6 +6,7 @@ const {
   escapeCssString,
   genId,
   getPublicCacheData,
+  getTelegramIdFromClaims,
   getShareTarget,
   normalizeGenre,
   cleanTrackTitle,
@@ -117,6 +118,23 @@ test('getPublicCacheData: normalizes malformed cache arrays', () => {
   assert.deepStrictEqual(getPublicCacheData({ releases: null }), {
     releases: [], reviews: [], comments: []
   });
+});
+
+test('getTelegramIdFromClaims: reads managed Auth app_metadata', () => {
+  assert.strictEqual(getTelegramIdFromClaims({
+    sub: '00000000-0000-0000-0000-000000000123',
+    app_metadata: { telegram_user_id: '123456' }
+  }), '123456');
+});
+
+test('getTelegramIdFromClaims: supports numeric legacy sub during rollout', () => {
+  assert.strictEqual(getTelegramIdFromClaims({ sub: '987654' }), '987654');
+});
+
+test('getTelegramIdFromClaims: rejects UUID sub without the managed claim', () => {
+  assert.strictEqual(getTelegramIdFromClaims({
+    sub: '00000000-0000-0000-0000-000000000123'
+  }), '');
 });
 
 test('getShareTarget: prefers a valid server deep-link', () => {

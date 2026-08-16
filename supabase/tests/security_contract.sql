@@ -1,7 +1,29 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(35);
+
+select is(
+  (select public from storage.buckets where id = 'release-covers'),
+  true,
+  'release cover bucket is publicly readable'
+);
+select is(
+  (select file_size_limit from storage.buckets where id = 'release-covers'),
+  2097152::bigint,
+  'release cover uploads are capped at two megabytes'
+);
+select is(
+  (
+    select count(*)
+    from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+      and coalesce(qual, '') || coalesce(with_check, '') ilike '%release-covers%'
+  ),
+  0::bigint,
+  'release cover writes have no client RLS policy'
+);
 
 select has_function(
   'public',
@@ -42,7 +64,7 @@ values ('release-1', 'Release', 'Artist', 'https://example.com/release');
 
 select set_config(
   'request.jwt.claims',
-  '{"sub":"200","role":"authenticated","user_metadata":{"username":"Alice","display_name":"Alice"}}',
+  '{"sub":"00000000-0000-0000-0000-000000000200","role":"authenticated","app_metadata":{"telegram_user_id":"200","username":"Alice","display_name":"Alice"}}',
   true
 );
 set local role authenticated;
@@ -162,7 +184,7 @@ select throws_ok(
 reset role;
 select set_config(
   'request.jwt.claims',
-  '{"sub":"201","role":"authenticated","user_metadata":{"username":"Bob","display_name":"Bob"}}',
+  '{"sub":"00000000-0000-0000-0000-000000000201","role":"authenticated","app_metadata":{"telegram_user_id":"201","username":"Bob","display_name":"Bob"}}',
   true
 );
 set local role authenticated;
@@ -191,7 +213,7 @@ reset role;
 insert into public.admins (user_id, username) values (100, 'owner');
 select set_config(
   'request.jwt.claims',
-  '{"sub":"100","role":"authenticated","user_metadata":{"username":"Owner","display_name":"Owner"}}',
+  '{"sub":"00000000-0000-0000-0000-000000000100","role":"authenticated","app_metadata":{"telegram_user_id":"100","username":"Owner","display_name":"Owner"}}',
   true
 );
 set local role authenticated;

@@ -45,6 +45,15 @@ function getPublicCacheData(data) {
   };
 }
 
+// Managed Supabase Auth sessions use a UUID in `sub`; the stable Telegram ID
+// is an admin-owned app_metadata claim. Numeric `sub` remains a compatibility
+// fallback for already-issued legacy application JWTs during rollout.
+function getTelegramIdFromClaims(claims) {
+  const managedId = claims?.app_metadata?.telegram_user_id;
+  if (managedId != null && String(managedId)) return String(managedId);
+  return /^\d+$/.test(String(claims?.sub || '')) ? String(claims.sub) : '';
+}
+
 // Серверный deep-link предпочтительнее ссылки на музыкальную площадку, но
 // обе ссылки должны быть обычными HTTP(S) URL.
 function getShareTarget(serverDeepLink, releaseLink) {
@@ -266,6 +275,7 @@ if (typeof module !== 'undefined' && module.exports) {
     escapeCssString,
     genId,
     getPublicCacheData,
+    getTelegramIdFromClaims,
     getShareTarget,
     normalizeGenre,
     cleanTrackTitle,

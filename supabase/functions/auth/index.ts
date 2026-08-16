@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.7";
-import { create, getNumericDate } from "https://deno.land/x/djwt@v2.9/mod.ts";
 import {
   parseTelegramUser,
   TelegramAuthError,
@@ -68,68 +67,93 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const jwtSecret = Deno.env.get("JWT_SECRET") ||
-      Deno.env.get("SUPABASE_JWT_SECRET");
-    if (!supabaseUrl || !supabaseServiceKey || !jwtSecret) {
+    if (!supabaseUrl || !supabaseServiceKey) {
       return jsonResponse({
         error: "Supabase authentication is not configured",
       }, 500);
     }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: blockedUser, error: blockedError } = await supabase
-      .from("blocked_users")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const [{ data: blockedUser, error: blockedError }, {
+      data: adminRecord,
+      error: adminError,
+    }] = await Promise.all([
+      supabase.from("blocked_users").select("user_id").eq("user_id", userId)
+        .maybeSingle(),
+      supabase.from("admins").select("user_id").eq("user_id", userId)
+        .maybeSingle(),
+    ]);
     if (blockedError) {
       console.error("Blocked-user lookup failed:", blockedError);
       return jsonResponse({ error: "Could not verify account status" }, 500);
     }
     if (blockedUser) return jsonResponse({ error: "User is blocked" }, 403);
 
-    const { data: adminRecord, error: adminError } = await supabase
-      .from("admins")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle();
     if (adminError) {
       console.error("Admin lookup failed:", adminError);
       return jsonResponse({ error: "Could not verify account role" }, 500);
     }
     const isAdmin = Boolean(adminRecord);
 
-    const signingKey = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(jwtSecret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    const jwt = await create(
-      { alg: "HS256", typ: "JWT" },
-      {
-        iss: supabaseUrl,
-        aud: "authenticated",
-        role: "authenticated",
-        sub: String(userId),
-        iat: getNumericDate(0),
-        exp: getNumericDate(60 * 60 * 24),
-        app_metadata: { is_admin: isAdmin },
-        user_metadata: {
-          username: cleanUsername,
-          display_name: displayName,
-        },
+    // Mint a normal Supabase Auth session rather than hand-signing a JWT.
+    // The hosted project uses managed signing keys, so Edge Functions do not
+    // have access to the active private key. Admin-generated magic links let
+    // the server exchange verified Telegram identity for a standard session
+    // without sending an email or exposing a reusable password.
+    const email = `telegram-${userId}@telegram.invalid`;
+    const appMetadata = {
+      telegram_user_id: String(userId),
+      username: cleanUsername,
+      display_name: displayName,
+      is_admin: isAdmin,
+    };
+    const { data: linkData, error: linkError } = await supabase.auth.admin
+      .generateLink({ type: "magiclink", email });
+    const authUserId = linkData?.user?.id;
+    const tokenHash = linkData?.properties?.hashed_token;
+    if (linkError || !authUserId || !tokenHash) {
+      console.error("Auth link generation failed:", linkError);
+      return jsonResponse({ error: "Could not prepare user session" }, 500);
+    }
+
+    const currentMetadata = linkData.user?.app_metadata || {};
+    const metadataChanged = String(currentMetadata.telegram_user_id || "") !==
+        appMetadata.telegram_user_id ||
+      String(currentMetadata.username || "") !== appMetadata.username ||
+      String(currentMetadata.display_name || "") !== appMetadata.display_name ||
+      Boolean(currentMetadata.is_admin) !== appMetadata.is_admin;
+    if (metadataChanged) {
+      const { error: updateUserError } = await supabase.auth.admin
+        .updateUserById(
+          authUserId,
+          { app_metadata: { ...currentMetadata, ...appMetadata } },
+        );
+      if (updateUserError) {
+        console.error("Auth metadata update failed:", updateUserError);
+        return jsonResponse({ error: "Could not update user session" }, 500);
+      }
+    }
+
+    const sessionClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
       },
-      signingKey,
-    );
+    });
+    const { data: sessionData, error: verifyError } = await sessionClient.auth
+      .verifyOtp({ token_hash: tokenHash, type: "email" });
+    const accessToken = sessionData.session?.access_token;
+    if (verifyError || !accessToken) {
+      console.error("Auth token exchange failed:", verifyError);
+      return jsonResponse({ error: "Could not exchange user session" }, 500);
+    }
 
     // Subscriber RLS and its server-fields trigger require the Telegram user's
-    // JWT. Keep privileged role lookups on the service client above, then run
-    // this account-owned write with the freshly issued user token.
+    // session. Keep privileged role lookups on the service client above, then
+    // run this account-owned write with the freshly issued user token.
     const userSupabase = createClient(supabaseUrl, supabaseServiceKey, {
-      global: { headers: { Authorization: `Bearer ${jwt}` } },
-      auth: { persistSession: false, autoRefreshToken: false },
+      accessToken: async () => accessToken,
     });
     const { error: subscriberError } = await userSupabase
       .from("notification_subscribers")
@@ -140,10 +164,11 @@ serve(async (req) => {
       }, { onConflict: "user_id" });
     if (subscriberError) {
       console.error("Subscriber registration failed:", subscriberError);
+      return jsonResponse({ error: "Could not validate user session" }, 500);
     }
 
     return jsonResponse({
-      token: jwt,
+      token: accessToken,
       user: {
         userId,
         username: displayName,

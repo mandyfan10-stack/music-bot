@@ -46,9 +46,38 @@ test('remote metadata parser requires a user JWT or signed Telegram session', ()
 
 test('auth registers notification subscribers with the issued user JWT', () => {
   const auth = read('supabase/functions/auth/index.ts');
-  assert.match(auth, /const jwt = await create\(/);
-  assert.match(auth, /Authorization:\s*`Bearer \$\{jwt\}`/);
+  assert.match(auth, /auth\.admin[\s\S]*?generateLink/);
+  assert.match(auth, /verifyOtp\(/);
+  assert.match(auth, /accessToken:\s*async \(\) => accessToken/);
   assert.match(auth, /userSupabase[\s\S]*?notification_subscribers/);
+  assert.doesNotMatch(auth, /SUPABASE_JWT_SECRET/);
+  assert.doesNotMatch(auth, /Deno\.env\.get\("JWT_SECRET"\)/);
+});
+
+test('Telegram application JWT bypasses GoTrue session APIs', () => {
+  const app = read('src/app.js');
+  const utils = read('src/utils.js');
+  assert.match(app, /accessToken:\s*async \(\) => getApiBearerToken\(\)/);
+  assert.match(app, /getTelegramIdFromClaims\(claims\)/);
+  assert.match(utils, /claims\?\.app_metadata\?\.telegram_user_id/);
+  assert.doesNotMatch(app, /supabase\??\.auth\.|\.auth\.setSession|\.auth\.getSession/);
+});
+
+test('public catalog starts in parallel with Telegram authentication', () => {
+  const app = read('src/app.js');
+  assert.match(app, /const authPromise = authenticateWithSupabase\(\);[\s\S]*?Promise\.all\(\[[\s\S]*?from\('releases'\)/);
+  assert.doesNotMatch(app, /await authenticateWithSupabase\(\);[\s\S]{0,500}?from\('releases'\)/);
+});
+
+test('release covers use a Telegram-authenticated server upload', () => {
+  const config = read('supabase/config.toml');
+  const cover = read('supabase/functions/release-cover/index.ts');
+  const app = read('src/app.js');
+  assert.match(config, /\[functions\.release-cover\][\s\S]*?verify_jwt\s*=\s*false/);
+  assert.match(cover, /verifyTelegramInitData\(/);
+  assert.match(cover, /from\("admins"\)/);
+  assert.match(cover, /from\(BUCKET\)\.upload/);
+  assert.match(app, /uploadReleaseCoverIfNeeded\(cover, releaseId\)/);
 });
 
 test('removed backend and local-admin compatibility paths do not return', () => {

@@ -39,6 +39,7 @@ jobs:
           test -f supabase/config.toml
           test -f supabase/schema.sql
           test -f supabase/functions/auth/index.ts
+          test -f supabase/functions/release-cover/index.ts
           test -f supabase/functions/parse-link/index.ts
           test -f supabase/functions/send-notifications/index.ts
           test -f supabase/functions/share-message/index.ts

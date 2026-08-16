@@ -100,3 +100,25 @@ Performance Advisors retain only informational notices for two currently
 unused indexes and the fixed Auth connection allocation. Keep the indexes until
 representative query statistics justify removal; revisit the Auth allocation
 when changing compute size.
+
+## Startup and artwork rollout (2026-08-16)
+
+The startup audit found that the Telegram bootstrap function was hand-signing
+tokens with a stale application secret. Supabase Auth rejected those tokens as
+`bad_jwt`, and one observed `/auth/v1/user` failure took 4.42 seconds. The
+replacement flow uses admin-generated, single-use magic-link hashes to mint a
+normal managed Supabase Auth session. Telegram ID and display claims are stored
+in `app_metadata`, while RLS continues to resolve the live admin and blocked
+tables on every protected operation.
+
+The public catalog now starts in parallel with authentication, and account
+state hydrates in the background. Six Base64 JPEG covers were copied byte for
+byte into the public `release-covers` Storage bucket. The release payload fell
+from 1,734,299 bytes to 6,184 bytes; production contains six Storage objects,
+six Storage-backed release URLs, and zero remaining Base64 release rows.
+
+Final hosted versions after removing all one-time verification hooks are
+`auth` v24 and `release-cover` v2, both `verify_jwt=false` with signed Telegram
+initData enforced in their function bodies. The managed Auth exchange was
+verified end to end for both first login and repeat login; temporary test users
+were deleted afterward.

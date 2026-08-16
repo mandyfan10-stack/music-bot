@@ -17,17 +17,26 @@
     const SUPABASE_URL = "https://ftpofwybzvhvyukrshcm.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0cG9md3lienZodnl1a3JzaGNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5OTQ3NzEsImV4cCI6MjA5OTU3MDc3MX0.Ha6pDI9U8D_Dg6gQgggJ7UXduXHHlcHcK1Imi3dcwok";
     const SUPABASE_AUTH_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/auth`;
+    const SUPABASE_RELEASE_COVER_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/release-cover`;
     const SUPABASE_PARSE_LINK_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/parse-link`;
     const SUPABASE_SHARE_MESSAGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/share-message`;
+
+    let supabaseAccessToken = '';
+    function getSupabaseAccessToken() {
+      return supabaseAccessToken;
+    }
+    function getApiBearerToken() {
+      return getSupabaseAccessToken() || SUPABASE_ANON_KEY;
+    }
 
     let supabase = null;
     try {
       if (typeof window.supabase !== 'undefined') {
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: true
-          }
+          // Telegram auth issues an application JWT for the Data API. Passing
+          // it through Supabase Auth's setSession() makes GoTrue look up a
+          // non-existent auth.users row and adds slow /auth/v1/user failures.
+          accessToken: async () => getApiBearerToken()
         });
       }
     } catch (err) {
@@ -430,7 +439,8 @@
         && parseFloat(tg.version || '0') >= 8;
 
       try {
-        const token = (await supabase?.auth.getSession())?.data?.session?.access_token;
+        await ensureValidAuthSession();
+        const token = getSupabaseAccessToken();
         if (!token) throw new Error('No authenticated session');
         const res = await fetch(SUPABASE_SHARE_MESSAGE_FUNCTION_URL, {
           method: 'POST',
@@ -1213,7 +1223,8 @@
     }
 
     let sessionExpiredWarned = false;
-    function applyData(data) {
+
+    function applyPublicData(data) {
       releases = data.releases || [];
       releasesById = new Map(releases.map(r => [r.id, r]));
       reviews = data.reviews || [];
@@ -1221,6 +1232,14 @@
       comments = data.comments || [];
       updateCommentsMap();
       updateGenreCounts();
+      renderReleases();
+      if (!activeTabId) switchTab('home');
+      else if (activeTabId === 'likes') renderLikes();
+      else if (activeTabId === 'feed') renderFeed();
+      handleStartParam();
+    }
+
+    function applyAccountData(data) {
       likedSet = new Set(data.likes || []);
       reactedSet = new Set(data.myReactions || []);
       blockedUsers = data.blockedUsers || [];
@@ -1237,20 +1256,51 @@
       applyUserRole();
       applyNotificationsToggle();
       renderReleases();
-      if (!activeTabId) switchTab('home');
-      else if (activeTabId === 'likes') renderLikes();
+      if (activeTabId === 'likes') renderLikes();
       else if (activeTabId === 'feed') renderFeed();
-      handleStartParam();
+    }
+
+    function applyData(data) {
+      applyPublicData(data);
+      applyAccountData(data);
+    }
+
+    function decodeJwtPayload(token) {
+      try {
+        const encoded = String(token || '').split('.')[1];
+        if (!encoded) return null;
+        const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+        return JSON.parse(atob(padded));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function hasUsableAccessToken(expectedUserId = user.userId) {
+      const token = getSupabaseAccessToken();
+      const claims = decodeJwtPayload(token);
+      if (!token || !claims) return false;
+      if (claims.role !== 'authenticated') return false;
+      if (expectedUserId != null
+          && getTelegramIdFromClaims(claims) !== String(expectedUserId)) return false;
+      return Number(claims.exp || 0) * 1000 > Date.now() + 30_000;
+    }
+
+    async function setSupabaseAccessToken(token) {
+      supabaseAccessToken = token;
+      try {
+        await supabase?.realtime?.setAuth?.(token);
+      } catch (error) {
+        console.warn('Realtime token update failed:', error);
+      }
     }
 
     let authenticationPromise = null;
     async function authenticateWithSupabase(force = false) {
       if (!supabase) return false;
       if (authenticationPromise) return authenticationPromise;
-      if (!force && user.isAuthenticated) {
-        const session = (await supabase.auth.getSession()).data.session;
-        if (session?.access_token) return true;
-      }
+      if (!force && user.isAuthenticated && hasUsableAccessToken()) return true;
       const currentInitData = getTgInitData();
       if (!currentInitData) return false;
 
@@ -1264,21 +1314,22 @@
         if (!res.ok) throw new Error('Auth failed: ' + res.status);
         const data = await res.json();
 
-        if (data.token) {
-          await supabase.auth.setSession({
-            access_token: data.token,
-            refresh_token: data.token
-          });
-
-          user.userId = data.user.userId;
-          user.username = data.user.username;
-          user.isAdmin = Boolean(data.user.isAdmin);
-          user.isBlocked = Boolean(data.user.isBlocked);
-          user.isAuthenticated = true;
-          user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
-          applyUserRole();
-          applyNotificationsToggle();
+        const claims = decodeJwtPayload(data.token);
+        if (!data.token || !claims
+            || claims.role !== 'authenticated'
+            || getTelegramIdFromClaims(claims) !== String(data.user?.userId)
+            || Number(claims.exp || 0) * 1000 <= Date.now() + 30_000) {
+          throw new Error('Auth returned an invalid user token');
         }
+        await setSupabaseAccessToken(data.token);
+        user.userId = data.user.userId;
+        user.username = data.user.username;
+        user.isAdmin = Boolean(data.user.isAdmin);
+        user.isBlocked = Boolean(data.user.isBlocked);
+        user.isAuthenticated = true;
+        user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
+        applyUserRole();
+        applyNotificationsToggle();
         return true;
         } catch (err) {
           console.error("Supabase authentication failed:", err);
@@ -1290,14 +1341,8 @@
     }
 
     async function ensureValidAuthSession(force = false) {
-      if (!user.isAuthenticated || force) {
-        return await authenticateWithSupabase(true);
-      }
-      const session = (await supabase?.auth.getSession())?.data?.session;
-      if (!session?.access_token) {
-        return await authenticateWithSupabase(true);
-      }
-      return true;
+      if (!force && user.isAuthenticated && hasUsableAccessToken()) return true;
+      return await authenticateWithSupabase(true);
     }
 
     async function fetchDB() {
@@ -1315,18 +1360,15 @@
           setSyncStatus('Обновляем релизы', 'syncing');
         }
 
-        // 2. Загружаем свежие данные с сервера Supabase
-        try {
-            const authOk = await authenticateWithSupabase();
+        // 2. Публичный каталог не зависит от авторизации: начинаем обе ветки
+        // одновременно, а личные данные догружаем в фоне после Telegram auth.
+        const authPromise = authenticateWithSupabase();
+        const accountPromise = authPromise.then(async (authOk) => {
             if (tg.initData && !authOk && !sessionExpiredWarned) {
               sessionExpiredWarned = true;
               showToast('Сессия Telegram устарела — переоткройте приложение');
             }
-
-            const releasesPromise = supabase.from('releases').select('*').order('timestamp', { ascending: false }).limit(200);
-            const reviewsPromise = supabase.from('reviews_view').select('*').order('timestamp', { ascending: false }).limit(1000);
-            const commentsPromise = supabase.from('comments_view').select('*').order('timestamp', { ascending: false }).limit(2000);
-
+            if (!authOk) return null;
             let likesPromise = Promise.resolve({ data: [] });
             let reactionsPromise = Promise.resolve({ data: [] });
             let subscriberPromise = Promise.resolve({ data: null });
@@ -1342,28 +1384,14 @@
               blockedUsersPromise = supabase.from('blocked_users').select('user_id, username');
             }
 
-            const [
-              releasesRes,
-              reviewsRes,
-              commentsRes,
-              likesRes,
-              reactionsRes,
-              subRes,
-              blockedRes
-            ] = await Promise.all([
-              releasesPromise,
-              reviewsPromise,
-              commentsPromise,
+            const [likesRes, reactionsRes, subRes, blockedRes] = await Promise.all([
               likesPromise,
               reactionsPromise,
               subscriberPromise,
               blockedUsersPromise
             ]);
-
-            if (releasesRes.error) throw releasesRes.error;
-            if (reviewsRes.error) throw reviewsRes.error;
-            if (commentsRes.error) throw commentsRes.error;
-
+            const accountError = likesRes.error || reactionsRes.error || subRes.error || blockedRes.error;
+            if (accountError) throw accountError;
             const likes = (likesRes.data || []).map(l => l.release_id);
             const myReactions = (reactionsRes.data || []).map(r => r.review_id);
             const blockedList = (blockedRes.data || []).map(b => b.username);
@@ -1374,10 +1402,7 @@
               applyNotificationsToggle();
             }
 
-            const data = {
-              releases: releasesRes.data || [],
-              reviews: reviewsRes.data || [],
-              comments: commentsRes.data || [],
+            return {
               likes,
               myReactions,
               blockedUsers: blockedList,
@@ -1391,11 +1416,33 @@
                 notificationsEnabled: user.notificationsEnabled
               }
             };
+        });
+        accountPromise.then((accountData) => {
+          if (accountData) applyAccountData(accountData);
+        }).catch((error) => {
+          console.error('Ошибка загрузки личных данных:', error.message || error);
+          showToast('Личные данные временно недоступны');
+        });
 
-            // Сохраняем в кэш и обновляем UI
-            saveCache(data);
-            applyData(data);
-            setSyncStatus('Всё актуально', 'ok');
+        // 3. Загружаем и показываем свежий публичный каталог независимо от auth.
+        try {
+            const [releasesRes, reviewsRes, commentsRes] = await Promise.all([
+              supabase.from('releases').select('*').order('timestamp', { ascending: false }).limit(200),
+              supabase.from('reviews_view').select('*').order('timestamp', { ascending: false }).limit(1000),
+              supabase.from('comments_view').select('*').order('timestamp', { ascending: false }).limit(2000)
+            ]);
+            if (releasesRes.error) throw releasesRes.error;
+            if (reviewsRes.error) throw reviewsRes.error;
+            if (commentsRes.error) throw commentsRes.error;
+
+            const publicData = {
+              releases: releasesRes.data || [],
+              reviews: reviewsRes.data || [],
+              comments: commentsRes.data || []
+            };
+            saveCache(publicData);
+            applyPublicData(publicData);
+            setSyncStatus('Релизы загружены', 'ok');
         } catch(e) {
             console.error("Ошибка загрузки БД:", e.message || e);
             setSyncStatus(cached ? 'Оффлайн (кэш)' : 'Нет соединения', 'warn');
@@ -1842,7 +1889,7 @@
       }
 
       await ensureValidAuthSession();
-      const parserToken = (await supabase.auth.getSession()).data.session?.access_token;
+      const parserToken = getSupabaseAccessToken();
       if (!parserToken) throw new Error('Telegram session is required for metadata parsing');
 
       const res = await fetch(SUPABASE_PARSE_LINK_FUNCTION_URL, {
@@ -2049,6 +2096,39 @@
       }
     }
 
+    async function callReleaseCoverFunction(payload) {
+      const res = await fetch(SUPABASE_RELEASE_COVER_FUNCTION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, initData: getTgInitData() })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Cover upload failed: ${res.status}`);
+      return data;
+    }
+
+    async function uploadReleaseCoverIfNeeded(cover, releaseId) {
+      if (!String(cover || '').startsWith('data:image/')) {
+        return { url: cover || '', path: '' };
+      }
+      const data = await callReleaseCoverFunction({
+        action: 'upload',
+        releaseId,
+        imageData: cover
+      });
+      if (!data.url || !data.path) throw new Error('Сервер не вернул адрес обложки');
+      return data;
+    }
+
+    async function removeUploadedReleaseCover(releaseId, path) {
+      if (!path) return;
+      try {
+        await callReleaseCoverFunction({ action: 'delete', releaseId, path });
+      } catch (error) {
+        console.warn('Failed to clean up release cover:', error);
+      }
+    }
+
     async function saveManualRelease() {
       const artist = document.getElementById('manual-artist').value.trim();
       const title = document.getElementById('manual-title').value.trim();
@@ -2067,6 +2147,8 @@
       if (saveBtn) saveBtn.disabled = true;
       if (saveBtnText) saveBtnText.innerText = 'Сохранение...';
 
+      const releaseId = genId();
+      let uploadedCoverPath = '';
       try {
         // Гарантируем валидную авторизованную сессию
         const authOk = await ensureValidAuthSession();
@@ -2086,8 +2168,12 @@
           }
         }
 
+        const uploadedCover = await uploadReleaseCoverIfNeeded(cover, releaseId);
+        cover = uploadedCover.url;
+        uploadedCoverPath = uploadedCover.path;
+
         const newRel = {
-          id: genId(),
+          id: releaseId,
           name: title,
           artist: artist,
           img: cover || '',
@@ -2125,6 +2211,7 @@
         manualCoverBase64 = null;
         selectedGenreForAdd = '';
       } catch (err) {
+        await removeUploadedReleaseCover(releaseId, uploadedCoverPath);
         console.error('Ошибка сохранения релиза:', err);
         const userMsg = err.message ? `Ошибка: ${err.message}` : 'Ошибка сохранения — попробуйте позже';
         showToast(userMsg, 'error');

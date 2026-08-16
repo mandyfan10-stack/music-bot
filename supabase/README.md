@@ -100,11 +100,20 @@ Validate with distinct anon, normal, blocked, and admin sessions:
 - notification webhook rejects anon/authenticated JWTs, accepts service-role, and does not duplicate a delivery;
 - metadata parsing rejects localhost, private/documentation IPv4, IPv6 loopback/link-local/ULA, DNS failure, a private redirect, oversized HTML, and non-HTML content.
 
-Store only these values in Supabase/GitHub Secrets: Telegram bot token, Supabase JWT/service keys, Groq key, and webhook credentials. Never put values in committed config or logs.
+Store only these values in Supabase/GitHub Secrets: Telegram bot token,
+Supabase service keys, Groq key, and webhook credentials. Never put values in
+committed config or logs. Telegram sessions are issued by Supabase Auth; the
+application no longer hand-signs JWTs in an Edge Function.
 
 The `auth` function deliberately has `verify_jwt = false` in `config.toml`:
 Telegram initData is its bootstrap credential and is signature-verified inside
-the function. Do not deploy it with the default gateway JWT requirement.
+the function before a normal Supabase Auth session is minted. Do not deploy it
+with the default gateway JWT requirement.
+
+The `release-cover` function also has `verify_jwt = false` because it verifies
+Telegram initData itself, checks the live `admins` table, and only then uploads
+public catalog artwork with its server-only Storage client. The
+`release-covers` bucket has no client write policy.
 
 Before testing notifications on each hosted project, create or update the Vault
 secrets without committing their values:
