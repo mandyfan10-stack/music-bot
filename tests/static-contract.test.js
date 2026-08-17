@@ -55,6 +55,8 @@ test('motion keeps iOS springs without review re-fade or tab blur', () => {
   assert.match(app, /seenReviewIds/);
   assert.match(app, /toastHideTimer/);
   assert.match(app, /bindEnterAnimations/);
+  assert.match(app, /relImg\.style\.opacity = '0'/);
+  assert.match(app, /revealReleaseCover/);
 });
 
 test('Telegram bootstrap auth explicitly bypasses gateway JWT verification', () => {

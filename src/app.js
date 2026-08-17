@@ -992,7 +992,10 @@
       if (id === 'modal-release') {
         reviewPublishBlocked = false;
         existingReviewForActiveRelease = null;
-        document.getElementById('rel-img').style.opacity = ''; // на случай прерванного морфа
+        clearCoverMorph();
+        const relImg = document.getElementById('rel-img');
+        relImg.style.opacity = '';
+        relImg.style.transition = '';
       }
       if (id === 'modal-confirm-review-delete') {
         pendingReviewDelete = null;
@@ -2380,48 +2383,83 @@
 
     // Морфинг: обложка нажатой карточки «вырастает» в обложку модалки релиза.
     // Призрак летит из ректа карточки к месту #rel-img, лист едет вверх позади.
+    let coverMorphGhost = null;
+    let coverMorphTimer = null;
+
+    function clearCoverMorph() {
+      if (coverMorphTimer) {
+        clearTimeout(coverMorphTimer);
+        coverMorphTimer = null;
+      }
+      if (coverMorphGhost) {
+        coverMorphGhost.remove();
+        coverMorphGhost = null;
+      }
+    }
+
+    function revealReleaseCover(relImg) {
+      if (!relImg) return;
+      relImg.style.transition = 'opacity 0.32s var(--ios-glide)';
+      relImg.style.opacity = '1';
+      setTimeout(() => { relImg.style.transition = ''; }, 340);
+    }
+
     function morphCoverFromCard(cardEl) {
-      if (!cardEl || prefersReducedMotion()) return;
+      clearCoverMorph();
+      if (!cardEl || prefersReducedMotion()) return false;
       const srcImg = cardEl.querySelector('img');
-      if (!srcImg) return;
+      if (!srcImg) return false;
       const from = srcImg.getBoundingClientRect();
-      if (from.width < 4 || from.height < 4) return;
+      if (from.width < 4 || from.height < 4) return false;
 
       const m = document.getElementById('modal-release');
-      m.classList.remove('hidden'); // показать для замера (slide-up ещё не добавлен)
       const relImg = document.getElementById('rel-img');
+      // Прячем #rel-img ДО снятия hidden: иначе один кадр видна
+      // полноразмерная обложка в уже раскрытой шторке.
+      relImg.style.transition = 'none';
+      relImg.style.opacity = '0';
+      m.classList.remove('hidden');
       const to = relImg.getBoundingClientRect();
-      if (to.width < 4) return;
-
-      relImg.style.opacity = '0'; // прячем реальную обложку на время морфа
+      if (to.width < 4) return false;
 
       const ghost = document.createElement('img');
-      ghost.src = relImg.src;
+      ghost.src = srcImg.currentSrc || srcImg.src || relImg.src;
       ghost.alt = '';
       ghost.setAttribute('aria-hidden', 'true');
-      ghost.style.cssText = `position:fixed; left:${to.left}px; top:${to.top}px; width:${to.width}px; height:${to.height}px; object-fit:cover; border-radius:2rem; z-index:80; pointer-events:none; margin:0;`;
+      ghost.style.cssText = `position:fixed; left:${to.left}px; top:${to.top}px; width:${to.width}px; height:${to.height}px; object-fit:cover; border-radius:2rem; z-index:80; pointer-events:none; margin:0; opacity:1;`;
       ghost.style.transformOrigin = '0 0';
       const s = from.width / to.width;
       ghost.style.transform = `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${s})`;
       document.body.appendChild(ghost);
-      void ghost.offsetWidth; // зафиксировать стартовое состояние
+      coverMorphGhost = ghost;
+      void ghost.offsetWidth;
 
-      ghost.style.transition = 'transform 0.5s var(--ios-glide)';
+      ghost.style.transition = 'transform 0.5s var(--ios-glide), opacity 0.32s var(--ios-glide)';
       ghost.style.transform = 'translate(0px, 0px) scale(1)';
 
       let done = false;
       const cleanup = () => {
         if (done) return;
         done = true;
-        relImg.style.transition = 'opacity 0.18s var(--ios-glide)';
-        relImg.style.opacity = '1';
-        ghost.remove();
-        setTimeout(() => { relImg.style.transition = ''; }, 200);
+        if (coverMorphTimer) {
+          clearTimeout(coverMorphTimer);
+          coverMorphTimer = null;
+        }
+        revealReleaseCover(relImg);
+        ghost.style.opacity = '0';
+        coverMorphTimer = setTimeout(() => {
+          if (coverMorphGhost === ghost) {
+            ghost.remove();
+            coverMorphGhost = null;
+          }
+          coverMorphTimer = null;
+        }, 320);
       };
       ghost.addEventListener('transitionend', (event) => {
         if (event.propertyName === 'transform') cleanup();
       });
-      setTimeout(cleanup, 700);
+      coverMorphTimer = setTimeout(cleanup, 700);
+      return true;
     }
 
     function openRelease(id, sourceEl) {
@@ -2430,7 +2468,8 @@
       const relImg = document.getElementById('rel-img');
       relImg.src = rel.img || fb;
       relImg.onerror = function() { this.src = fb; };
-      relImg.style.opacity = ''; // сброс на случай прошлого морфа
+      relImg.style.transition = 'none';
+      relImg.style.opacity = '0';
 
       document.getElementById('rel-title').textContent = rel.name;
       document.getElementById('rel-artist').textContent = rel.artist;
@@ -2450,8 +2489,9 @@
       }
 
       resetReviewInputs(); renderReviews();
-      morphCoverFromCard(sourceEl);
+      const morphed = morphCoverFromCard(sourceEl);
       openModal('modal-release');
+      if (!morphed) revealReleaseCover(relImg);
     }
 
     function openConfirmDelete(id) {
