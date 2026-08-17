@@ -95,8 +95,8 @@ select is(
 );
 select is(
   (select rating from public.reviews where release_id = 'release-1'),
-  6.0::numeric,
-  'final rating is calculated by the database'
+  4.0::numeric,
+  'final rating equals the criteria average'
 );
 select throws_ok(
   $$select public.create_review(

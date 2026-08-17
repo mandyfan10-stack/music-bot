@@ -45,6 +45,17 @@ test('visual chrome keeps sync status in the header and a single settings label'
   assert.match(css, /color-scheme:\s*light/);
 });
 
+test('review form shows a criteria-total meter instead of a bare 1-10 row', () => {
+  const html = read('index.html');
+  const app = read('src/app.js');
+  assert.match(html, /id="rating-total"/);
+  assert.match(html, /id="rating-total-fill"/);
+  assert.doesNotMatch(html, /id="rating-buttons-container"/);
+  assert.match(app, /function updateRatingTotal/);
+  assert.doesNotMatch(app, /function selectRating/);
+  assert.doesNotMatch(app, /selectedRating/);
+});
+
 test('motion keeps iOS springs without review re-fade or tab blur', () => {
   const css = read('src/styles.css');
   const app = read('src/app.js');

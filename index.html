@@ -16,8 +16,8 @@
   <script src="src/utils.js?v=5"></script>
 
   <!-- Tailwind собран заранее (npm run build:css) — рантайм-компилятора CDN больше нет -->
-  <link rel="stylesheet" href="src/tailwind.css?v=4">
-  <link rel="stylesheet" href="src/styles.css?v=6">
+  <link rel="stylesheet" href="src/tailwind.css?v=5">
+  <link rel="stylesheet" href="src/styles.css?v=7">
 </head>
 <body class="antialiased h-screen flex flex-col">
 
@@ -239,7 +239,19 @@
       <div class="w-full">
         <h3 class="text-lg font-bold text-white mb-4">Написать рецензию</h3>
         <div class="bg-white/5 border border-white/10 rounded-[1.5rem] p-5">
-           <div class="flex flex-wrap gap-2 justify-center mb-3" id="rating-buttons-container"></div>
+           <div id="rating-total" class="rating-total mb-4">
+             <div class="flex items-center justify-between mb-2 px-1">
+               <span class="text-[12px] font-medium text-gray-400">Итоговая оценка</span>
+               <span id="rating-total-value" class="text-[15px] font-black text-white tabular-nums">5.0</span>
+             </div>
+             <div class="rating-total-track" role="meter" aria-label="Итоговая оценка по критериям" aria-valuemin="1" aria-valuemax="10" aria-valuenow="5" id="rating-total-meter">
+               <div id="rating-total-fill" class="rating-total-fill"></div>
+             </div>
+             <div class="flex items-center justify-between mt-1.5 px-1">
+               <span class="text-[10px] text-gray-500">Сумма критериев</span>
+               <span id="rating-total-sum" class="text-[10px] text-gray-500 tabular-nums">30 / 60</span>
+             </div>
+           </div>
            <div class="flex flex-wrap gap-2 justify-center mb-4" id="criteria-buttons-container"></div>
            <div class="relative w-full mb-4">
              <textarea id="rev-text" data-act-input="review-char-count" aria-label="Мнение о саунде" placeholder="Мнение о саунде..." class="w-full h-24 bg-black/20 border border-white/5 rounded-xl outline-none p-3 pb-7 text-[13px] text-white resize-none transition-all focus:border-red-500/30"></textarea>
@@ -362,6 +374,6 @@
     </div>
   </div>
 
-  <script src="src/app.js?v=9" defer></script>
+  <script src="src/app.js?v=10" defer></script>
 </body>
 </html>

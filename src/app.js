@@ -199,7 +199,6 @@
       'submit-comment': (el) => submitComment(el.dataset.id),
       'delete-comment': (el) => requestDeleteComment(el.dataset.id, el.dataset.review),
       'execute-confirm-action': () => executeConfirmAction(),
-      'select-rating': (el) => selectRating(Number(el.dataset.rating)),
       'set-criterion': (el) => setCriterion(el.dataset.key, Number(el.dataset.delta)),
     };
 
@@ -349,7 +348,7 @@
 
     document.getElementById('user-name').innerText = user.username;
 
-    let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedRating = 10, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
+    let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
     let reactedSet = new Set(); // id рецензий, на которые текущий пользователь отреагировал
     let comments = [], commentsByReviewId = new Map();
     let expandedComments = new Set(); // id рецензий с раскрытой веткой комментариев
@@ -694,18 +693,6 @@
       });
     }
 
-    const ratingContainer = document.getElementById('rating-buttons-container');
-    for(let i=1; i<=10; i++) {
-        const btn = document.createElement('button');
-        btn.className = 'rating-btn btn-press';
-        btn.id = `rate-${i}`;
-        btn.innerText = i;
-        btn.setAttribute('aria-label', `Оценка ${i} из 10`);
-        btn.setAttribute('data-act', 'select-rating');
-        btn.setAttribute('data-rating', String(i));
-        ratingContainer.appendChild(btn);
-    }
-
     const criteriaContainer = document.getElementById('criteria-buttons-container');
     const criteriaConfig = [
       { key: 'sound', label: 'Звук' },
@@ -747,16 +734,32 @@
       const next = Math.max(1, Math.min(10, (selectedCriteria[key] || 5) + delta));
       selectedCriteria = { ...selectedCriteria, [key]: next };
       document.getElementById(`criterion-${key}`).innerText = next;
+      updateRatingTotal();
+    }
+
+    function updateRatingTotal() {
+      const average = getCriteriaAverage(selectedCriteria);
+      const sum = criteriaConfig.reduce((total, { key }) => {
+        const value = selectedCriteria[key];
+        return total + (typeof value === 'number' ? value : 5);
+      }, 0);
+      const valueEl = document.getElementById('rating-total-value');
+      const sumEl = document.getElementById('rating-total-sum');
+      const fillEl = document.getElementById('rating-total-fill');
+      const meterEl = document.getElementById('rating-total-meter');
+      if (valueEl) valueEl.textContent = average.toFixed(1);
+      if (sumEl) sumEl.textContent = `${sum} / 60`;
+      if (fillEl) fillEl.style.width = `${Math.max(0, Math.min(100, (average / 10) * 100))}%`;
+      if (meterEl) meterEl.setAttribute('aria-valuenow', String(average));
     }
 
     function resetReviewInputs() {
-      selectedRating = 10;
       selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
-      selectRating(10);
       criteriaConfig.forEach(({ key }) => {
         const el = document.getElementById(`criterion-${key}`);
         if (el) el.innerText = '5';
       });
+      updateRatingTotal();
       const text = document.getElementById('rev-text');
       if (text) text.value = '';
       updateReviewCharCount();
@@ -1231,12 +1234,6 @@
       renderAddGenreSelector('manual-genre-selector');
     }
     
-    function selectRating(val) { 
-      selectedRating = val; 
-      document.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('active')); 
-      document.getElementById(`rate-${val}`).classList.add('active'); 
-    }
-
     // --- КЭШИРОВАНИЕ: мгновенный старт из localStorage ---
     const CACHE_KEY = 'xxii_public_cache_v3';
     const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -2609,7 +2606,6 @@
       if (reviews.some(r => r.relId === activeReleaseId && reviewByUser(r, user.userId, user.username))) return showToast('На этот трек уже есть ваша рецензия');
 
       const objectiveRating = getCriteriaAverage(selectedCriteria);
-      const finalRating = Math.round((objectiveRating + selectedRating) / 2 * 10) / 10;
       const newRev = {
         id: genId(),
         relId: activeReleaseId,
@@ -2619,8 +2615,8 @@
         authorIsAdmin: user.isAdmin,
         reactionCount: 0,
         text: t,
-        rating: finalRating,
-        baseRating: selectedRating,
+        rating: objectiveRating,
+        baseRating: Math.max(1, Math.min(10, Math.round(objectiveRating))),
         criteria: { ...selectedCriteria },
         objectiveRating,
         date: new Date().toLocaleDateString('ru-RU'),
@@ -2968,7 +2964,6 @@
     }
 
     refreshIcons();
-    selectRating(10);
     resetReviewInputs();
     setSortMode('new');
 

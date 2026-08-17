@@ -205,6 +205,21 @@
       header.app-header { background: var(--bg-color); }
     }
     
+    .rating-total-track {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+    .rating-total-fill {
+      height: 100%;
+      width: 50%;
+      border-radius: inherit;
+      background: var(--accent-red);
+      transition: width 0.46s var(--ios-glide);
+    }
+    body.light-theme .rating-total-track { background: rgba(0, 0, 0, 0.08); }
+
     .rating-btn { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); transition: transform 0.44s var(--ios-spring), background-color 0.3s var(--ios-glide), color 0.3s var(--ios-glide), box-shadow 0.3s var(--ios-glide), border-color 0.3s var(--ios-glide); }
     .rating-btn.active { background: white; color: black; transform: scale(1.06); box-shadow: 0 0 0 2px var(--accent-red); border-color: white; }
 
