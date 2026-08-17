@@ -22,7 +22,7 @@ node --check src/utils.js
 node --check server.js
 deno check --frozen supabase/functions/*/index.ts
 deno fmt --check supabase/functions
-deno test --frozen supabase/functions/_shared/*_test.ts
+deno test --frozen --allow-read=tests/fixtures supabase/functions/_shared/*_test.ts
 ```
 
 Database migrations and the staging-first rollout procedure are documented in

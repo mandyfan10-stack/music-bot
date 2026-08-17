@@ -36,7 +36,7 @@ supabase db start
 supabase test db
 deno fmt --check supabase/functions
 deno check --frozen supabase/functions/*/index.ts
-deno test --frozen supabase/functions/_shared/*_test.ts
+deno test --frozen --allow-read=tests/fixtures supabase/functions/_shared/*_test.ts
 ```
 
 CI starts a fresh local Supabase database, applies all migrations, and runs the pgTAP RLS contract. CI never links to or deploys a hosted project.
