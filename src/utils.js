@@ -268,6 +268,35 @@ function filterAndSortReleases(releases, options) {
   return filtered;
 }
 
+function isSameReview(left, right) {
+  if (!left || !right) return false;
+  if (left.id && right.id && left.id === right.id) return true;
+  const leftAuthor = left.authorId != null ? String(left.authorId) : '';
+  const rightAuthor = right.authorId != null ? String(right.authorId) : '';
+  return !!(left.relId && left.relId === right.relId && leftAuthor && leftAuthor === rightAuthor);
+}
+
+function upsertByMatcher(list, item, isSame) {
+  const items = Array.isArray(list) ? list.slice() : [];
+  if (!item || typeof isSame !== 'function') return items;
+  const idx = items.findIndex((existing) => isSame(existing, item));
+  if (idx >= 0) items[idx] = Object.assign({}, items[idx], item);
+  else items.unshift(item);
+  return items;
+}
+
+// Replaces a locally created row after the server assigns (or echoes) an id,
+// and drops a Realtime duplicate that already arrived with the server id.
+function adoptCreatedRecord(list, localId, createdId, item) {
+  const items = Array.isArray(list) ? list.slice() : [];
+  const nextId = createdId || localId;
+  if (!nextId) return items;
+  const kept = items.filter((existing) => existing && existing.id !== localId && existing.id !== nextId);
+  const existing = items.find((entry) => entry && (entry.id === nextId || entry.id === localId));
+  kept.unshift(Object.assign({}, existing || {}, item || {}, { id: nextId }));
+  return kept;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     cleanUsername,
@@ -280,6 +309,9 @@ if (typeof module !== 'undefined' && module.exports) {
     normalizeGenre,
     cleanTrackTitle,
     parseArtistAndTitle,
-    filterAndSortReleases
+    filterAndSortReleases,
+    isSameReview,
+    upsertByMatcher,
+    adoptCreatedRecord
   };
 }

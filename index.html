@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://ftpofwybzvhvyukrshcm.supabase.co wss://ftpofwybzvhvyukrshcm.supabase.co https://noembed.com https://itunes.apple.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://ftpofwybzvhvyukrshcm.supabase.co wss://ftpofwybzvhvyukrshcm.supabase.co https://itunes.apple.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <script src="src/supabase.min.js?v=2"></script>
   <script src="src/lucide.min.js?v=2"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="src/telegram-web-app.js?v=2"></script>
-  <script src="src/utils.js?v=3"></script>
+  <script src="src/utils.js?v=4"></script>
 
   <!-- Tailwind собран заранее (npm run build:css) — рантайм-компилятора CDN больше нет -->
   <link rel="stylesheet" href="src/tailwind.css?v=2">
@@ -283,6 +283,22 @@
     </div>
   </div>
 
+  <div id="modal-confirm-action" role="alertdialog" aria-modal="true" aria-hidden="true" aria-labelledby="confirm-action-title" class="fixed inset-0 z-[80] hidden flex flex-col justify-end">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" data-act="close-modal" data-modal="modal-confirm-action"></div>
+    <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container text-center flex-col">
+      <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
+      <div class="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+        <i data-lucide="trash-2" class="w-8 h-8"></i>
+      </div>
+      <h3 id="confirm-action-title" class="text-xl font-bold text-white mb-2">Подтвердите действие</h3>
+      <p id="confirm-action-body" class="text-[13px] text-gray-400 mb-8"></p>
+      <div class="flex gap-3">
+        <button data-act="close-modal" data-modal="modal-confirm-action" class="btn-press flex-1 py-3.5 bg-white/10 text-white font-bold rounded-2xl border border-white/10">Отмена</button>
+        <button id="confirm-action-btn" data-act="execute-confirm-action" class="btn-press flex-1 py-3.5 bg-red-600 text-white font-bold rounded-2xl shadow-lg shadow-red-900/20">Удалить</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-profile" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="profile-name" class="fixed inset-0 z-[60] hidden flex flex-col justify-end">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" data-act="close-modal" data-modal="modal-profile"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container text-center max-h-[92vh] overflow-y-auto hide-scrollbar flex-col">
@@ -344,6 +360,6 @@
     </div>
   </div>
 
-  <script src="src/app.js?v=3" defer></script>
+  <script src="src/app.js?v=4" defer></script>
 </body>
 </html>

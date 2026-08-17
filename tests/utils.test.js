@@ -11,7 +11,10 @@ const {
   normalizeGenre,
   cleanTrackTitle,
   parseArtistAndTitle,
-  filterAndSortReleases
+  filterAndSortReleases,
+  isSameReview,
+  upsertByMatcher,
+  adoptCreatedRecord
 } = require('../src/utils.js');
 
 test('cleanUsername: should remove leading @ and convert to lowercase', () => {
@@ -278,4 +281,41 @@ test('filterAndSortReleases: does not mutate the input array', () => {
 test('filterAndSortReleases: tolerates nullish input', () => {
   assert.deepStrictEqual(filterAndSortReleases(null, {}), []);
   assert.deepStrictEqual(filterAndSortReleases(undefined), []);
+});
+
+test('isSameReview: matches by id or by release plus author', () => {
+  assert.strictEqual(isSameReview({ id: 'a' }, { id: 'a' }), true);
+  assert.strictEqual(isSameReview(
+    { id: 'temp', relId: 'r1', authorId: 7 },
+    { id: 'server', relId: 'r1', authorId: '7' }
+  ), true);
+  assert.strictEqual(isSameReview(
+    { id: 'temp', relId: 'r1', authorId: 7 },
+    { id: 'other', relId: 'r1', authorId: 8 }
+  ), false);
+});
+
+test('upsertByMatcher: updates an existing review in place', () => {
+  const out = upsertByMatcher(
+    [{ id: 'temp', relId: 'r1', authorId: 1, text: 'old' }],
+    { id: 'server', relId: 'r1', authorId: 1, text: 'new' },
+    isSameReview
+  );
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].id, 'server');
+  assert.strictEqual(out[0].text, 'new');
+});
+
+test('adoptCreatedRecord: drops a Realtime duplicate and keeps one row', () => {
+  const out = adoptCreatedRecord(
+    [
+      { id: 'temp', text: 'local' },
+      { id: 'server', text: 'realtime' }
+    ],
+    'temp',
+    'server',
+    { id: 'server', text: 'saved', author: 'Alice' }
+  );
+  assert.strictEqual(out.length, 1);
+  assert.deepStrictEqual(out[0], { id: 'server', text: 'saved', author: 'Alice' });
 });

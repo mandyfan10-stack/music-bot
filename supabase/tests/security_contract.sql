@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(39);
 
 select is(
   (select public from storage.buckets where id = 'release-covers'),
@@ -120,6 +120,50 @@ select throws_ok(
   'Exactly six rating criteria are required',
   'criteria must contain exactly the six supported keys'
 );
+
+reset role;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"00000000-0000-0000-0000-000000000202","role":"authenticated","app_metadata":{"telegram_user_id":"202","username":"Cara","display_name":"Cara"}}',
+  true
+);
+set local role authenticated;
+select lives_ok(
+  $$select public.create_review(
+    'release-1',
+    repeat('A named review. ', 3),
+    7,
+    '{"sound":3,"production":3,"originality":3,"meaning":3,"relevance":3,"image":3}'::jsonb,
+    'client-review-id-202'
+  )$$,
+  'create_review accepts a client-supplied id'
+);
+select is(
+  (select id from public.reviews where author_id = 202),
+  'client-review-id-202',
+  'review id matches the client-supplied value'
+);
+select lives_ok(
+  $$select public.create_comment(
+    'client-review-id-202',
+    'hello from the client id path',
+    'client-comment-id-202'
+  )$$,
+  'create_comment accepts a client-supplied id'
+);
+select is(
+  (select id from public.review_comments where author_id = 202),
+  'client-comment-id-202',
+  'comment id matches the client-supplied value'
+);
+
+reset role;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"00000000-0000-0000-0000-000000000200","role":"authenticated","app_metadata":{"telegram_user_id":"200","username":"Alice","display_name":"Alice"}}',
+  true
+);
+set local role authenticated;
 
 insert into public.likes (release_id, user_id, username)
 values ('release-1', 999, 'forged');

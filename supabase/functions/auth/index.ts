@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.7";
 import {
-  parseTelegramUser,
   TelegramAuthError,
   verifyTelegramInitData,
 } from "../_shared/telegram_auth.ts";
@@ -35,21 +34,16 @@ serve(async (req) => {
     }
 
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
-    const devMode = Deno.env.get("DEV_MODE") === "true";
     const maxAge = Number(Deno.env.get("INIT_DATA_MAX_AGE") || "86400");
+    if (!botToken) {
+      return jsonResponse(
+        { error: "TELEGRAM_BOT_TOKEN is not configured" },
+        500,
+      );
+    }
     let telegramUser;
     try {
-      if (botToken) {
-        telegramUser = await verifyTelegramInitData(initData, botToken, maxAge);
-      } else if (devMode) {
-        console.warn("DEV MODE: Telegram signature verification is disabled");
-        telegramUser = parseTelegramUser(initData);
-      } else {
-        return jsonResponse(
-          { error: "TELEGRAM_BOT_TOKEN is not configured" },
-          500,
-        );
-      }
+      telegramUser = await verifyTelegramInitData(initData, botToken, maxAge);
     } catch (error) {
       if (error instanceof TelegramAuthError) {
         return jsonResponse({ error: error.message }, error.status);

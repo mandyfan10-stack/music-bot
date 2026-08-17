@@ -190,14 +190,17 @@
       'execute-delete-release': () => executeDeleteRelease(),
       'execute-delete-review': () => executeDeleteReview(),
       'toggle-block-user': () => toggleBlockUser(),
-      'delete-all-reviews': () => deleteAllReviewsByUser(),
+      'delete-all-reviews': () => requestDeleteAllReviewsByUser(),
       'open-release': (el) => openRelease(el.dataset.id, el),
       'toggle-like': (el, e) => toggleLikeAPI(e, el.dataset.id),
       'toggle-reaction': (el) => toggleReviewReaction(el.dataset.id),
       'open-confirm-review-delete': (el) => openConfirmReviewDelete(el.dataset.id, el.dataset.rel),
       'toggle-comments': (el) => toggleComments(el.dataset.id),
       'submit-comment': (el) => submitComment(el.dataset.id),
-      'delete-comment': (el) => deleteComment(el.dataset.id, el.dataset.review),
+      'delete-comment': (el) => requestDeleteComment(el.dataset.id, el.dataset.review),
+      'execute-confirm-action': () => executeConfirmAction(),
+      'select-rating': (el) => selectRating(Number(el.dataset.rating)),
+      'set-criterion': (el) => setCriterion(el.dataset.key, Number(el.dataset.delta)),
     };
 
     document.addEventListener('click', (event) => {
@@ -258,8 +261,13 @@
 
     document.getElementById('welcome-user-name').innerText = user.username;
 
-    if (localStorage.getItem('raper_welcomed_v1')) {
+    const WELCOME_KEY = 'xxii_welcomed_v1';
+    if (localStorage.getItem(WELCOME_KEY) || localStorage.getItem('raper_welcomed_v1')) {
         document.getElementById('welcome-screen').classList.add('hidden');
+        try {
+          localStorage.setItem(WELCOME_KEY, 'true');
+          localStorage.removeItem('raper_welcomed_v1');
+        } catch (_) {}
     }
 
     function closeWelcomeScreen() {
@@ -267,7 +275,10 @@
         ws.classList.add('opacity-0');
         setTimeout(() => {
             ws.classList.add('hidden');
-            localStorage.setItem('raper_welcomed_v1', 'true');
+            try {
+              localStorage.setItem(WELCOME_KEY, 'true');
+              localStorage.removeItem('raper_welcomed_v1');
+            } catch (_) {}
         }, 700);
     }
 
@@ -391,6 +402,25 @@
     }
     let pendingReviewDelete = null;
     let pendingReviewTargetReleaseId = null;
+    let pendingConfirmAction = null;
+
+    function openConfirmAction({ title, body, confirmText, action }) {
+      pendingConfirmAction = typeof action === 'function' ? action : null;
+      const titleEl = document.getElementById('confirm-action-title');
+      const bodyEl = document.getElementById('confirm-action-body');
+      const btnEl = document.getElementById('confirm-action-btn');
+      if (titleEl) titleEl.textContent = title || 'Подтвердите действие';
+      if (bodyEl) bodyEl.textContent = body || '';
+      if (btnEl) btnEl.textContent = confirmText || 'Удалить';
+      openModal('modal-confirm-action');
+    }
+
+    async function executeConfirmAction() {
+      const action = pendingConfirmAction;
+      pendingConfirmAction = null;
+      closeModal('modal-confirm-action');
+      if (action) await action();
+    }
     let reviewPublishBlocked = false;
     let existingReviewForActiveRelease = null;
     let activeProfile = null; // { id, username, displayName }
@@ -675,7 +705,8 @@
         btn.id = `rate-${i}`;
         btn.innerText = i;
         btn.setAttribute('aria-label', `Оценка ${i} из 10`);
-        btn.onclick = () => selectRating(i);
+        btn.setAttribute('data-act', 'select-rating');
+        btn.setAttribute('data-rating', String(i));
         ratingContainer.appendChild(btn);
     }
 
@@ -701,12 +732,16 @@
       minus.className = 'rating-btn btn-press !w-7 !h-7 !rounded-full';
       minus.innerText = '−';
       minus.setAttribute('aria-label', 'Уменьшить оценку для ' + label);
-      minus.onclick = () => setCriterion(key, -1);
+      minus.setAttribute('data-act', 'set-criterion');
+      minus.setAttribute('data-key', key);
+      minus.setAttribute('data-delta', '-1');
       const plus = document.createElement('button');
       plus.className = 'rating-btn btn-press !w-7 !h-7 !rounded-full';
       plus.innerText = '+';
       plus.setAttribute('aria-label', 'Увеличить оценку для ' + label);
-      plus.onclick = () => setCriterion(key, 1);
+      plus.setAttribute('data-act', 'set-criterion');
+      plus.setAttribute('data-key', key);
+      plus.setAttribute('data-delta', '1');
       wrap.appendChild(minus);
       wrap.appendChild(plus);
       criteriaContainer.appendChild(wrap);
@@ -940,6 +975,9 @@
         pendingReviewDelete = null;
         pendingReviewTargetReleaseId = null;
       }
+      if (id === 'modal-confirm-action') {
+        pendingConfirmAction = null;
+      }
     }
 
     function closeModal(id, immediate) {
@@ -1155,12 +1193,22 @@
       } catch(e) { showToast('Ошибка: ' + e.message); }
     }
 
+    function requestDeleteAllReviewsByUser() {
+      if (!activeProfile || !user.isAdmin) return;
+      if (activeProfile.id == null) return showToast('Не удалось определить Telegram ID пользователя');
+      const displayName = activeProfile.displayName || activeProfile.username || activeProfile.id;
+      openConfirmAction({
+        title: 'Удалить все рецензии?',
+        body: `Все рецензии ${displayName} будут удалены безвозвратно.`,
+        confirmText: 'Удалить все',
+        action: () => deleteAllReviewsByUser()
+      });
+    }
+
     async function deleteAllReviewsByUser() {
       if (!activeProfile || !user.isAdmin) return;
       if (activeProfile.id == null) return showToast('Не удалось определить Telegram ID пользователя');
       const targetId = String(activeProfile.id);
-      const displayName = activeProfile.displayName || activeProfile.username || targetId;
-      if (!confirm(`Удалить ВСЕ рецензии ${displayName}?`)) return;
       try {
         const { data: deleted, error } = await supabase.rpc('admin_delete_reviews', {
           p_user_id: Number(activeProfile.id)
@@ -1345,6 +1393,21 @@
       return await authenticateWithSupabase(true);
     }
 
+    function isMissingRpcSignature(error) {
+      const message = String(error?.message || '');
+      return error?.code === 'PGRST202' || /could not find the function/i.test(message);
+    }
+
+    // New servers accept p_id so Realtime can merge in place. Older schemas
+    // still expose the previous signature — retry without the extra argument.
+    async function rpcCreateWithOptionalId(fn, payload) {
+      const first = await supabase.rpc(fn, payload).single();
+      if (!first.error || !payload.p_id || !isMissingRpcSignature(first.error)) return first;
+      const rest = { ...payload };
+      delete rest.p_id;
+      return supabase.rpc(fn, rest).single();
+    }
+
     async function fetchDB() {
         if (!supabase) {
           console.error("Supabase client is not initialized.");
@@ -1353,10 +1416,11 @@
         }
         setSyncStatus('Загрузка релизов', 'syncing');
 
-        // 1. Мгновенно показываем кэш
+        // 1. Мгновенно показываем только публичный каталог. Личные данные
+        // (лайки, реакции, роль) кэш не содержит и сбрасывать их нельзя.
         const cached = loadCache();
         if (cached) {
-          applyData(cached);
+          applyPublicData(cached);
           setSyncStatus('Обновляем релизы', 'syncing');
         }
 
@@ -1474,9 +1538,7 @@
 
       (data.reviews || []).forEach(rv => {
         if (!rv || !rv.id) return;
-        const idx = reviews.findIndex(x => x.id === rv.id);
-        if (idx >= 0) reviews[idx] = rv;
-        else reviews.unshift(rv);
+        reviews = upsertByMatcher(reviews, rv, isSameReview);
         changed = true;
       });
 
@@ -1543,7 +1605,6 @@
           'postgres_changes',
           { event: '*', schema: 'public', table: 'releases' },
           (payload) => {
-            console.log('Realtime releases change:', payload);
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               applySyncDelta({ releases: [payload.new] });
             } else if (payload.eventType === 'DELETE') {
@@ -1555,7 +1616,6 @@
           'postgres_changes',
           { event: '*', schema: 'public', table: 'reviews' },
           async (payload) => {
-            console.log('Realtime reviews change:', payload);
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const { data: rev } = await supabase.from('reviews_view').select('*').eq('id', payload.new.id).maybeSingle();
               if (rev) {
@@ -1570,7 +1630,6 @@
           'postgres_changes',
           { event: '*', schema: 'public', table: 'review_comments' },
           async (payload) => {
-            console.log('Realtime comments change:', payload);
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
               const { data: comm } = await supabase.from('comments_view').select('*').eq('id', payload.new.id).maybeSingle();
               if (comm) {
@@ -1585,7 +1644,6 @@
           'postgres_changes',
           { event: '*', schema: 'public', table: 'likes' },
           (payload) => {
-            console.log('Realtime likes change:', payload);
             if (user.userId) {
               const uId = Number(payload.new?.user_id || payload.old?.user_id);
               if (uId === Number(user.userId)) {
@@ -1604,7 +1662,6 @@
           'postgres_changes',
           { event: '*', schema: 'public', table: 'review_reactions' },
           async (payload) => {
-            console.log('Realtime review_reactions change:', payload);
             const revId = payload.new?.review_id || payload.old?.review_id;
             if (revId) {
               const { data: rev } = await supabase.from('reviews_view').select('*').eq('id', revId).maybeSingle();
@@ -1629,7 +1686,6 @@
           'postgres_changes',
           { event: '*', schema: 'public', table: 'blocked_users' },
           (payload) => {
-            console.log('Realtime blocked_users change:', payload);
             if (payload.eventType === 'INSERT') {
               if (!blockedUsers.includes(payload.new.username)) blockedUsers.push(payload.new.username);
               blockedUserIds.add(String(payload.new.user_id));
@@ -1650,7 +1706,6 @@
           }
         )
         .subscribe((status) => {
-          console.log('Supabase Realtime status:', status);
           if (status === 'SUBSCRIBED') {
             setSyncStatus('Всё актуально', 'ok');
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
@@ -1846,24 +1901,6 @@
       });
     }
 
-    async function fetchOEmbedData(link) {
-      const embedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(link)}`);
-      const embedData = await embedRes.json();
-      
-      if (!embedData.error && embedData.title) {
-        const parsed = parseArtistAndTitle(embedData.title, link);
-        let artist = parsed.artist || (embedData.author_name ? embedData.author_name.replace(/ - Topic/gi, '').trim() : '');
-        let name = parsed.name || cleanTrackTitle(embedData.title);
-        
-        return {
-          artist: artist || 'Артист',
-          name: name || 'Релиз',
-          cover: embedData.thumbnail_url || ''
-        };
-      }
-      throw new Error('noembed failed');
-    }
-
     async function fetchBackendParseData(link) {
       if (isLocalhost) {
         try {
@@ -1970,35 +2007,13 @@
       let parsedGenre = '';
       let isSuccess = false;
 
-      const isYandex = link.includes('music.yandex.') || link.includes('yandex.ru/music') || link.includes('yandex.') && link.includes('music');
-
       try {
-        if (isYandex) {
-          // Для Яндекс Музыки сразу вызываем надежный прямой парсер бэкенда
-          const data = await fetchBackendParseData(link);
-          parsedArtist = data.artist;
-          parsedName = data.name;
-          parsedCover = data.cover;
-          if (data.genre) parsedGenre = data.genre;
-          isSuccess = Boolean(parsedName && parsedArtist);
-        } else {
-          // Для YouTube, Spotify, SoundCloud сначала пробуем oEmbed
-          try {
-            const data = await fetchOEmbedData(link);
-            parsedArtist = data.artist;
-            parsedName = data.name;
-            parsedCover = data.cover;
-            isSuccess = Boolean(parsedName && parsedArtist);
-          } catch {
-            // Фолбэк на Edge Function парсер
-            const data = await fetchBackendParseData(link);
-            parsedArtist = data.artist;
-            parsedName = data.name;
-            parsedCover = data.cover;
-            if (data.genre) parsedGenre = data.genre;
-            isSuccess = Boolean(parsedName && parsedArtist);
-          }
-        }
+        const data = await fetchBackendParseData(link);
+        parsedArtist = data.artist;
+        parsedName = data.name;
+        parsedCover = data.cover;
+        if (data.genre) parsedGenre = data.genre;
+        isSuccess = Boolean(parsedName && parsedArtist);
       } catch (err) {
         console.warn('Авто-парсинг ссылки не удался:', err);
       } finally {
@@ -2586,32 +2601,29 @@
       };
 
       try {
-        const { data: created, error } = await supabase.rpc('create_review', {
+        const { data: created, error } = await rpcCreateWithOptionalId('create_review', {
           p_release_id: newRev.relId,
           p_text: newRev.text,
           p_base_rating: newRev.baseRating,
-          p_criteria: newRev.criteria
-        }).single();
+          p_criteria: newRev.criteria,
+          p_id: newRev.id
+        });
         if (error) throw error;
-        newRev.id = created.id;
         newRev.author = created.author_display_name;
         newRev.authorId = created.author_id;
         newRev.authorUsername = created.author_username;
         newRev.rating = Number(created.rating);
         newRev.objectiveRating = Number(created.objective_rating);
         newRev.timestamp = Number(created.timestamp);
+        reviews = adoptCreatedRecord(reviews, newRev.id, created.id, newRev);
+        newRev.id = created.id;
       } catch(e) {
         console.error('Ошибка сохранения рецензии:', e);
         showToast('Ошибка сохранения — попробуйте позже', 'error');
         return;
       }
 
-      reviews.unshift(newRev);
-      if (!reviewsByRelId.has(activeReleaseId)) reviewsByRelId.set(activeReleaseId, []);
-      reviewsByRelId.get(activeReleaseId).push(newRev);
-      const rvs = reviewsByRelId.get(activeReleaseId);
-      const avg = rvs.length > 0 ? rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length : 0;
-      avgRatingByRelId.set(activeReleaseId, avg);
+      updateReviewsMap();
 
       existingReviewForActiveRelease = newRev;
       reviewPublishBlocked = true;
@@ -2739,16 +2751,22 @@
       renderReviews();
 
       try {
-        const { data: created, error } = await supabase.rpc('create_comment', {
+        const { data: created, error } = await rpcCreateWithOptionalId('create_comment', {
           p_review_id: newComment.reviewId,
-          p_text: newComment.text
-        }).single();
+          p_text: newComment.text,
+          p_id: newComment.id
+        });
         if (error) throw error;
-        newComment.id = created.id;
-        newComment.author = created.author_display_name;
-        newComment.authorId = created.author_id;
-        newComment.authorUsername = created.author_username;
-        newComment.timestamp = Number(created.timestamp);
+        comments = adoptCreatedRecord(comments, newComment.id, created.id, {
+          ...newComment,
+          id: created.id,
+          author: created.author_display_name,
+          authorId: created.author_id,
+          authorUsername: created.author_username,
+          timestamp: Number(created.timestamp)
+        });
+        updateCommentsMap();
+        renderReviews();
         showToast('Комментарий добавлен', 'success');
       } catch (e) {
         console.error('Comment add error:', e);
@@ -2760,9 +2778,17 @@
       }
     }
 
+    function requestDeleteComment(commentId, reviewId) {
+      openConfirmAction({
+        title: 'Удалить комментарий?',
+        body: 'Комментарий будет удалён без возможности восстановления.',
+        confirmText: 'Удалить',
+        action: () => deleteComment(commentId, reviewId)
+      });
+    }
+
     // Удаление комментария — оптимистично, с откатом при ошибке.
     async function deleteComment(commentId, reviewId) {
-      if (!confirm('Удалить комментарий?')) return;
       const removed = comments.find(c => c.id === commentId);
       if (!removed) return;
       comments = comments.filter(c => c.id !== commentId);

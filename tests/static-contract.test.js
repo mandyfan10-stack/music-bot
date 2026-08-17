@@ -34,14 +34,26 @@ test('Telegram bootstrap auth explicitly bypasses gateway JWT verification', () 
   assert.match(config, /\[functions\.auth\][\s\S]*?verify_jwt\s*=\s*false/);
 });
 
-test('remote metadata parser requires a user JWT or signed Telegram session', () => {
+test('remote metadata parser requires an authenticated user JWT', () => {
   const config = read('supabase/config.toml');
   const parser = read('supabase/functions/parse-link/index.ts');
   const app = read('src/app.js');
   assert.match(config, /\[functions\.parse-link\][\s\S]*?verify_jwt\s*=\s*true/);
   assert.match(parser, /requireGatewayVerifiedRole\([\s\S]*?"authenticated"/);
-  assert.match(parser, /verifyTelegramInitData\(/);
+  assert.doesNotMatch(parser, /verifyTelegramInitData\(/);
+  assert.doesNotMatch(parser, /requireParserAccess/);
   assert.match(app, /Authorization':\s*`Bearer \$\{parserToken\}`/);
+  assert.doesNotMatch(app, /fetchOEmbedData|noembed\.com/);
+});
+
+test('share-message uses gateway role and managed Telegram claims', () => {
+  const config = read('supabase/config.toml');
+  const share = read('supabase/functions/share-message/index.ts');
+  assert.match(config, /\[functions\.share-message\][\s\S]*?verify_jwt\s*=\s*true/);
+  assert.match(share, /requireGatewayVerifiedRole\([\s\S]*?"authenticated"/);
+  assert.match(share, /requireTelegramUserId\(/);
+  assert.doesNotMatch(share, /Number\(payload\.sub\)/);
+  assert.doesNotMatch(share, /JWT_SECRET|djwt/);
 });
 
 test('auth registers notification subscribers with the issued user JWT', () => {
@@ -50,6 +62,9 @@ test('auth registers notification subscribers with the issued user JWT', () => {
   assert.match(auth, /verifyOtp\(/);
   assert.match(auth, /accessToken:\s*async \(\) => accessToken/);
   assert.match(auth, /userSupabase[\s\S]*?notification_subscribers/);
+  assert.match(auth, /verifyTelegramInitData\(/);
+  assert.doesNotMatch(auth, /DEV_MODE/);
+  assert.doesNotMatch(auth, /parseTelegramUser\(/);
   assert.doesNotMatch(auth, /SUPABASE_JWT_SECRET/);
   assert.doesNotMatch(auth, /Deno\.env\.get\("JWT_SECRET"\)/);
 });
@@ -67,6 +82,22 @@ test('public catalog starts in parallel with Telegram authentication', () => {
   const app = read('src/app.js');
   assert.match(app, /const authPromise = authenticateWithSupabase\(\);[\s\S]*?Promise\.all\(\[[\s\S]*?from\('releases'\)/);
   assert.doesNotMatch(app, /await authenticateWithSupabase\(\);[\s\S]{0,500}?from\('releases'\)/);
+});
+
+test('public cache hydrates catalog without replacing account state', () => {
+  const app = read('src/app.js');
+  assert.match(app, /applyPublicData\(cached\)/);
+  assert.doesNotMatch(app, /applyData\(cached\)/);
+});
+
+test('review and comment creates send a client id and merge Realtime races', () => {
+  const app = read('src/app.js');
+  const migration = read('supabase/migrations/20260817120000_accept_client_entity_ids.sql');
+  assert.match(app, /rpcCreateWithOptionalId\('create_review'/);
+  assert.match(app, /rpcCreateWithOptionalId\('create_comment'/);
+  assert.match(app, /adoptCreatedRecord\(reviews/);
+  assert.match(app, /upsertByMatcher\(reviews, rv, isSameReview\)/);
+  assert.match(migration, /p_id TEXT DEFAULT NULL/);
 });
 
 test('release covers use a Telegram-authenticated server upload', () => {

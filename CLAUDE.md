@@ -34,10 +34,11 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   (`openModal`/`closeModal`), стек `openModalStack` для нативной кнопки
   «Назад». Шторку можно закрыть свайпом вниз (`setupSheetDrag`).
 - **Поток данных**: cache-first. `fetchDB()` мгновенно показывает только
-  публичный кэш каталога (`xxii_public_cache_v3`, TTL 15 мин), затем читает
-  таблицы и security-invoker views через Supabase Data API. Лайки, реакции,
-  блокировки и профиль не кэшируются. Инкрементальные изменения приходят через
-  Supabase Realtime и применяются `applySyncDelta()`.
+  публичный кэш каталога (`xxii_public_cache_v3`, TTL 15 мин) через
+  `applyPublicData()` — не через `applyData()`, чтобы не обнулить лайки и
+  роль. Затем читает таблицы и security-invoker views через Supabase Data API.
+  Лайки, реакции, блокировки и профиль не кэшируются. Инкрементальные
+  изменения приходят через Supabase Realtime и применяются `applySyncDelta()`.
 - **Состояние** — глобальные переменные: `releases`, `releasesById` (Map),
   `reviews`, `reviewsByRelId` (Map), `avgRatingByRelId` (Map), `comments`,
   `commentsByReviewId` (Map), `likedSet`, `reactedSet`, `genreCounts`, `user`.
@@ -51,7 +52,8 @@ FastAPI/MongoDB-проект архивирован и не участвует �
 - **Бэкенд**: URL проекта и публичный legacy anon key находятся в `app.js`;
   service-role и Telegram bot token никогда не попадают в клиент. Запись
   рецензий/комментариев идёт через RPC, остальные операции защищает RLS.
-  Внешние API: noembed, iTunes, Yandex Music API и ui-avatars.
+  Внешние API: iTunes (обложка), Yandex Music API и ui-avatars. Метаданные
+  ссылки парсит только `parse-link` (локально — `server.js`).
 
 ## Ключевые функции
 
@@ -91,8 +93,11 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
   `submitComment`, `deleteComment`); **создание/удаление рецензий и релизов
   pessimistic** — ждут ответа сервера, затем меняют локальное состояние
   (`addReview`, `saveManualRelease`, `executeDeleteReview`,
-  `executeDeleteRelease`). Серверные `id` совпадают с клиентскими, поэтому
-  `applySyncDelta` обновляет такие записи на месте, без дублей.
+  `executeDeleteRelease`). `create_review` / `create_comment` принимают
+  клиентский `p_id`; клиент всё равно сливает гонку с Realtime через
+  `adoptCreatedRecord` и `isSameReview` (рецензия — по id или
+  `(relId, authorId)`). Подтверждения удаления — шторка
+  `modal-confirm-action`, не `window.confirm`.
 - Доступность: `aria-label`, `role="button"`, `tabindex`, поддержка
   `prefers-reduced-motion` (анимации и морф отключаются).
 
@@ -117,3 +122,5 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
   Telegram. Остальные runtime-библиотеки находятся в `src/`.
 - `supabase/schema.sql` — только указатель; применяемая схема определяется
   упорядоченными файлами `supabase/migrations/`.
+- `identity_contract` применён на проде 2026-08-17: PK `admins` /
+  `blocked_users` — `user_id`. Down-миграции нет.

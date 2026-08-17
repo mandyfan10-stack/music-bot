@@ -12,6 +12,9 @@ This directory is the only active backend. The FastAPI and MongoDB implementatio
 - 20260719000280_private_rls_helpers.sql moves SECURITY DEFINER implementations out of the exposed schema while retaining compatible invoker wrappers.
 - 20260719000290_policy_normalization.sql removes redundant permissive SELECT policies without changing effective access.
 - `20260719000300_identity_contract.sql` is the delayed contract phase. After seven stable days it makes stable Telegram IDs mandatory and switches the administrator/block primary keys.
+- `20260817120000_accept_client_entity_ids.sql` lets `create_review` and
+  `create_comment` persist a client-generated id so Realtime can update the
+  same row instead of inserting a duplicate.
 - `20260816074509_protect_private_reactions_and_counts.sql` makes raw like and
   reaction identities owner-only, keeps aggregate reaction counts public,
   declares the Realtime publication in migrations, removes legacy development

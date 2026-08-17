@@ -1,6 +1,10 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.7";
-import { verify } from "https://deno.land/x/djwt@v2.9/mod.ts";
+import {
+  JwtAuthError,
+  requireGatewayVerifiedRole,
+  requireTelegramUserId,
+} from "../_shared/jwt_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,63 +25,13 @@ serve(async (req) => {
   }
 
   try {
-    // 1. Verify User Session
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const token = authHeader.substring(7);
-    const jwtSecret = Deno.env.get("JWT_SECRET") ||
-      Deno.env.get("SUPABASE_JWT_SECRET");
-    if (!jwtSecret) {
-      return new Response(
-        JSON.stringify({ error: "Missing SUPABASE_JWT_SECRET variable" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    const signingKey = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(jwtSecret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"],
+    // Gateway verifies the JWT signature. Claims then supply the Telegram ID:
+    // managed Auth stores it in app_metadata, not in the UUID `sub`.
+    const payload = requireGatewayVerifiedRole(
+      req.headers.get("Authorization"),
+      "authenticated",
     );
-
-    let payload;
-    try {
-      payload = await verify(token, signingKey);
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid token signature" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    const telegramUserId = Number(payload.sub);
-    if (
-      payload.role !== "authenticated" ||
-      !Number.isSafeInteger(telegramUserId) ||
-      telegramUserId <= 0
-    ) {
-      return new Response(
-        JSON.stringify({ error: "Invalid user token claims" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
+    const telegramUserId = requireTelegramUserId(payload);
 
     // 2. Parse Request
     const { releaseId, prepare = true } = await req.json();
@@ -216,6 +170,12 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    if (err instanceof JwtAuthError) {
+      return new Response(JSON.stringify({ error: err.message }), {
+        status: err.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     console.error("Error in share-message function:", err);
     const message = err instanceof Error ? err.message : String(err);
     return new Response(JSON.stringify({ error: message }), {

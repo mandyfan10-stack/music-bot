@@ -122,3 +122,26 @@ Final hosted versions after removing all one-time verification hooks are
 initData enforced in their function bodies. The managed Auth exchange was
 verified end to end for both first login and repeat login; temporary test users
 were deleted afterward.
+
+## Identity contract still deferred (2026-08-17)
+
+`20260719000300_identity_contract.sql` remains unapplied. The seven-day
+observation window elapsed, but this repository change set does not apply it:
+hosted gates must be re-checked on project `ftpofwybzvhvyukrshcm` immediately
+before rollout, and there is no down-migration. A later migration,
+`20260817120000_accept_client_entity_ids.sql`, is additive and should go out
+with the matching frontend (`p_id` on `create_review` / `create_comment`).
+
+## Hosted rollout (2026-08-17)
+
+Project `ftpofwybzvhvyukrshcm` gates were re-checked live: 2 admins both bound
+to Telegram `user_id`, 0 blocked rows, 0 duplicate `(release_id, author_id)`
+groups. Applied hosted migrations `accept_client_entity_ids` and
+`identity_contract`. Admin/blocked primary keys are now `user_id`.
+`create_review` / `create_comment` accept optional `p_id`.
+
+Deployed Edge Function versions: `share-message` v13 (`verify_jwt=true`,
+managed Telegram claims), `auth` v25 (`verify_jwt=false`, Telegram signature
+still required, no `DEV_MODE`), `parse-link` v17 (`verify_jwt=true`,
+authenticated JWT only). `release-cover` v2 and `send-notifications` v11 were
+not changed.

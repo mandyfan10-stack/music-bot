@@ -1,11 +1,14 @@
 import {
   assertEquals,
   assertRejects,
+  assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.9/mod.ts";
 import {
   JwtAuthError,
+  getTelegramIdFromClaims,
   requireGatewayVerifiedRole,
+  requireTelegramUserId,
   verifyRequiredRole,
 } from "./jwt_auth.ts";
 
@@ -80,5 +83,42 @@ Deno.test("gateway-verified webhook requires the service_role claim", async () =
       requireGatewayVerifiedRole(`Bearer ${anonToken}`, "service_role"),
     JwtAuthError,
     "role required",
+  );
+});
+
+Deno.test("managed Auth claims expose the Telegram user id", () => {
+  assertEquals(
+    getTelegramIdFromClaims({
+      sub: "00000000-0000-0000-0000-000000000123",
+      app_metadata: { telegram_user_id: "123456" },
+    }),
+    "123456",
+  );
+  assertEquals(getTelegramIdFromClaims({ sub: "987654" }), "987654");
+  assertEquals(
+    getTelegramIdFromClaims({
+      sub: "00000000-0000-0000-0000-000000000123",
+    }),
+    "",
+  );
+  assertEquals(
+    requireTelegramUserId({
+      role: "authenticated",
+      sub: "00000000-0000-0000-0000-000000000123",
+      app_metadata: { telegram_user_id: "4242" },
+    }),
+    4242,
+  );
+});
+
+Deno.test("UUID sub without a Telegram claim is rejected", () => {
+  assertThrows(
+    () =>
+      requireTelegramUserId({
+        role: "authenticated",
+        sub: "00000000-0000-0000-0000-000000000123",
+      }),
+    JwtAuthError,
+    "Invalid user token claims",
   );
 });

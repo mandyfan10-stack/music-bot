@@ -3,8 +3,30 @@ import { verify } from "https://deno.land/x/djwt@v2.9/mod.ts";
 export type JwtPayload = {
   role?: string;
   sub?: string;
+  app_metadata?: {
+    telegram_user_id?: string | number;
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 };
+
+// Managed Supabase Auth stores the Telegram ID in app_metadata. Numeric `sub`
+// remains a compatibility fallback for legacy application JWTs.
+export function getTelegramIdFromClaims(
+  claims: JwtPayload | null | undefined,
+): string {
+  const managedId = claims?.app_metadata?.telegram_user_id;
+  if (managedId != null && String(managedId)) return String(managedId);
+  return /^\d+$/.test(String(claims?.sub || "")) ? String(claims?.sub) : "";
+}
+
+export function requireTelegramUserId(claims: JwtPayload): number {
+  const telegramUserId = Number(getTelegramIdFromClaims(claims));
+  if (!Number.isSafeInteger(telegramUserId) || telegramUserId <= 0) {
+    throw new JwtAuthError("Invalid user token claims", 401);
+  }
+  return telegramUserId;
+}
 
 export class JwtAuthError extends Error {
   constructor(message: string, public readonly status: number) {
