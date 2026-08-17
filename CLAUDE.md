@@ -111,7 +111,7 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
   `node --check src/catalog-parse.js` и `node --check server.js`
 - Edge Functions: `deno fmt --check supabase/functions`,
   `deno check --frozen supabase/functions/*/index.ts` и
-  `deno test --frozen supabase/functions/_shared/*_test.ts`
+  `deno test --frozen --allow-read=tests/fixtures supabase/functions/_shared/*_test.ts`
 - База/RLS: `supabase db start && supabase test db`
 - Пересобрать Tailwind после изменения классов: `npm install && npm run build:css`
 - Полная проверка UI требует среды Telegram Mini App.

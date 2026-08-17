@@ -46,7 +46,7 @@ jobs:
           test -f supabase/functions/share-message/index.ts
       - run: deno check --frozen supabase/functions/*/index.ts
       - run: deno fmt --check supabase/functions
-      - run: deno test --frozen supabase/functions/_shared/*_test.ts
+      - run: deno test --frozen --allow-read=tests/fixtures supabase/functions/_shared/*_test.ts
   supabase-database:
     runs-on: ubuntu-latest
     steps:
