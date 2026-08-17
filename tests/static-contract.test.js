@@ -40,7 +40,7 @@ test('visual chrome keeps sync status in the header and a single settings label'
   assert.doesNotMatch(html, />Опции</);
   assert.match(app, />НОВОЕ</);
   assert.doesNotMatch(app, />NEW</);
-  assert.match(css, /--accent-red:\s*#ff0000/);
+  assert.match(css, /--accent-red:\s*#e5484d/);
   assert.match(css, /header\.app-header/);
   assert.match(css, /color-scheme:\s*light/);
 });

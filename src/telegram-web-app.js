@@ -89,7 +89,7 @@
     },
     MainButton: {
       text: 'CONTINUE',
-      color: '#ff0000',
+      color: '#e5484d',
       textColor: '#ffffff',
       isVisible: false,
       isActive: true,

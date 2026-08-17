@@ -3,7 +3,7 @@
     
     :root {
       --bg-color: #000000;
-      --accent-red: #ff0000;
+      --accent-red: #e5484d;
       --header-safe-top: max(
         16px,
         env(safe-area-inset-top, 0px),
@@ -231,7 +231,7 @@
       transition: transform 0.13s var(--ios-snappy), opacity 0.13s var(--ios-snappy);
     }
     .btn-press:active::before { opacity: 0.82; transform: scale(1.04); transition-duration: 0.12s; }
-    .btn-press:focus-visible { box-shadow: 0 0 0 2px var(--accent-red), 0 0 0 7px rgba(255, 0, 0, 0.12); outline: none; }
+    .btn-press:focus-visible { box-shadow: 0 0 0 2px var(--accent-red), 0 0 0 7px color-mix(in srgb, var(--accent-red) 18%, transparent); outline: none; }
     .btn-press[disabled],
     .btn-press.disabled\:cursor-not-allowed:disabled {
       transform: none;
