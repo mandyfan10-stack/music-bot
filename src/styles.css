@@ -243,6 +243,31 @@
        абсолютное позиционирование, например лайк-кнопке на карточке релиза. */
     .btn-press.absolute { position: absolute; }
     .btn-press.fixed { position: fixed; }
+    /* Лайк на обложке: не резать иконку и не накрывать её hover-вуалью. */
+    button[data-act="toggle-like"] {
+      overflow: visible;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    button[data-act="toggle-like"]::before { content: none; }
+    button[data-act="toggle-like"] svg,
+    button[data-act="toggle-like"] i {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      color: #fff;
+      transition: fill 0.22s var(--ios-glide), stroke 0.22s var(--ios-glide), color 0.22s var(--ios-glide);
+    }
+    button[data-act="toggle-like"].is-liked svg,
+    button[data-act="toggle-like"].is-liked i {
+      fill: var(--accent-red) !important;
+      stroke: var(--accent-red) !important;
+      color: var(--accent-red) !important;
+    }
+    body.light-theme button[data-act="toggle-like"]:not(.is-liked) svg,
+    body.light-theme button[data-act="toggle-like"]:not(.is-liked) i { color: #111; }
     .btn-press::before {
       content: "";
       position: absolute;
