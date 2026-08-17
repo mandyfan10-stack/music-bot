@@ -123,14 +123,15 @@ initData enforced in their function bodies. The managed Auth exchange was
 verified end to end for both first login and repeat login; temporary test users
 were deleted afterward.
 
-## Identity contract still deferred (2026-08-17)
+## Identity contract pre-apply checklist (2026-08-17)
 
-`20260719000300_identity_contract.sql` remains unapplied. The seven-day
-observation window elapsed, but this repository change set does not apply it:
-hosted gates must be re-checked on project `ftpofwybzvhvyukrshcm` immediately
-before rollout, and there is no down-migration. A later migration,
-`20260817120000_accept_client_entity_ids.sql`, is additive and should go out
-with the matching frontend (`p_id` on `create_review` / `create_comment`).
+This was the same-day checklist before applying
+`20260719000300_identity_contract.sql`. The seven-day observation window had
+elapsed; hosted gates still had to be re-checked on project
+`ftpofwybzvhvyukrshcm`, and there is no down-migration. Additive
+`20260817120000_accept_client_entity_ids.sql` was to ship with the matching
+frontend (`p_id` on `create_review` / `create_comment`). Both migrations were
+applied in the hosted rollout below.
 
 ## Hosted rollout (2026-08-17)
 
@@ -145,3 +146,12 @@ managed Telegram claims), `auth` v25 (`verify_jwt=false`, Telegram signature
 still required, no `DEV_MODE`), `parse-link` v17 (`verify_jwt=true`,
 authenticated JWT only). `release-cover` v2 and `send-notifications` v11 were
 not changed.
+
+## Catalog-parse extract (2026-08-17)
+
+`parse-link` v18 matches the repository layout: genre/title/Yandex URL helpers
+live in `_shared/catalog_parse.ts`. Gateway `verify_jwt=true` and the
+authenticated-role check are unchanged. HTTP probes after deploy returned 200
+for CORS preflight, 401 without a JWT, and 403 for an anon JWT. `auth` v25,
+`share-message` v13, `release-cover` v2, and `send-notifications` v11 were not
+changed.
