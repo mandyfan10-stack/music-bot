@@ -2461,6 +2461,10 @@
 
     function openRelease(id, sourceEl) {
       const rel = releasesById.get(id); if (!rel) return; activeReleaseId = id;
+      const profileModal = document.getElementById('modal-profile');
+      if (profileModal && !profileModal.classList.contains('hidden')) {
+        closeModal('modal-profile', true);
+      }
       const fb = getFallbackImg(rel.name);
       const relImg = document.getElementById('rel-img');
       relImg.src = rel.img || fb;

@@ -56,6 +56,14 @@ test('review form shows a criteria-total meter instead of a bare 1-10 row', () =
   assert.doesNotMatch(app, /selectedRating/);
 });
 
+test('opening a release from a profile closes the profile sheet first', () => {
+  const app = read('src/app.js');
+  assert.match(
+    app,
+    /function openRelease\([\s\S]*?closeModal\('modal-profile',\s*true\)/
+  );
+});
+
 test('motion keeps iOS springs without review re-fade or tab blur', () => {
   const css = read('src/styles.css');
   const app = read('src/app.js');
