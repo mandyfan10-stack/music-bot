@@ -45,14 +45,6 @@ test('visual chrome keeps sync status in the header and a single settings label'
   assert.match(css, /color-scheme:\s*light/);
 });
 
-test('release like button uses a dedicated liked state', () => {
-  const app = read('src/app.js');
-  const css = read('src/styles.css');
-  assert.match(app, /classList\.toggle\('is-liked', liked\)/);
-  assert.match(app, /is-liked/);
-  assert.match(css, /button\[data-act="toggle-like"\]\.is-liked svg/);
-});
-
 test('review form shows a criteria-total meter instead of a bare 1-10 row', () => {
   const html = read('index.html');
   const app = read('src/app.js');

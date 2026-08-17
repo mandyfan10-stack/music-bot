@@ -2225,8 +2225,6 @@
     function applyLikeState(id, liked) {
       const safeId = escapeCssString(id);
       document.querySelectorAll(`button[data-like-id="${safeId}"]`).forEach(btn => {
-        btn.classList.toggle('is-liked', liked);
-        btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
         const icon = btn.querySelector('svg') || btn.querySelector('i');
         if (!icon) return;
         if (liked) {
@@ -2292,8 +2290,8 @@
             <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" loading="lazy" decoding="async" class="w-full h-full object-cover">
             ${ratingBadge}
             ${newBadge}
-          <button data-act="toggle-like" data-id="${escapeHtml(r.id)}" data-like-id="${escapeHtml(r.id)}" aria-label="Нравится" aria-pressed="${isLiked ? 'true' : 'false'}" class="absolute bottom-2 right-2 z-10 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press${isLiked ? ' is-liked' : ''}">
-              <i data-lucide="heart" class="lucide-heart w-4 h-4 ${isLiked?'fill-red-500 text-red-500':'text-white'}"></i>
+          <button data-act="toggle-like" data-id="${escapeHtml(r.id)}" data-like-id="${escapeHtml(r.id)}" aria-label="Нравится" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
+              <i data-lucide="heart" class="w-4 h-4 ${isLiked?'fill-red-500 text-red-500':'text-white'}"></i>
             </button>
           </div>
           <div class="px-1"><div class="text-[13px] font-bold text-white truncate">${escapeHtml(r.name)}</div><div class="text-[11px] text-gray-500 truncate">${escapeHtml(r.artist)}</div></div>
