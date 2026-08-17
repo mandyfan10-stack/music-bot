@@ -5,8 +5,8 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.9/mod.ts";
 import {
-  JwtAuthError,
   getTelegramIdFromClaims,
+  JwtAuthError,
   requireGatewayVerifiedRole,
   requireTelegramUserId,
   verifyRequiredRole,

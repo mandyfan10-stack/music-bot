@@ -122,6 +122,8 @@ select throws_ok(
 );
 
 reset role;
+insert into public.releases (id, name, artist, link)
+values ('release-2', 'Named', 'Artist', 'https://example.com/named');
 select set_config(
   'request.jwt.claims',
   '{"sub":"00000000-0000-0000-0000-000000000202","role":"authenticated","app_metadata":{"telegram_user_id":"202","username":"Cara","display_name":"Cara"}}',
@@ -130,7 +132,7 @@ select set_config(
 set local role authenticated;
 select lives_ok(
   $$select public.create_review(
-    'release-1',
+    'release-2',
     repeat('A named review. ', 3),
     7,
     '{"sound":3,"production":3,"originality":3,"meaning":3,"relevance":3,"image":3}'::jsonb,
