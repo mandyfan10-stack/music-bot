@@ -117,6 +117,31 @@ test('removed backend and local-admin compatibility paths do not return', () => 
   assert.doesNotMatch(app, /xxii_cache_v2(?!(?:'\);))/);
 });
 
+test('JS and TS catalog-parse maps stay in lockstep', () => {
+  const js = read('src/catalog-parse.js');
+  const ts = read('supabase/functions/_shared/catalog_parse.ts');
+  const keys = (source) => {
+    const block = source.match(/GENRE_MAP[\s\S]*?=\s*\{([\s\S]*?)\n\};/)?.[1] || '';
+    return [...block.matchAll(/['"]([^'"]+)['"]\s*:/g)].map((match) => match[1]).sort();
+  };
+  assert.deepStrictEqual(keys(js), keys(ts));
+  assert.match(js, /function parseYandexMusicUrl/);
+  assert.match(ts, /export function parseYandexMusicUrl/);
+  assert.doesNotMatch(read('supabase/functions/parse-link/index.ts'), /const GENRE_MAP/);
+});
+
+test('pure app helpers live in utils.js, not in the IIFE', () => {
+  const app = read('src/app.js');
+  const utils = read('src/utils.js');
+  assert.match(utils, /function reviewByUser/);
+  assert.match(utils, /function computeProfileBadges/);
+  assert.match(utils, /function decodeJwtPayload/);
+  assert.match(utils, /function pluralReviews/);
+  assert.doesNotMatch(app, /function reviewByUser\(/);
+  assert.doesNotMatch(app, /function decodeJwtPayload\(/);
+  assert.doesNotMatch(app, /function pluralReviews\(/);
+});
+
 test('database migration removes hosted development bypass RPCs', () => {
   const migration = read('supabase/migrations/20260816074509_protect_private_reactions_and_counts.sql');
   assert.match(migration, /DROP FUNCTION IF EXISTS public\.dev_create_release/i);

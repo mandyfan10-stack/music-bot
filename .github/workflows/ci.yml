@@ -22,6 +22,7 @@ jobs:
       - run: npm test
       - run: node --check src/app.js
       - run: node --check src/utils.js
+      - run: node --check src/catalog-parse.js
       - run: node --check server.js
       - run: npm run build:css
       - run: git diff --exit-code -- src/tailwind.css

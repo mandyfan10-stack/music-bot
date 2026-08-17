@@ -1,7 +1,14 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { cleanTrackTitle, parseArtistAndTitle, normalizeGenre } = require('./src/utils.js');
+const {
+  cleanTrackTitle,
+  parseArtistAndTitle,
+  normalizeGenre,
+  parseYandexMusicUrl,
+  yandexCoverUrl,
+  joinNames
+} = require('./src/catalog-parse.js');
 
 const PORT = process.env.PORT || 3000;
 const MIME_TYPES = {
@@ -21,88 +28,55 @@ const MIME_TYPES = {
   '.ttf': 'font/ttf'
 };
 
-function parseYandexUrl(urlStr) {
-  try {
-    const url = new URL(urlStr);
-    const result = {};
-    const trackParam = url.searchParams.get('track');
-    if (trackParam && /^\d+$/.test(trackParam)) result.track_id = trackParam;
-
-    const parts = url.pathname.split('/').filter(Boolean);
-    for (let i = 0; i < parts.length; i++) {
-      if (parts[i] === 'track' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
-        result.track_id = parts[i + 1];
-      }
-      if (parts[i] === 'album' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
-        result.album_id = parts[i + 1];
-      }
-    }
-    return Object.keys(result).length > 0 ? result : null;
-  } catch {
-    return null;
-  }
-}
-
-function yandexCoverUrl(coverUri) {
-  if (!coverUri) return '';
-  const uri = coverUri.replace('%%', '1000x1000');
-  if (uri.startsWith('//')) return `https:${uri}`;
-  if (uri.startsWith('http://') || uri.startsWith('https://')) return uri;
-  return `https://${uri}`;
-}
-
 async function handleParseLink(link) {
-  const isYandex = link.includes('music.yandex.') || link.includes('yandex.ru/music');
-  
-  if (isYandex) {
-    const ids = parseYandexUrl(link);
-    if (ids) {
-      try {
-        const headers = {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Accept': 'application/json',
-          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
-        };
+  const ids = parseYandexMusicUrl(link);
 
-        if (ids.track_id) {
-          const res = await fetch(`https://api.music.yandex.net/tracks/${ids.track_id}`, { headers });
-          if (res.ok) {
-            const data = await res.json();
-            const track = data.result?.[0];
-            if (track && track.title) {
-              const album = track.albums?.[0] || {};
-              const artists = (track.artists || []).map(a => a.name).filter(Boolean).join(', ');
-              const img = yandexCoverUrl(track.coverUri || track.ogImage || album.coverUri || album.ogImage || '');
-              return {
-                artist: artists || 'Артист',
-                name: cleanTrackTitle(track.title),
-                img: img,
-                genre: normalizeGenre(track.genre || album.genre || '')
-              };
-            }
+  if (ids) {
+    try {
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+      };
+
+      if (ids.track_id) {
+        const res = await fetch(`https://api.music.yandex.net/tracks/${ids.track_id}`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          const track = data.result?.[0];
+          if (track && track.title) {
+            const album = track.albums?.[0] || {};
+            const artists = joinNames(track.artists) || joinNames(album.artists) || joinNames(album.labels);
+            const img = yandexCoverUrl(track.coverUri || track.ogImage || album.coverUri || album.ogImage || '');
+            return {
+              artist: artists || 'Артист',
+              name: cleanTrackTitle(track.title),
+              img: img,
+              genre: normalizeGenre(track.genre || album.genre || '')
+            };
           }
         }
-
-        if (ids.album_id) {
-          const res = await fetch(`https://api.music.yandex.net/albums/${ids.album_id}/with-tracks`, { headers });
-          if (res.ok) {
-            const data = await res.json();
-            const album = data.result || {};
-            if (album.title) {
-              const artists = (album.artists || []).map(a => a.name).filter(Boolean).join(', ');
-              const img = yandexCoverUrl(album.coverUri || album.ogImage || album.cover?.uri || '');
-              return {
-                artist: artists || 'Артист',
-                name: cleanTrackTitle(album.title),
-                img: img,
-                genre: normalizeGenre(album.genre || '')
-              };
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[Local Server] Yandex API fetch error:', err.message);
       }
+
+      if (ids.album_id) {
+        const res = await fetch(`https://api.music.yandex.net/albums/${ids.album_id}/with-tracks`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          const album = data.result || {};
+          if (album.title) {
+            const artists = joinNames(album.artists) || joinNames(album.labels);
+            const img = yandexCoverUrl(album.coverUri || album.ogImage || album.cover?.uri || '');
+            return {
+              artist: artists || 'Артист',
+              name: album.title,
+              img: img,
+              genre: normalizeGenre(album.genre || '')
+            };
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Local Server] Yandex API fetch error:', err.message);
     }
   }
 

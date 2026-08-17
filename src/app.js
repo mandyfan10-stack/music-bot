@@ -509,16 +509,6 @@
       }
     }
 
-    function getCriteriaAverage(criteria = {}) {
-      const values = criteriaConfig.map(({ key }) => typeof criteria[key] === 'number' ? criteria[key] : 5);
-      return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
-    }
-
-    function formatCriteria(criteria = {}) {
-      return criteriaConfig
-        .map(({ key }) => typeof criteria[key] === 'number' ? criteria[key] : 5)
-        .join('/');
-    }
     let currentPendingLink = '';
     let manualCoverBase64 = null;
     let releaseToDelete = null;
@@ -1000,44 +990,15 @@
       closeModal(openModalStack[openModalStack.length - 1]);
     });
 
-    // Принадлежит ли рецензия пользователю. authorId приходит с сервера и
-    // надёжен; displayName — фолбэк для старых записей без authorId.
-    function reviewByUser(review, userId, displayName) {
-      if (userId != null && review.authorId != null) {
-        return String(review.authorId) === String(userId);
-      }
-      return !!displayName && review.author === displayName;
-    }
-
-    // --- СТАТИСТИКА ПРОФИЛЯ ---
-    // Бейджи-достижения, вычисляемые из рецензий пользователя.
-    function computeProfileBadges(userReviews) {
-      const badges = [];
-      const count = userReviews.length;
-      if (count >= 1) badges.push({ icon: 'pen-line', label: 'Первая рецензия' });
-      if (count >= 10) badges.push({ icon: 'flame', label: 'Плодовитый' });
-      if (count >= 25) badges.push({ icon: 'crown', label: 'Ветеран' });
-
-      const genres = new Set();
-      userReviews.forEach(r => {
-        const rel = releasesById.get(r.relId);
-        genres.add((rel && rel.genre) || 'Другое');
-      });
-      if (genres.size >= 5) badges.push({ icon: 'disc-3', label: 'Меломан' });
-
-      if (count >= 3) {
-        const avg = userReviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / count;
-        if (avg < 5) badges.push({ icon: 'gavel', label: 'Строгий критик' });
-        else if (avg >= 8) badges.push({ icon: 'sparkles', label: 'Щедрый' });
-      }
-      return badges;
+    function computeProfileBadgesForUser(userReviews) {
+      return computeProfileBadges(userReviews, (id) => releasesById.get(id));
     }
 
     function renderProfileBadges(userReviews) {
       const wrap = document.getElementById('profile-badges');
       const list = document.getElementById('profile-badges-list');
       if (!wrap || !list) return;
-      const badges = computeProfileBadges(userReviews);
+      const badges = computeProfileBadgesForUser(userReviews);
       if (!badges.length) {
         wrap.classList.add('hidden');
         list.innerHTML = '';
@@ -1313,17 +1274,7 @@
       applyAccountData(data);
     }
 
-    function decodeJwtPayload(token) {
-      try {
-        const encoded = String(token || '').split('.')[1];
-        if (!encoded) return null;
-        const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
-        const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-        return JSON.parse(atob(padded));
-      } catch (_) {
-        return null;
-      }
-    }
+
 
     function hasUsableAccessToken(expectedUserId = user.userId) {
       const token = getSupabaseAccessToken();
@@ -1393,10 +1344,7 @@
       return await authenticateWithSupabase(true);
     }
 
-    function isMissingRpcSignature(error) {
-      const message = String(error?.message || '');
-      return error?.code === 'PGRST202' || /could not find the function/i.test(message);
-    }
+
 
     // New servers accept p_id so Realtime can merge in place. Older schemas
     // still expose the previous signature — retry without the extra argument.
@@ -2827,13 +2775,7 @@
       refreshIcons();
     }
 
-    // Множественное число для слова «рецензия» по правилам русского языка.
-    function pluralReviews(n) {
-      const mod10 = n % 10, mod100 = n % 100;
-      if (mod10 === 1 && mod100 !== 11) return 'рецензия';
-      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'рецензии';
-      return 'рецензий';
-    }
+
 
     // График средних оценок по 6 критериям для активного релиза.
     function renderCriteriaChart(relId) {

@@ -67,167 +67,6 @@ function getShareTarget(serverDeepLink, releaseLink) {
   return '';
 }
 
-const GENRE_MAP = {
-  'rusrap': 'Рэп',
-  'rap': 'Рэп',
-  'рэп': 'Рэп',
-  'hip hop': 'Хип-хоп',
-  'hip-hop': 'Хип-хоп',
-  'hiphop': 'Хип-хоп',
-  'хип-хоп': 'Хип-хоп',
-  'хипхоп': 'Хип-хоп',
-  'trap': 'Трэп',
-  'трэп': 'Трэп',
-  'drill': 'Трэп',
-  'дрил': 'Трэп',
-  'дрилл': 'Трэп',
-  'phonk': 'Трэп',
-  'фонк': 'Трэп',
-  'cloud rap': 'Рэп',
-  'lo-fi': 'Хип-хоп',
-  'lofi': 'Хип-хоп',
-  'r&b': 'R&B',
-  'rnb': 'R&B',
-  'рнб': 'R&B',
-  'soul': 'R&B',
-  'соул': 'R&B',
-  'urban': 'R&B',
-  'ruspop': 'Поп',
-  'pop': 'Поп',
-  'поп': 'Поп',
-  'synthpop': 'Поп',
-  'rusrock': 'Рок',
-  'rock': 'Рок',
-  'рок': 'Рок',
-  'indie': 'Рок',
-  'инди': 'Рок',
-  'alternative': 'Рок',
-  'альтернатива': 'Рок',
-  'punk': 'Рок',
-  'панк': 'Рок',
-  'post-punk': 'Рок',
-  'grunge': 'Рок',
-  'pop-punk': 'Рок',
-  'electronics': 'Электронная',
-  'electronic': 'Электронная',
-  'электроника': 'Электронная',
-  'электронная': 'Электронная',
-  'edm': 'Электронная',
-  'dance': 'Электронная',
-  'club': 'Электронная',
-  'house': 'Электронная',
-  'techno': 'Электронная',
-  'trance': 'Электронная',
-  'dubstep': 'Электронная',
-  'dnb': 'Электронная',
-  'metal': 'Метал',
-  'метал': 'Метал',
-  'heavy metal': 'Метал',
-  'metalcore': 'Метал',
-  'hardrock': 'Метал',
-  'jazz': 'Джаз',
-  'джаз': 'Джаз',
-  'blues': 'Джаз',
-  'блюз': 'Джаз'
-};
-
-function normalizeGenre(raw) {
-  if (!raw) return '';
-  const low = String(raw).trim().toLowerCase().replace(/_/g, '-');
-  if (GENRE_MAP[low]) return GENRE_MAP[low];
-  for (const [key, val] of Object.entries(GENRE_MAP)) {
-    if (low === key || low.includes(key)) return val;
-  }
-  return 'Другое';
-}
-
-function cleanTrackTitle(raw) {
-  let title = (raw || '').replace(/\s+/g, ' ').trim();
-  title = title.replace(
-    /\s*\|\s*(Spotify|Apple Music|YouTube Music|YouTube|Yandex Music|Яндекс Музыка|VK Музыка|SoundCloud|Bandcamp)\s*$/i,
-    ''
-  );
-  title = title.replace(
-    /\s*[-–—]\s*(Spotify|Apple Music|YouTube Music|YouTube|Yandex Music|Яндекс Музыка|VK Музыка|SoundCloud|Bandcamp)\s*$/i,
-    ''
-  );
-  title = title.replace(
-    /\s*(\(Official\s*(Music\s*)?Video\)|\[Official\s*(Music\s*)?Video\]|\(Official\s*Audio\)|\(Audio\)|\(Lyric\s*Video\)|\(Lyrics\)|\(Visualizer\)|\[Audio\]|\[Премьера\s*клипа\]|\[Клип\]|\(Премьера\s*клипа\)|\(Клип\)|\(Mood\s*Video\))\s*$/gi,
-    ''
-  );
-  return title.trim();
-}
-
-function parseArtistAndTitle(rawTitle, urlStr) {
-  let title = cleanTrackTitle(rawTitle);
-
-  // Шаблон Яндекс Музыки (SEO заголовок): "<Название> (альбом|трек|сингл|песня) <Артисты> слушать онлайн..."
-  const yandexSeoMatch = title.match(/^(.+?)\s+(?:альбом|трек|сингл|песня)\s+(.+?)\s+слушать\s+онлайн/i);
-  if (yandexSeoMatch) {
-    return {
-      artist: yandexSeoMatch[2].trim(),
-      name: yandexSeoMatch[1].trim(),
-      genre: ''
-    };
-  }
-
-  // Шаблон Яндекс Музыки: "Трек «EUPHORIA» (SALUKI) слушать онлайн..."
-  const yandexTrackMatch = title.match(/Трек\s+[«"'](.+?)[»"']\s*\((.+?)\)/i);
-  if (yandexTrackMatch) {
-    return {
-      artist: yandexTrackMatch[2].trim(),
-      name: yandexTrackMatch[1].trim(),
-      genre: ''
-    };
-  }
-
-  // Шаблон Яндекс Музыки: "Альбом «WILD EA$T» (SALUKI)..."
-  const yandexAlbumMatch = title.match(/Альбом\s+[«"'](.+?)[»"']\s*\((.+?)\)/i);
-  if (yandexAlbumMatch) {
-    return {
-      artist: yandexAlbumMatch[2].trim(),
-      name: yandexAlbumMatch[1].trim(),
-      genre: ''
-    };
-  }
-
-  // Шаблон "Track by Artist"
-  const byMatch = title.match(/^(.+?)\s+by\s+(.+)$/i);
-  if (byMatch) {
-    return {
-      artist: byMatch[2].trim(),
-      name: byMatch[1].trim(),
-      genre: ''
-    };
-  }
-
-  // Разделители "Artist - Track"
-  for (const separator of [' - ', ' – ', ' — ', ' : ']) {
-    if (title.includes(separator)) {
-      const parts = title.split(separator);
-      return {
-        artist: parts[0].trim(),
-        name: parts.slice(1).join(separator).trim(),
-        genre: ''
-      };
-    }
-  }
-
-  try {
-    const url = new URL(urlStr || '');
-    const pathName = decodeURIComponent(url.pathname.replace(/\/$/, '').split('/').pop() || '')
-      .replace(/[-_]/g, ' ')
-      .trim();
-    return {
-      artist: '',
-      name: title || pathName || 'Релиз',
-      genre: ''
-    };
-  } catch {
-    return { artist: '', name: title || 'Релиз', genre: '' };
-  }
-}
-
 // Чистая фильтрация и сортировка каталога релизов.
 function filterAndSortReleases(releases, options) {
   const opts = options || {};
@@ -285,6 +124,81 @@ function upsertByMatcher(list, item, isSame) {
   return items;
 }
 
+const DEFAULT_CRITERIA_KEYS = [
+  'sound', 'production', 'originality', 'meaning', 'relevance', 'image'
+];
+
+function reviewByUser(review, userId, displayName) {
+  if (!review) return false;
+  if (userId != null && review.authorId != null) {
+    return String(review.authorId) === String(userId);
+  }
+  return !!displayName && review.author === displayName;
+}
+
+function computeProfileBadges(userReviews, getRelease) {
+  const badges = [];
+  const reviews = Array.isArray(userReviews) ? userReviews : [];
+  const lookup = typeof getRelease === 'function' ? getRelease : () => null;
+  const count = reviews.length;
+  if (count >= 1) badges.push({ icon: 'pen-line', label: 'Первая рецензия' });
+  if (count >= 10) badges.push({ icon: 'flame', label: 'Плодовитый' });
+  if (count >= 25) badges.push({ icon: 'crown', label: 'Ветеран' });
+
+  const genres = new Set();
+  reviews.forEach((review) => {
+    const rel = lookup(review && review.relId);
+    genres.add((rel && rel.genre) || 'Другое');
+  });
+  if (genres.size >= 5) badges.push({ icon: 'disc-3', label: 'Меломан' });
+
+  if (count >= 3) {
+    const avg = reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0) / count;
+    if (avg < 5) badges.push({ icon: 'gavel', label: 'Строгий критик' });
+    else if (avg >= 8) badges.push({ icon: 'sparkles', label: 'Щедрый' });
+  }
+  return badges;
+}
+
+function getCriteriaAverage(criteria, keys) {
+  const list = Array.isArray(keys) && keys.length ? keys : DEFAULT_CRITERIA_KEYS;
+  const source = criteria && typeof criteria === 'object' ? criteria : {};
+  const values = list.map((key) => typeof source[key] === 'number' ? source[key] : 5);
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
+}
+
+function formatCriteria(criteria, keys) {
+  const list = Array.isArray(keys) && keys.length ? keys : DEFAULT_CRITERIA_KEYS;
+  const source = criteria && typeof criteria === 'object' ? criteria : {};
+  return list.map((key) => typeof source[key] === 'number' ? source[key] : 5).join('/');
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const encoded = String(token || '').split('.')[1];
+    if (!encoded) return null;
+    const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    return JSON.parse(atob(padded));
+  } catch (_) {
+    return null;
+  }
+}
+
+function isMissingRpcSignature(error) {
+  const message = String(error && error.message || '');
+  return error && error.code === 'PGRST202' || /could not find the function/i.test(message);
+}
+
+function pluralReviews(n) {
+  const count = Number(n) || 0;
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'рецензия';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'рецензии';
+  return 'рецензий';
+}
+
 // Replaces a locally created row after the server assigns (or echoes) an id,
 // and drops a Realtime duplicate that already arrived with the server id.
 function adoptCreatedRecord(list, localId, createdId, item) {
@@ -298,6 +212,7 @@ function adoptCreatedRecord(list, localId, createdId, item) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
+  const catalogParse = require('./catalog-parse.js');
   module.exports = {
     cleanUsername,
     escapeHtml,
@@ -306,12 +221,17 @@ if (typeof module !== 'undefined' && module.exports) {
     getPublicCacheData,
     getTelegramIdFromClaims,
     getShareTarget,
-    normalizeGenre,
-    cleanTrackTitle,
-    parseArtistAndTitle,
     filterAndSortReleases,
     isSameReview,
     upsertByMatcher,
-    adoptCreatedRecord
+    adoptCreatedRecord,
+    reviewByUser,
+    computeProfileBadges,
+    getCriteriaAverage,
+    formatCriteria,
+    decodeJwtPayload,
+    isMissingRpcSignature,
+    pluralReviews,
+    ...catalogParse
   };
 }

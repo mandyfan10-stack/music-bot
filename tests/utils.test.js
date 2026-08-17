@@ -14,7 +14,14 @@ const {
   filterAndSortReleases,
   isSameReview,
   upsertByMatcher,
-  adoptCreatedRecord
+  adoptCreatedRecord,
+  reviewByUser,
+  computeProfileBadges,
+  getCriteriaAverage,
+  formatCriteria,
+  decodeJwtPayload,
+  isMissingRpcSignature,
+  pluralReviews
 } = require('../src/utils.js');
 
 test('cleanUsername: should remove leading @ and convert to lowercase', () => {
@@ -304,6 +311,55 @@ test('upsertByMatcher: updates an existing review in place', () => {
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0].id, 'server');
   assert.strictEqual(out[0].text, 'new');
+});
+
+test('reviewByUser: prefers authorId over display name', () => {
+  assert.strictEqual(reviewByUser({ authorId: 1, author: 'A' }, 1, 'B'), true);
+  assert.strictEqual(reviewByUser({ authorId: 1, author: 'A' }, 2, 'A'), false);
+  assert.strictEqual(reviewByUser({ author: 'A' }, null, 'A'), true);
+});
+
+test('computeProfileBadges: first review and genre spread', () => {
+  const one = computeProfileBadges([{ relId: 'r1', rating: 9 }]);
+  assert.ok(one.some((badge) => badge.label === 'Первая рецензия'));
+  const many = computeProfileBadges(
+    [1, 2, 3, 4, 5].map((n) => ({ relId: 'r' + n, rating: 4 })),
+    (id) => ({ genre: id })
+  );
+  assert.ok(many.some((badge) => badge.label === 'Меломан'));
+  assert.ok(many.some((badge) => badge.label === 'Строгий критик'));
+});
+
+test('getCriteriaAverage and formatCriteria use the six default keys', () => {
+  assert.strictEqual(getCriteriaAverage({
+    sound: 10, production: 10, originality: 10, meaning: 10, relevance: 10, image: 10
+  }), 10);
+  assert.strictEqual(formatCriteria({ sound: 1, production: 2 }), '1/2/5/5/5/5');
+});
+
+test('decodeJwtPayload reads a padded payload', () => {
+  const payload = btoa(JSON.stringify({ role: 'authenticated', sub: '1' }))
+    .replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+  assert.deepStrictEqual(decodeJwtPayload('x.' + payload + '.y'), {
+    role: 'authenticated',
+    sub: '1'
+  });
+  assert.strictEqual(decodeJwtPayload('bad'), null);
+});
+
+test('isMissingRpcSignature detects PostgREST missing-function errors', () => {
+  assert.strictEqual(isMissingRpcSignature({ code: 'PGRST202' }), true);
+  assert.strictEqual(isMissingRpcSignature({ message: 'Could not find the function public.create_review' }), true);
+  assert.strictEqual(isMissingRpcSignature({ message: 'JWT expired' }), false);
+});
+
+test('pluralReviews follows Russian plural rules', () => {
+  assert.strictEqual(pluralReviews(1), 'рецензия');
+  assert.strictEqual(pluralReviews(2), 'рецензии');
+  assert.strictEqual(pluralReviews(5), 'рецензий');
+  assert.strictEqual(pluralReviews(21), 'рецензия');
 });
 
 test('adoptCreatedRecord: drops a Realtime duplicate and keeps one row', () => {

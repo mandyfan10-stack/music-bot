@@ -21,9 +21,12 @@ FastAPI/MongoDB-проект архивирован и не участвует �
 - `package.json` — devDependency `tailwindcss` и скрипт `build:css` (для
   регенерации; на деплой не влияет).
 - `src/styles.css` — кастомные стили поверх Tailwind (подключается `<link>`).
-- `src/app.js` — вся логика приложения (~2900 строк, `<script src defer>`).
-- `src/utils.js` — утилиты экранирования + чистые функции каталога
-  (`filterAndSortReleases`); переиспользуется тестами через `module.exports`.
+- `src/app.js` — IIFE приложения (`<script src defer>`). Чистые хелперы
+  вынесены в `utils.js`; жанр/название/Yandex URL — в `catalog-parse.js`.
+- `src/catalog-parse.js` — общие чистые функции парсера (браузер + Node).
+  TypeScript-копия — `supabase/functions/_shared/catalog_parse.ts`.
+- `src/utils.js` — экранирование, кэш, фильтры, JWT claims, бейджи;
+  переиспользуется тестами через `module.exports`.
 - `tests/utils.test.js` — тесты утилит и логики фильтрации (Node `test`).
 
 ## Архитектура
@@ -104,8 +107,8 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
 ## Команды
 
 - Тесты (утилиты, фильтрация и статические контракты): `npm test`
-- Синтаксис: `node --check src/app.js`, `node --check src/utils.js` и
-  `node --check server.js`
+- Синтаксис: `node --check src/app.js`, `node --check src/utils.js`,
+  `node --check src/catalog-parse.js` и `node --check server.js`
 - Edge Functions: `deno fmt --check supabase/functions`,
   `deno check --frozen supabase/functions/*/index.ts` и
   `deno test --frozen supabase/functions/_shared/*_test.ts`
