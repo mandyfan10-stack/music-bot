@@ -4,6 +4,12 @@
     :root {
       --bg-color: #000000;
       --accent-red: #ff0000;
+      --header-safe-top: max(
+        16px,
+        env(safe-area-inset-top, 0px),
+        var(--tg-content-safe-area-inset-top, 0px),
+        var(--tg-safe-area-inset-top, 0px)
+      );
       /* Пружинная моторика iOS 26 */
       --ios-spring: cubic-bezier(0.34, 1.42, 0.5, 1);   /* мягкий overshoot — входы, морф */
       --ios-snappy: cubic-bezier(0.22, 0.9, 0.32, 1);   /* быстрый отклик — тапы, переключатели */
@@ -17,8 +23,36 @@
       color: #f3f4f6; 
       font-family: 'Inter', sans-serif; 
       overflow: hidden; 
+      color-scheme: dark;
       -webkit-tap-highlight-color: transparent;
       transition: background-color 0.6s var(--ios-glide);
+    }
+
+    /* Один акцент вместо red-400 / red-500 / red-600. */
+    .bg-red-600,
+    .bg-red-500 { background-color: var(--accent-red); }
+    .text-red-600,
+    .text-red-500,
+    .text-red-400 { color: var(--accent-red); }
+    .fill-red-500 { fill: var(--accent-red); }
+    .border-red-500 { border-color: var(--accent-red); }
+    .bg-red-500\/10,
+    .bg-red-600\/10 { background-color: color-mix(in srgb, var(--accent-red) 10%, transparent); }
+    .bg-red-500\/15 { background-color: color-mix(in srgb, var(--accent-red) 15%, transparent); }
+    .bg-red-500\/20 { background-color: color-mix(in srgb, var(--accent-red) 20%, transparent); }
+    .border-red-500\/20,
+    .border-red-500\/25 { border-color: color-mix(in srgb, var(--accent-red) 22%, transparent); }
+    .hover\:bg-red-500\/20:hover { background-color: color-mix(in srgb, var(--accent-red) 20%, transparent); }
+    .ring-red-500\/30 { --tw-ring-color: color-mix(in srgb, var(--accent-red) 30%, transparent); }
+    .ring-red-500\/50 { --tw-ring-color: color-mix(in srgb, var(--accent-red) 50%, transparent); }
+    .focus-visible\:ring-red-500:focus-visible { --tw-ring-color: var(--accent-red); }
+
+    header.app-header {
+      padding-top: var(--header-safe-top);
+      background: color-mix(in srgb, var(--bg-color) 84%, transparent);
+      backdrop-filter: blur(22px) saturate(150%);
+      -webkit-backdrop-filter: blur(22px) saturate(150%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     
     .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -148,11 +182,15 @@
     }
 
     /* Стекло */
-    .glass { background: rgba(28, 28, 30, 0.75); backdrop-filter: blur(28px) saturate(150%); -webkit-backdrop-filter: blur(28px) saturate(150%); border: 1px solid rgba(255, 255, 255, 0.12); }
+    .glass { background: rgba(28, 28, 30, 0.88); backdrop-filter: blur(28px) saturate(150%); -webkit-backdrop-filter: blur(28px) saturate(150%); border: 1px solid rgba(255, 255, 255, 0.12); }
     .glass-input { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); transition: all 0.3s; }
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .glass { background: rgba(20, 20, 22, 0.97); }
+      header.app-header { background: var(--bg-color); }
+    }
     
     .rating-btn { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); transition: transform 0.44s var(--ios-spring), background-color 0.3s var(--ios-glide), color 0.3s var(--ios-glide), box-shadow 0.3s var(--ios-glide), border-color 0.3s var(--ios-glide); }
-    .rating-btn.active { background: white; color: black; transform: scale(1.2); box-shadow: 0 0 20px rgba(255, 255, 255, 0.4); border-color: white; }
+    .rating-btn.active { background: white; color: black; transform: scale(1.06); box-shadow: 0 0 0 2px var(--accent-red); border-color: white; }
 
     .btn-press {
       position: relative;
@@ -255,7 +293,7 @@
     /* ========================================= */
     /* СВЕТЛАЯ ТЕМА (Полная инверсия стилей)     */
     /* ========================================= */
-    body.light-theme { --bg-color: #f2f2f7; color: #000; }
+    body.light-theme { --bg-color: #f2f2f7; color: #000; color-scheme: light; }
     
     body.light-theme .text-white { color: #000 !important; }
     body.light-theme .bg-red-600 { color: #fff !important; }
@@ -273,10 +311,17 @@
     body.light-theme .glass-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); color: #000; }
     body.light-theme .glass-input::placeholder { color: #8e8e93; }
     
+    body.light-theme header.app-header {
+      border-bottom-color: rgba(0, 0, 0, 0.06);
+    }
     body.light-theme .bg-white\/5 { background-color: rgba(0,0,0,0.04) !important; }
     body.light-theme .bg-white\/10 { background-color: rgba(0,0,0,0.08) !important; }
+    body.light-theme .bg-white\/20 { background-color: rgba(0,0,0,0.08) !important; }
     body.light-theme .border-white\/10 { border-color: rgba(0,0,0,0.08) !important; }
-    body.light-theme .border-white\/5 { border-color: rgba(0,0,0,0.04) !important; }
+    body.light-theme .border-white\/5,
+    body.light-theme .border-white\/\[0\.05\] { border-color: rgba(0,0,0,0.06) !important; }
+    body.light-theme .hover\:bg-white\/10:hover { background-color: rgba(0,0,0,0.06) !important; }
+    body.light-theme .hover\:bg-white\/20:hover { background-color: rgba(0,0,0,0.1) !important; }
     
     body.light-theme .bg-\[\#1c1c1e\] { background-color: #fff !important; border-color: rgba(0,0,0,0.08) !important; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
     body.light-theme .bg-black\/20 { background-color: rgba(0,0,0,0.05) !important; }
@@ -290,7 +335,7 @@
     body.light-theme .fill-black { fill: #fff !important; }
     
     body.light-theme .rating-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #000; }
-    body.light-theme .rating-btn.active { background: #000; color: #fff; border-color: #000; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+    body.light-theme .rating-btn.active { background: #000; color: #fff; border-color: #000; box-shadow: 0 0 0 2px var(--accent-red); }
     
     body.light-theme .modal-overlay { background: rgba(0,0,0,0.25); }
     body.light-theme #toast { background: rgba(255,255,255,0.95); color: #000; border-color: rgba(0,0,0,0.1); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
@@ -311,14 +356,12 @@
     body.light-theme #rev-text { background: rgba(255,255,255,0.65) !important; border-color: rgba(0,0,0,0.1) !important; color: #111827 !important; }
     body.light-theme #rev-text::placeholder { color: #6b7280 !important; }
 
-    /* Перенос длинных слов на мобильных */
+    /* Перенос длинных слов на мобильных — без разрыва кириллицы посередине слова */
     .modal-container, #reviews-container, #profile-user-reviews, #releases-grid, #likes-grid {
-      overflow-wrap: break-word;
-      word-break: break-word;
+      overflow-wrap: anywhere;
       min-width: 0;
     }
     .modal-container * { min-width: 0; }
-    p, span, div { overflow-wrap: break-word; }
 
     /* Фильтры */
     .sort-btn { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: #d1d5db; }
@@ -345,27 +388,32 @@
     body.light-theme #genre-dropdown button { color: #111; }
 
 
-    /* Остров статуса синхронизации (в духе iOS Dynamic Island) */
+    /* Статус синхронизации — в шапке, не поверх логотипа */
     .sync-island {
-      position: fixed;
-      top: calc(env(safe-area-inset-top, 0px) + 10px);
-      left: 50%;
-      z-index: 90;
+      position: relative;
+      top: auto;
+      left: auto;
+      z-index: 1;
       display: inline-flex;
       align-items: center;
-      max-width: min(80vw, 280px);
-      padding: 7px 13px;
+      justify-content: center;
+      flex: 1 1 0;
+      min-width: 0;
+      max-width: min(46vw, 220px);
+      margin: 0 auto;
+      padding: 6px 12px;
       border-radius: 999px;
       background: rgba(10, 10, 12, 0.92);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
       backdrop-filter: blur(20px) saturate(160%);
       -webkit-backdrop-filter: blur(20px) saturate(160%);
       color: #e5e7eb;
       font-size: clamp(10px, 2.9vw, 12px);
       font-weight: 600;
       pointer-events: none;
-      animation: islandDrop 0.6s var(--ease-spring) both;
+      transform: none;
+      animation: none;
       transition:
         padding 0.55s var(--ease-spring),
         background 0.4s var(--ease-out),
@@ -516,10 +564,10 @@
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       transition: transform 0.5s var(--ios-spring);
     }
-    .notif-switch.on { background: #dc2626; border-color: #dc2626; }
+    .notif-switch.on { background: var(--accent-red); border-color: var(--accent-red); }
     .notif-switch.on .notif-switch-knob { transform: translateX(20px); }
     body.light-theme .notif-switch { background: rgba(0, 0, 0, 0.12); border-color: rgba(0, 0, 0, 0.08); }
-    body.light-theme .notif-switch.on { background: #dc2626; border-color: #dc2626; }
+    body.light-theme .notif-switch.on { background: var(--accent-red); border-color: var(--accent-red); }
 
     @media (max-width: 420px) {
       header { padding-left: 14px !important; padding-right: 14px !important; gap: 8px !important; }
@@ -527,9 +575,9 @@
       .logo-container { padding: 5px 10px; background-size: 14px 14px; background-position: 0 0, 7px 7px; }
       .logo-text { font-size: 22px; letter-spacing: -1px; }
       .brand-name { display: none; }
-      .sync-island { max-width: 86vw; padding: 6px 11px; }
+      .sync-island { max-width: min(36vw, 168px); padding: 5px 9px; }
       .sync-island-glyph { width: 8px; height: 8px; }
-      #user-profile { max-width: 96px; padding-right: 8px !important; }
+      #user-profile { max-width: min(42vw, 148px); padding-right: 8px !important; }
       #user-profile .w-7 { width: 26px !important; height: 26px !important; }
       #user-role { display: none; }
       #releases-grid, #likes-grid { gap: 12px !important; }

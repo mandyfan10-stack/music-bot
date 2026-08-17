@@ -29,6 +29,22 @@ test('HTML element IDs are unique', () => {
   assert.strictEqual(new Set(ids).size, ids.length);
 });
 
+test('visual chrome keeps sync status in the header and a single settings label', () => {
+  const html = read('index.html');
+  const css = read('src/styles.css');
+  const app = read('src/app.js');
+  const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] || '';
+  assert.match(header, /id="sync-status"/);
+  assert.match(header, /class="app-header/);
+  assert.match(html, />Настройки<\/span><\/button>/);
+  assert.doesNotMatch(html, />Опции</);
+  assert.match(app, />НОВОЕ</);
+  assert.doesNotMatch(app, />NEW</);
+  assert.match(css, /--accent-red:\s*#ff0000/);
+  assert.match(css, /header\.app-header/);
+  assert.match(css, /color-scheme:\s*light/);
+});
+
 test('Telegram bootstrap auth explicitly bypasses gateway JWT verification', () => {
   const config = read('supabase/config.toml');
   assert.match(config, /\[functions\.auth\][\s\S]*?verify_jwt\s*=\s*false/);

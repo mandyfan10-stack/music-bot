@@ -404,14 +404,20 @@
     let pendingReviewTargetReleaseId = null;
     let pendingConfirmAction = null;
 
-    function openConfirmAction({ title, body, confirmText, action }) {
+    function openConfirmAction({ title, body, confirmText, action, icon }) {
       pendingConfirmAction = typeof action === 'function' ? action : null;
       const titleEl = document.getElementById('confirm-action-title');
       const bodyEl = document.getElementById('confirm-action-body');
       const btnEl = document.getElementById('confirm-action-btn');
+      const iconWrap = document.getElementById('confirm-action-icon-wrap');
       if (titleEl) titleEl.textContent = title || 'Подтвердите действие';
       if (bodyEl) bodyEl.textContent = body || '';
       if (btnEl) btnEl.textContent = confirmText || 'Удалить';
+      if (iconWrap) {
+        const iconName = /^[a-z0-9-]+$/i.test(String(icon || '')) ? icon : 'trash-2';
+        iconWrap.innerHTML = `<i data-lucide="${iconName}" class="w-8 h-8"></i>`;
+        refreshIcons();
+      }
       openModal('modal-confirm-action');
     }
 
@@ -2250,7 +2256,7 @@
       const avgRating = cachedAvg ? cachedAvg.toFixed(1) : null;
       const ratingBadge = avgRating ? `<div class="rating-badge absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
       const isNew = lastSeenTs > 0 && (r.timestamp || 0) > lastSeenTs;
-      const newBadge = isNew ? `<div class="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wider shadow-lg">NEW</div>` : '';
+      const newBadge = isNew ? `<div class="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wider shadow-lg">НОВОЕ</div>` : '';
       return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="${enterCls}flex flex-col gap-2 w-full min-w-0 active:scale-95 transition-transform relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]"${enterStyle}>
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
             <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" loading="lazy" decoding="async" class="w-full h-full object-cover">
@@ -2854,6 +2860,13 @@
       const isLight = hex === '#f2f2f7';
       if(isLight) document.body.classList.add('light-theme');
       else document.body.classList.remove('light-theme');
+
+      const chromeColor = isLight ? '#f2f2f7' : '#000000';
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', chromeColor);
+      try {
+        tg.setHeaderColor?.(chromeColor);
+        tg.setBackgroundColor?.(chromeColor);
+      } catch (_) {}
 
       // Сохраняем выбор темы (persist=false — авто-тема Telegram, не считается ручным выбором)
       if (persist) {
