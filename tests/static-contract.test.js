@@ -45,6 +45,18 @@ test('visual chrome keeps sync status in the header and a single settings label'
   assert.match(css, /color-scheme:\s*light/);
 });
 
+test('motion keeps iOS springs without review re-fade or tab blur', () => {
+  const css = read('src/styles.css');
+  const app = read('src/app.js');
+  assert.match(css, /--ios-spring/);
+  assert.match(css, /\.review-enter/);
+  assert.match(css, /\.card-press:has\(button:active\)/);
+  assert.doesNotMatch(css, /tabExitForward[^}]*blur\(/);
+  assert.match(app, /seenReviewIds/);
+  assert.match(app, /toastHideTimer/);
+  assert.match(app, /bindEnterAnimations/);
+});
+
 test('Telegram bootstrap auth explicitly bypasses gateway JWT verification', () => {
   const config = read('supabase/config.toml');
   assert.match(config, /\[functions\.auth\][\s\S]*?verify_jwt\s*=\s*false/);

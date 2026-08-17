@@ -58,30 +58,31 @@
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-    /* «Утопание» фона под открытой модалкой — глубина в духе iOS-листов */
+    /* «Утопание» фона под открытой модалкой — глубина iOS-листа.
+       Затемнение даёт оверлей шторки: filter:brightness на всём main
+       на Android WebView дороже, чем даёт визуально. */
     main {
       transform-origin: 50% 0;
-      transition: transform 0.55s var(--ios-spring), filter 0.5s var(--ios-glide);
+      transition: transform 0.58s var(--ios-spring);
     }
     body.modal-open main {
       transform: scale(0.965) translateY(8px);
-      filter: brightness(0.82);
     }
     
     /* Пружинная моторика iOS 26 */
-    .slide-up-modal { animation: slideUp 0.52s var(--ios-glide) forwards; }
-    .slide-down-modal { animation: slideDown 0.4s var(--ios-glide) forwards; }
+    .slide-up-modal { animation: slideUp 0.58s var(--ios-spring) forwards; }
+    .slide-down-modal { animation: slideDown 0.42s var(--ios-glide) forwards; }
     .fade-in { animation: fadeIn 0.42s var(--ios-glide) forwards; }
     .fade-out { animation: fadeOut 0.32s var(--ios-glide) forwards; }
 
     .tab-screen {
       transform: translate3d(0, 0, 0);
-      will-change: opacity, transform;
     }
     .tab-screen-entering {
       position: relative;
       z-index: 2;
       pointer-events: none;
+      will-change: opacity, transform;
     }
     .tab-screen-exiting {
       position: absolute;
@@ -89,12 +90,12 @@
       width: 100%;
       z-index: 1;
       pointer-events: none;
+      will-change: opacity, transform;
     }
-    /* Вход экрана — чистое замедление (push-переход iOS, без оголения края),
-       уходящий «утопает» с микро-blur. Пружина живёт в индикаторе вкладок. */
-    .tab-enter-forward { animation: tabEnterForward 0.48s var(--ios-glide) forwards; }
+    /* Push-переход: вход пружиной, выход — чистое замедление без blur. */
+    .tab-enter-forward { animation: tabEnterForward 0.52s var(--ios-spring) forwards; }
     .tab-exit-forward { animation: tabExitForward 0.4s var(--ios-glide) forwards; }
-    .tab-enter-backward { animation: tabEnterBackward 0.48s var(--ios-glide) forwards; }
+    .tab-enter-backward { animation: tabEnterBackward 0.52s var(--ios-spring) forwards; }
     .tab-exit-backward { animation: tabExitBackward 0.4s var(--ios-glide) forwards; }
 
     .card-enter {
@@ -102,15 +103,30 @@
       transform: translateY(22px) scale(0.92);
       animation: cardPop 0.56s var(--ios-spring) forwards;
     }
+    .review-enter {
+      opacity: 0;
+      transform: translateY(12px) scale(0.97);
+      animation: cardPop 0.48s var(--ios-spring) forwards;
+    }
+    .card-press {
+      transition: transform 0.46s var(--ios-spring);
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    .card-press:active {
+      transform: scale(0.97);
+      transition-duration: 0.13s;
+      transition-timing-function: var(--ios-snappy);
+    }
+    .card-press:has(button:active) { transform: none; }
 
     @keyframes slideUp { 0% { transform: translateY(100%); } 100% { transform: translateY(0); } }
     @keyframes slideDown { 0% { transform: translateY(0); } 100% { transform: translateY(100%); } }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-    @keyframes tabEnterForward { from { opacity: 0; transform: translate3d(26px, 0, 0) scale(0.955); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
-    @keyframes tabExitForward { from { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; filter: blur(4px); transform: translate3d(-14px, 0, 0) scale(0.97); } }
-    @keyframes tabEnterBackward { from { opacity: 0; transform: translate3d(-26px, 0, 0) scale(0.955); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
-    @keyframes tabExitBackward { from { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; filter: blur(4px); transform: translate3d(14px, 0, 0) scale(0.97); } }
+    @keyframes tabEnterForward { from { opacity: 0; transform: translate3d(28px, 0, 0) scale(0.96); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+    @keyframes tabExitForward { from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; transform: translate3d(-18px, 0, 0) scale(0.97); } }
+    @keyframes tabEnterBackward { from { opacity: 0; transform: translate3d(-28px, 0, 0) scale(0.96); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+    @keyframes tabExitBackward { from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } to { opacity: 0; transform: translate3d(18px, 0, 0) scale(0.97); } }
     @keyframes cardPop { to { opacity: 1; transform: translateY(0) scale(1); } }
     @keyframes pressRipple {
       from { opacity: 0.22; transform: translate(-50%, -50%) scale(0); }
@@ -205,7 +221,6 @@
         color 0.3s var(--ios-glide);
       outline: none;
       touch-action: manipulation;
-      will-change: transform;
     }
     /* styles.css грузится после tailwind.css, поэтому одиночный .btn-press
        перекрывал tailwind-утилиту .absolute (та же специфичность).
@@ -607,10 +622,36 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
+      .slide-up-modal,
+      .slide-down-modal,
+      .fade-in,
+      .fade-out,
+      .tab-enter-forward,
+      .tab-exit-forward,
+      .tab-enter-backward,
+      .tab-exit-backward,
+      .card-enter,
+      .review-enter,
+      .comments-reveal,
+      .review-card-pulse,
+      .press-ripple,
+      #genre-dropdown:not(.hidden),
+      .skeleton-card,
+      .sync-island.is-syncing .sync-island-glyph::before,
+      #ptr-indicator.ptr-refreshing i {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
+      }
+      main,
+      .btn-press,
+      .card-press,
+      .rating-btn,
+      #tab-indicator,
+      #toast,
+      .sync-island,
+      .notif-switch-knob,
+      #welcome-screen,
+      #ptr-indicator {
         transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
       }
     }

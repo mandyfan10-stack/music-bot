@@ -793,12 +793,35 @@
       }
     }
 
+    function prefersReducedMotion() {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function bindEnterAnimations(root) {
+      if (!root) return;
+      root.querySelectorAll('.card-enter, .review-enter').forEach((el) => {
+        if (prefersReducedMotion()) {
+          el.classList.remove('card-enter', 'review-enter');
+          return;
+        }
+        el.addEventListener('animationend', (event) => {
+          if (event.target === el) el.classList.remove('card-enter', 'review-enter');
+        }, { once: true });
+      });
+    }
+
+    let toastHideTimer = null;
     function showToast(msg, haptic = null) {
       const t = document.getElementById('toast');
       document.getElementById('toast-msg').innerText = msg;
       t.classList.replace('opacity-0', 'opacity-100');
       t.classList.replace('pointer-events-none', 'pointer-events-auto');
-      setTimeout(() => { t.classList.replace('opacity-100', 'opacity-0'); t.classList.replace('pointer-events-auto', 'pointer-events-none'); }, 2500);
+      if (toastHideTimer) clearTimeout(toastHideTimer);
+      toastHideTimer = setTimeout(() => {
+        t.classList.replace('opacity-100', 'opacity-0');
+        t.classList.replace('pointer-events-auto', 'pointer-events-none');
+        toastHideTimer = null;
+      }, 2500);
       if (haptic) tgHapticNotify(haptic);
     }
 
@@ -878,7 +901,6 @@
       const main = document.querySelector('main');
       if (main) main.scrollTo({ top: 0, behavior: 'auto' });
 
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const previousIndex = TAB_ORDER.indexOf(activeTabId);
       const nextIndex = TAB_ORDER.indexOf(tabId);
       const direction = previousIndex !== -1 && nextIndex < previousIndex ? 'backward' : 'forward';
@@ -886,7 +908,7 @@
       activeTabId = tabId;
       updateTabNav(tabId);
 
-      if (!current || current === next || current.id === 'screen-loading' || prefersReducedMotion) {
+      if (!current || current === next || current.id === 'screen-loading' || prefersReducedMotion()) {
         screens.forEach(screen => screen.classList.toggle('hidden', screen !== next));
         next.classList.remove('hidden');
         return;
@@ -904,7 +926,7 @@
         cleanupTabTransition(current);
         cleanupTabTransition(next);
         tabTransitionTimer = null;
-      }, 540); // совпадает с длительностью пружинного входа вкладки
+      }, 560);
     }
 
     // Стек открытых модалок — для нативной кнопки «Назад» Telegram.
@@ -933,9 +955,14 @@
       openModalStack.push(id);
       document.body.classList.add('modal-open'); // фон уходит вглубь
       syncBackButton();
+      if (prefersReducedMotion()) {
+        c.classList.remove('slide-up-modal');
+        o.classList.remove('fade-in');
+        return;
+      }
       // После открытия снимаем slide-up-modal: иначе forwards-заливка анимации
       // перекрывает inline-transform при свайпе вниз.
-      setTimeout(() => { if (!m.classList.contains('hidden')) c.classList.remove('slide-up-modal'); }, 700);
+      setTimeout(() => { if (!m.classList.contains('hidden')) c.classList.remove('slide-up-modal'); }, 750);
     }
 
     // Финальная очистка модалки — общая для обычного и свайп-закрытия.
@@ -981,7 +1008,7 @@
       // Фон возвращается, как только закрыта последняя модалка из стека.
       if (openModalStack.length === 0) document.body.classList.remove('modal-open');
       syncBackButton();
-      if (immediate) { finalizeModalClose(id); return; }
+      if (immediate || prefersReducedMotion()) { finalizeModalClose(id); return; }
       const m = document.getElementById(id);
       const c = m.querySelector('.modal-container');
       const o = m.querySelector('.modal-overlay');
@@ -2244,6 +2271,7 @@
     // id релизов, чьи карточки уже хоть раз отрисованы — чтобы анимация
     // появления (cardPop) не проигрывалась повторно на каждом ре-рендере.
     const seenReleaseIds = new Set();
+    const seenReviewIds = new Set();
 
     function renderReleaseCard(r, index) {
       const isLiked = likedSet.has(r.id);
@@ -2257,7 +2285,7 @@
       const ratingBadge = avgRating ? `<div class="rating-badge absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
       const isNew = lastSeenTs > 0 && (r.timestamp || 0) > lastSeenTs;
       const newBadge = isNew ? `<div class="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wider shadow-lg">НОВОЕ</div>` : '';
-      return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="${enterCls}flex flex-col gap-2 w-full min-w-0 active:scale-95 transition-transform relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]"${enterStyle}>
+      return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="${enterCls}card-press flex flex-col gap-2 w-full min-w-0 relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]"${enterStyle}>
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
             <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" loading="lazy" decoding="async" class="w-full h-full object-cover">
             ${ratingBadge}
@@ -2288,6 +2316,7 @@
         } else {
           noResults.classList.add('hidden');
           grid.innerHTML = filtered.map((r, i) => renderReleaseCard(r, i)).join('');
+          bindEnterAnimations(grid);
         }
         refreshIcons();
       }
@@ -2302,6 +2331,7 @@
     function renderLikes() {
       const grid = document.getElementById('likes-grid'); const likedArr = releases.filter(r => likedSet.has(r.id));
       grid.innerHTML = likedArr.length ? likedArr.map((r, i) => renderReleaseCard(r, i)).join('') : LIKES_EMPTY_HTML;
+      bindEnterAnimations(grid);
       refreshIcons();
     }
 
@@ -2351,8 +2381,7 @@
     // Морфинг: обложка нажатой карточки «вырастает» в обложку модалки релиза.
     // Призрак летит из ректа карточки к месту #rel-img, лист едет вверх позади.
     function morphCoverFromCard(cardEl) {
-      if (!cardEl) return;
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      if (!cardEl || prefersReducedMotion()) return;
       const srcImg = cardEl.querySelector('img');
       if (!srcImg) return;
       const from = srcImg.getBoundingClientRect();
@@ -2370,25 +2399,29 @@
       ghost.src = relImg.src;
       ghost.alt = '';
       ghost.setAttribute('aria-hidden', 'true');
-      ghost.style.cssText = `position:fixed; left:${to.left}px; top:${to.top}px; width:${to.width}px; height:${to.height}px; object-fit:cover; border-radius:2rem; z-index:80; pointer-events:none; margin:0; will-change:transform;`;
+      ghost.style.cssText = `position:fixed; left:${to.left}px; top:${to.top}px; width:${to.width}px; height:${to.height}px; object-fit:cover; border-radius:2rem; z-index:80; pointer-events:none; margin:0;`;
       ghost.style.transformOrigin = '0 0';
       const s = from.width / to.width;
       ghost.style.transform = `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${s})`;
       document.body.appendChild(ghost);
       void ghost.offsetWidth; // зафиксировать стартовое состояние
 
-      ghost.style.transition = 'transform 0.5s var(--ios-glide)';
+      ghost.style.transition = 'transform 0.58s var(--ios-spring)';
       ghost.style.transform = 'translate(0px, 0px) scale(1)';
 
       let done = false;
       const cleanup = () => {
         if (done) return;
         done = true;
+        relImg.style.transition = 'opacity 0.18s var(--ios-glide)';
+        relImg.style.opacity = '1';
         ghost.remove();
-        relImg.style.opacity = '';
+        setTimeout(() => { relImg.style.transition = ''; }, 200);
       };
-      ghost.addEventListener('transitionend', cleanup, { once: true });
-      setTimeout(cleanup, 700); // страховка
+      ghost.addEventListener('transitionend', (event) => {
+        if (event.propertyName === 'transform') cleanup();
+      });
+      setTimeout(cleanup, 750);
     }
 
     function openRelease(id, sourceEl) {
@@ -2582,6 +2615,7 @@
       existingReviewForActiveRelease = newRev;
       reviewPublishBlocked = true;
       document.getElementById('rev-text').value = '';
+      seenReviewIds.add(newRev.id);
       renderReviews();
       updateReviewCharCount();
       showToast('Опубликовано!', 'success');
@@ -2591,7 +2625,7 @@
     // Мягкая «пульсация» только что опубликованной карточки — сдержанный
     // фидбэк об успешной публикации вместо конфетти-салюта.
     function pulseNewReview(reviewId) {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      if (prefersReducedMotion()) return;
       const card = document.querySelector(`[data-review-id="${escapeCssString(reviewId)}"]`);
       if (!card) return;
       card.classList.add('review-card-pulse');
@@ -2771,12 +2805,17 @@
         const reacted = reactedSet.has(r.id);
         const reactionCount = typeof r.reactionCount === 'number' ? r.reactionCount : 0;
         const reactBtn = `<button data-act="toggle-reaction" data-id="${escapeHtml(r.id)}" aria-label="Полезная рецензия" class="btn-press shrink-0 flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${reacted ? 'bg-red-500/15 border border-red-500/25 text-red-400' : 'bg-white/5 border border-white/10 text-gray-400'}"><i data-lucide="thumbs-up" class="w-3 h-3"></i><span class="text-[10px] font-bold">${reactionCount}</span></button>`;
-        return `<div data-review-id="${escapeHtml(r.id)}" class="bg-white/5 rounded-2xl p-4 border border-white/5 fade-in" style="animation-delay: ${Math.min(i, 12) * 36}ms">
+        const firstPaint = !seenReviewIds.has(r.id);
+        seenReviewIds.add(r.id);
+        const enterCls = firstPaint ? 'review-enter ' : '';
+        const enterStyle = firstPaint ? ` style="animation-delay: ${Math.min(i, 8) * 28}ms"` : '';
+        return `<div data-review-id="${escapeHtml(r.id)}" class="${enterCls}bg-white/5 rounded-2xl p-4 border border-white/5"${enterStyle}>
           <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" data-act="open-profile" data-user="${escapeHtml(r.author)}" data-author-id="${escapeHtml(r.authorId == null ? '' : r.authorId)}" data-username="${escapeHtml(r.authorUsername || '')}">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button data-act="open-confirm-review-delete" data-id="${escapeHtml(r.id)}" data-rel="${escapeHtml(r.relId)}" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
           <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span>${reactBtn}</div>
           ${renderCommentsSection(r.id)}</div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
+      bindEnterAnimations(container);
       renderCriteriaChart(activeReleaseId);
       refreshIcons();
     }
