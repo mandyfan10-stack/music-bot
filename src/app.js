@@ -2834,7 +2834,6 @@
     function renderReviews() {
       const container = document.getElementById('reviews-container'); const relReviews = reviewsByRelId.get(activeReleaseId) || [];
       container.innerHTML = relReviews.map((r, i) => {
-        const objective = typeof r.objectiveRating === 'number' ? r.objectiveRating : r.rating;
         const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0;
         const criteria = r.criteria ? ` · ${escapeHtml(formatCriteria(r.criteria))}` : '';
         const canDelete = reviewByUser(r, user.userId, user.username) || user.isAdmin;
@@ -2848,7 +2847,7 @@
         return `<div data-review-id="${escapeHtml(r.id)}" class="${enterCls}bg-white/5 rounded-2xl p-4 border border-white/5"${enterStyle}>
           <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" data-act="open-profile" data-user="${escapeHtml(r.author)}" data-author-id="${escapeHtml(r.authorId == null ? '' : r.authorId)}" data-username="${escapeHtml(r.authorUsername || '')}">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button data-act="open-confirm-review-delete" data-id="${escapeHtml(r.id)}" data-rel="${escapeHtml(r.relId)}" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
-          <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria} · объективно ${escapeHtml(objective)}</span>${reactBtn}</div>
+          <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria}</span>${reactBtn}</div>
           ${renderCommentsSection(r.id)}</div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
       bindEnterAnimations(container);
