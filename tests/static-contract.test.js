@@ -56,6 +56,14 @@ test('review form shows a criteria-total meter instead of a bare 1-10 row', () =
   assert.doesNotMatch(app, /selectedRating/);
 });
 
+test('release sheet locks scroll while the cover morph plays', () => {
+  const app = read('src/app.js');
+  const css = read('src/styles.css');
+  assert.match(app, /function lockReleaseSheet/);
+  assert.match(app, /releaseSheetLocked/);
+  assert.match(css, /#modal-release \.modal-container\.is-open-locked/);
+});
+
 test('opening a release from a profile closes the profile sheet first', () => {
   const app = read('src/app.js');
   assert.match(

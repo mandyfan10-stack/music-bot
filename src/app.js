@@ -934,6 +934,29 @@
 
     // Стек открытых модалок — для нативной кнопки «Назад» Telegram.
     let openModalStack = [];
+    let releaseSheetLocked = false;
+    let releaseSheetLockTimer = null;
+
+    function lockReleaseSheet() {
+      releaseSheetLocked = true;
+      const sheet = document.querySelector('#modal-release .modal-container');
+      if (sheet) {
+        sheet.scrollTop = 0;
+        sheet.classList.add('is-open-locked');
+      }
+      if (releaseSheetLockTimer) clearTimeout(releaseSheetLockTimer);
+      releaseSheetLockTimer = setTimeout(unlockReleaseSheet, 800);
+    }
+
+    function unlockReleaseSheet() {
+      releaseSheetLocked = false;
+      if (releaseSheetLockTimer) {
+        clearTimeout(releaseSheetLockTimer);
+        releaseSheetLockTimer = null;
+      }
+      const sheet = document.querySelector('#modal-release .modal-container');
+      if (sheet) sheet.classList.remove('is-open-locked');
+    }
 
     function syncBackButton() {
       try {
@@ -995,6 +1018,7 @@
       if (id === 'modal-release') {
         reviewPublishBlocked = false;
         existingReviewForActiveRelease = null;
+        unlockReleaseSheet();
         clearCoverMorph();
         const relImg = document.getElementById('rel-img');
         relImg.style.opacity = '';
@@ -1790,6 +1814,7 @@
         if (e.target.closest('input, textarea')) return; // не мешаем вводу
         const modal = c.closest('[id^="modal-"]');
         if (!modal || modal.classList.contains('hidden')) return;
+        if (modal.id === 'modal-release' && releaseSheetLocked) return;
         if (c.scrollTop > 0) return;
         container = c; modalId = modal.id;
         overlay = modal.querySelector('.modal-overlay');
@@ -2396,9 +2421,9 @@
 
     function revealReleaseCover(relImg) {
       if (!relImg) return;
-      relImg.style.transition = 'opacity 0.32s var(--ios-glide)';
+      relImg.style.transition = 'opacity 0.4s var(--ios-glide)';
       relImg.style.opacity = '1';
-      setTimeout(() => { relImg.style.transition = ''; }, 340);
+      setTimeout(() => { relImg.style.transition = ''; }, 420);
     }
 
     function morphCoverFromCard(cardEl) {
@@ -2431,7 +2456,7 @@
       coverMorphGhost = ghost;
       void ghost.offsetWidth;
 
-      ghost.style.transition = 'transform 0.5s var(--ios-glide), opacity 0.32s var(--ios-glide)';
+      ghost.style.transition = 'transform 0.62s var(--ios-glide), opacity 0.4s var(--ios-glide)';
       ghost.style.transform = 'translate(0px, 0px) scale(1)';
 
       let done = false;
@@ -2450,12 +2475,12 @@
             coverMorphGhost = null;
           }
           coverMorphTimer = null;
-        }, 320);
+        }, 400);
       };
       ghost.addEventListener('transitionend', (event) => {
         if (event.propertyName === 'transform') cleanup();
       });
-      coverMorphTimer = setTimeout(cleanup, 700);
+      coverMorphTimer = setTimeout(cleanup, 800);
       return true;
     }
 
@@ -2490,6 +2515,7 @@
       }
 
       resetReviewInputs(); renderReviews();
+      lockReleaseSheet();
       const morphed = morphCoverFromCard(sourceEl);
       openModal('modal-release');
       if (!morphed) revealReleaseCover(relImg);

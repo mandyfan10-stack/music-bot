@@ -72,6 +72,11 @@
     /* Пружинная моторика iOS 26 */
     .slide-up-modal { animation: slideUp 0.52s var(--ios-glide) forwards; }
     .slide-down-modal { animation: slideDown 0.42s var(--ios-glide) forwards; }
+    #modal-release .modal-container.is-open-locked {
+      overflow: hidden;
+      touch-action: none;
+      overscroll-behavior: none;
+    }
     .fade-in { animation: fadeIn 0.42s var(--ios-glide) forwards; }
     .fade-out { animation: fadeOut 0.32s var(--ios-glide) forwards; }
 
