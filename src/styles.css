@@ -3,7 +3,7 @@
     
     :root {
       --bg-color: #000000;
-      --accent-red: #e5484d;
+      --accent-red: #ff0000;
       --header-safe-top: max(
         16px,
         env(safe-area-inset-top, 0px),
@@ -63,14 +63,14 @@
        на Android WebView дороже, чем даёт визуально. */
     main {
       transform-origin: 50% 0;
-      transition: transform 0.58s var(--ios-spring);
+      transition: transform 0.55s var(--ios-spring);
     }
     body.modal-open main {
       transform: scale(0.965) translateY(8px);
     }
     
     /* Пружинная моторика iOS 26 */
-    .slide-up-modal { animation: slideUp 0.58s var(--ios-spring) forwards; }
+    .slide-up-modal { animation: slideUp 0.52s var(--ios-glide) forwards; }
     .slide-down-modal { animation: slideDown 0.42s var(--ios-glide) forwards; }
     .fade-in { animation: fadeIn 0.42s var(--ios-glide) forwards; }
     .fade-out { animation: fadeOut 0.32s var(--ios-glide) forwards; }
@@ -92,10 +92,10 @@
       pointer-events: none;
       will-change: opacity, transform;
     }
-    /* Push-переход: вход пружиной, выход — чистое замедление без blur. */
-    .tab-enter-forward { animation: tabEnterForward 0.52s var(--ios-spring) forwards; }
+    /* Push-переход: вход и выход без overshoot и без blur. */
+    .tab-enter-forward { animation: tabEnterForward 0.48s var(--ios-glide) forwards; }
     .tab-exit-forward { animation: tabExitForward 0.4s var(--ios-glide) forwards; }
-    .tab-enter-backward { animation: tabEnterBackward 0.52s var(--ios-spring) forwards; }
+    .tab-enter-backward { animation: tabEnterBackward 0.48s var(--ios-glide) forwards; }
     .tab-exit-backward { animation: tabExitBackward 0.4s var(--ios-glide) forwards; }
 
     .card-enter {

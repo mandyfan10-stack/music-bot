@@ -926,7 +926,7 @@
         cleanupTabTransition(current);
         cleanupTabTransition(next);
         tabTransitionTimer = null;
-      }, 560);
+      }, 540);
     }
 
     // Стек открытых модалок — для нативной кнопки «Назад» Telegram.
@@ -962,7 +962,7 @@
       }
       // После открытия снимаем slide-up-modal: иначе forwards-заливка анимации
       // перекрывает inline-transform при свайпе вниз.
-      setTimeout(() => { if (!m.classList.contains('hidden')) c.classList.remove('slide-up-modal'); }, 750);
+      setTimeout(() => { if (!m.classList.contains('hidden')) c.classList.remove('slide-up-modal'); }, 700);
     }
 
     // Финальная очистка модалки — общая для обычного и свайп-закрытия.
@@ -2406,7 +2406,7 @@
       document.body.appendChild(ghost);
       void ghost.offsetWidth; // зафиксировать стартовое состояние
 
-      ghost.style.transition = 'transform 0.58s var(--ios-spring)';
+      ghost.style.transition = 'transform 0.5s var(--ios-glide)';
       ghost.style.transform = 'translate(0px, 0px) scale(1)';
 
       let done = false;
@@ -2421,7 +2421,7 @@
       ghost.addEventListener('transitionend', (event) => {
         if (event.propertyName === 'transform') cleanup();
       });
-      setTimeout(cleanup, 750);
+      setTimeout(cleanup, 700);
     }
 
     function openRelease(id, sourceEl) {
