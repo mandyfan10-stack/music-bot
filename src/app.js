@@ -1373,15 +1373,29 @@
       if (feedScreen && !feedScreen.classList.contains('hidden')) renderFeed();
     }
 
+    function prefetchCatalogCovers(list) {
+      const items = Array.isArray(list) ? list : [];
+      for (let i = 0; i < items.length && i < 6; i++) {
+        const src = items[i] && items[i].img;
+        if (!src || !isSafeHttpUrl(src)) continue;
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = src;
+      }
+    }
+
     function applyPublicData(data) {
       releases = data.releases || [];
       releasesById = new Map(releases.map(r => [r.id, r]));
       reviews = data.reviews || [];
       updateReviewsMap();
-      comments = data.comments || [];
-      updateCommentsMap();
+      if (Array.isArray(data.comments)) {
+        comments = data.comments;
+        updateCommentsMap();
+      }
       updateGenreCounts();
       renderReleases();
+      prefetchCatalogCovers(releases);
       if (!activeTabId) switchTab('home');
       else if (activeTabId === 'likes') renderLikes();
       else if (activeTabId === 'feed') renderFeed();
@@ -1439,6 +1453,64 @@
       return Number(claims.exp || 0) * 1000 > Date.now() + 30_000;
     }
 
+    const AUTH_STORE_KEY = 'xxii_auth_v1';
+
+    function persistAuthSession(token, profile) {
+      try {
+        const claims = decodeJwtPayload(token);
+        const tokenUserId = getTelegramIdFromClaims(claims);
+        if (!token || !claims || claims.role !== 'authenticated' || !tokenUserId) return;
+        localStorage.setItem(AUTH_STORE_KEY, JSON.stringify({
+          token,
+          userId: profile?.userId != null ? profile.userId : tokenUserId,
+          username: profile?.username || '',
+          isAdmin: !!profile?.isAdmin,
+          isBlocked: !!profile?.isBlocked,
+          savedAt: Date.now()
+        }));
+      } catch (_) {}
+    }
+
+    function clearAuthSession() {
+      try { localStorage.removeItem(AUTH_STORE_KEY); } catch (_) {}
+    }
+
+    function restoreAuthSession() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(AUTH_STORE_KEY) || 'null');
+        if (!raw || !raw.token) return false;
+        const claims = decodeJwtPayload(raw.token);
+        const tokenUserId = getTelegramIdFromClaims(claims);
+        if (!claims || claims.role !== 'authenticated' || !tokenUserId
+            || Number(claims.exp || 0) * 1000 <= Date.now() + 30_000) {
+          clearAuthSession();
+          return false;
+        }
+        if (raw.userId != null && String(raw.userId) !== tokenUserId) {
+          clearAuthSession();
+          return false;
+        }
+        const tgId = getTgUser()?.id;
+        if (tgId != null && String(tgId) !== tokenUserId) {
+          clearAuthSession();
+          return false;
+        }
+        supabaseAccessToken = raw.token;
+        user.userId = raw.userId != null ? raw.userId : (Number(tokenUserId) || tokenUserId);
+        if (raw.username) user.username = raw.username;
+        user.isAdmin = !!raw.isAdmin;
+        user.isBlocked = !!raw.isBlocked;
+        user.isAuthenticated = true;
+        user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    restoreAuthSession();
+    if (user.isAuthenticated) applyUserRole();
+
     async function setSupabaseAccessToken(token) {
       supabaseAccessToken = token;
       try {
@@ -1449,12 +1521,25 @@
     }
 
     let authenticationPromise = null;
+    let silentAuthQueued = false;
+    function queueSilentAuthRefresh() {
+      if (silentAuthQueued) return;
+      silentAuthQueued = true;
+      queueMicrotask(() => {
+        authenticateWithSupabase(true).catch(() => {});
+      });
+    }
+
     async function authenticateWithSupabase(force = false) {
       if (!supabase) return false;
       if (authenticationPromise) return authenticationPromise;
-      if (!force && user.isAuthenticated && hasUsableAccessToken()) return true;
+      if (!force && hasUsableAccessToken()) {
+        user.isAuthenticated = true;
+        queueSilentAuthRefresh();
+        return true;
+      }
       const currentInitData = getTgInitData();
-      if (!currentInitData) return false;
+      if (!currentInitData) return hasUsableAccessToken();
 
       authenticationPromise = (async () => {
         try {
@@ -1478,6 +1563,7 @@
           throw new Error('Auth returned an invalid user token');
         }
         await setSupabaseAccessToken(data.token);
+        persistAuthSession(data.token, data.user);
         user.userId = data.user.userId;
         user.username = data.user.username;
         user.isAdmin = Boolean(data.user.isAdmin);
@@ -1489,6 +1575,10 @@
         return true;
         } catch (err) {
           console.error("Supabase authentication failed:", err);
+          if (hasUsableAccessToken()) {
+            user.isAuthenticated = true;
+            return true;
+          }
           return false;
         }
       })();
@@ -1594,25 +1684,37 @@
           showToast('Личные данные временно недоступны');
         });
 
-        // 3. Загружаем и показываем свежий публичный каталог независимо от auth.
+        // 3. Каталог (релизы + оценки) рисуем сразу. Комментарии качаются
+        // параллельно, но не держат первый кадр — они нужны только в карточке.
         try {
-            const [releasesRes, reviewsRes, commentsRes] = await Promise.all([
+            const commentsPromise = supabase.from('comments_view').select('*').order('timestamp', { ascending: false }).limit(2000);
+            const [releasesRes, reviewsRes] = await Promise.all([
               supabase.from('releases').select('*').order('timestamp', { ascending: false }).limit(200),
-              supabase.from('reviews_view').select('*').order('timestamp', { ascending: false }).limit(1000),
-              supabase.from('comments_view').select('*').order('timestamp', { ascending: false }).limit(2000)
+              supabase.from('reviews_view').select('*').order('timestamp', { ascending: false }).limit(1000)
             ]);
             if (releasesRes.error) throw releasesRes.error;
             if (reviewsRes.error) throw reviewsRes.error;
-            if (commentsRes.error) throw commentsRes.error;
 
             const publicData = {
               releases: releasesRes.data || [],
               reviews: reviewsRes.data || [],
-              comments: commentsRes.data || []
+              comments
             };
             saveCache(publicData);
             applyPublicData(publicData);
             setSyncStatus('Релизы загружены', 'ok');
+
+            commentsPromise.then((commentsRes) => {
+              if (commentsRes.error) throw commentsRes.error;
+              comments = commentsRes.data || [];
+              updateCommentsMap();
+              saveCache({ releases, reviews, comments });
+              if (activeReleaseId && !document.getElementById('modal-release')?.classList.contains('hidden')) {
+                renderReviews();
+              }
+            }).catch((error) => {
+              console.warn('Ошибка загрузки комментариев:', error.message || error);
+            });
         } catch(e) {
             console.error("Ошибка загрузки БД:", e.message || e);
             setSyncStatus(cached ? 'Оффлайн (кэш)' : 'Нет соединения', 'warn');
@@ -2439,7 +2541,7 @@
       const newBadge = isNew ? `<div class="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wider shadow-lg">НОВОЕ</div>` : '';
       return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="${enterCls}card-press flex flex-col gap-2 w-full min-w-0 relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]"${enterStyle}>
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
-            <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" loading="lazy" decoding="async" class="w-full h-full object-cover">
+            <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" loading="${index < 6 ? 'eager' : 'lazy'}"${index < 2 ? ' fetchpriority="high"' : ''} decoding="async" class="w-full h-full object-cover">
             ${ratingBadge}
             ${newBadge}
           <button data-act="toggle-like" data-id="${escapeHtml(r.id)}" data-like-id="${escapeHtml(r.id)}" aria-label="Нравится" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">

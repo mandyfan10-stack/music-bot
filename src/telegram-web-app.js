@@ -42,6 +42,12 @@
     return unsafe;
   }
 
+  function announceReady(twa) {
+    if (!twa) return;
+    try { if (typeof twa.ready === 'function') twa.ready(); } catch (_) {}
+    try { if (typeof twa.expand === 'function') twa.expand(); } catch (_) {}
+  }
+
   // 1. Если официальный SDK Telegram WebApp уже загружен — сохраняем его и НЕ перезаписываем!
   if (window.Telegram && window.Telegram.WebApp) {
     var twa = window.Telegram.WebApp;
@@ -57,6 +63,7 @@
         } catch (_) {}
       }
     }
+    announceReady(twa);
     return;
   }
 
@@ -113,4 +120,6 @@
     openLink: function(url) { window.open(url, '_blank'); },
     openTelegramLink: function(url) { window.open(url, '_blank'); }
   };
+
+  announceReady(window.Telegram.WebApp);
 })();

@@ -141,6 +141,38 @@ test('public catalog starts in parallel with Telegram authentication', () => {
   assert.doesNotMatch(app, /await authenticateWithSupabase\(\);[\s\S]{0,500}?from\('releases'\)/);
 });
 
+test('first catalog paint does not wait for comments_view', () => {
+  const app = read('src/app.js');
+  assert.match(app, /const commentsPromise = supabase\.from\('comments_view'\)/);
+  assert.match(app, /const \[releasesRes, reviewsRes\] = await Promise\.all\(/);
+  assert.doesNotMatch(app, /const \[releasesRes, reviewsRes, commentsRes\]/);
+});
+
+test('Telegram JWT is restored from localStorage before /auth', () => {
+  const app = read('src/app.js');
+  assert.match(app, /xxii_auth_v1/);
+  assert.match(app, /function restoreAuthSession/);
+  assert.match(app, /function persistAuthSession/);
+  assert.match(app, /restoreAuthSession\(\)/);
+});
+
+test('boot path hides welcome early, announces Telegram ready, and defers heavy scripts', () => {
+  const html = read('index.html');
+  const boot = read('src/boot.js');
+  const tw = read('src/telegram-web-app.js');
+  const css = read('src/styles.css');
+  assert.match(html, /rel="preconnect"[^>]+ftpofwybzvhvyukrshcm\.supabase\.co/);
+  assert.match(html, /src="src\/boot\.js/);
+  assert.match(html, /src="src\/supabase\.min\.js[^"]*" defer/);
+  assert.match(html, /src="src\/lucide\.min\.js[^"]*" defer/);
+  assert.match(html, /src="src\/app\.js[^"]*" defer/);
+  assert.doesNotMatch(html, /@import url\('https:\/\/fonts\.googleapis\.com/);
+  assert.match(boot, /is-returning/);
+  assert.match(boot, /\.ready\(/);
+  assert.match(tw, /function announceReady/);
+  assert.match(css, /html\.is-returning #welcome-screen/);
+});
+
 test('public cache hydrates catalog without replacing account state', () => {
   const app = read('src/app.js');
   assert.match(app, /applyPublicData\(cached\)/);

@@ -50,6 +50,8 @@ jobs:
           node --check src/app.js
           node --check src/utils.js
           node --check src/catalog-parse.js
+          node --check src/boot.js
+          node --check src/telegram-web-app.js
           node --check server.js
           npm run build:css
           git diff --exit-code -- src/tailwind.css
