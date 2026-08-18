@@ -361,6 +361,36 @@
     let reactedSet = new Set(); // id рецензий, на которые текущий пользователь отреагировал
     const pendingLikeIds = new Set();
     const pendingReactionIds = new Set();
+    // Последнее локальное намерение перекрывает поздний Realtime и догоняющий
+    // fetchDB: иначе DELETE 204 + запоздалый INSERT/снимок возвращают лайк.
+    const LIKE_INTENT_MS = 8000;
+    const likeIntentById = new Map();
+    const reactionIntentById = new Map();
+
+    function rememberIntent(map, id, on) {
+      map.set(String(id), { on: !!on, until: Date.now() + LIKE_INTENT_MS });
+    }
+
+    function applyIntent(map, ids) {
+      const next = ids instanceof Set ? new Set(ids) : new Set(Array.isArray(ids) ? ids : []);
+      const now = Date.now();
+      map.forEach((intent, id) => {
+        if (!intent || now > intent.until) {
+          map.delete(id);
+          return;
+        }
+        if (intent.on) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    }
+
+    function isDuplicateToggleError(error) {
+      const code = String(error && error.code || '');
+      const status = Number(error && error.status);
+      const message = String(error && error.message || '');
+      return code === '23505' || status === 409 || /duplicate key|already exists/i.test(message);
+    }
     let comments = [], commentsByReviewId = new Map();
     let expandedComments = new Set(); // id рецензий с раскрытой веткой комментариев
     let commentDrafts = new Map();    // reviewId → черновик комментария (переживает ре-рендер)
@@ -1364,13 +1394,13 @@
         if (likedSet.has(id)) serverLikes.add(id);
         else serverLikes.delete(id);
       });
-      likedSet = serverLikes;
+      likedSet = applyIntent(likeIntentById, serverLikes);
       const serverReactions = new Set(data.myReactions || []);
       pendingReactionIds.forEach((id) => {
         if (reactedSet.has(id)) serverReactions.add(id);
         else serverReactions.delete(id);
       });
-      reactedSet = serverReactions;
+      reactedSet = applyIntent(reactionIntentById, serverReactions);
       blockedUsers = data.blockedUsers || [];
       blockedUserIds = new Set((data.blockedUserIds || []).map(String));
       if (data.currentUser) {
@@ -1723,10 +1753,13 @@
             if (user.userId) {
               const uId = Number(payload.new?.user_id || payload.old?.user_id);
               if (uId === Number(user.userId)) {
-                if (payload.eventType === 'INSERT') {
-                  likedSet.add(payload.new.release_id);
-                } else if (payload.eventType === 'DELETE') {
-                  likedSet.delete(payload.old.release_id);
+                const relId = payload.new?.release_id || payload.old?.release_id;
+                if (relId && (pendingLikeIds.has(relId) || likeIntentById.has(String(relId)))) {
+                  likedSet = applyIntent(likeIntentById, likedSet);
+                } else if (payload.eventType === 'INSERT' && relId) {
+                  likedSet.add(relId);
+                } else if (payload.eventType === 'DELETE' && relId) {
+                  likedSet.delete(relId);
                 }
                 renderReleases();
                 if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
@@ -1748,10 +1781,15 @@
             if (user.userId) {
               const uId = Number(payload.new?.user_id || payload.old?.user_id);
               if (uId === Number(user.userId)) {
-                if (payload.eventType === 'INSERT') {
+                if (revId && (pendingReactionIds.has(revId) || reactionIntentById.has(String(revId)))) {
+                  reactedSet = applyIntent(reactionIntentById, reactedSet);
+                } else if (payload.eventType === 'INSERT' && revId) {
                   reactedSet.add(revId);
-                } else if (payload.eventType === 'DELETE') {
+                } else if (payload.eventType === 'DELETE' && revId) {
                   reactedSet.delete(revId);
+                }
+                if (activeReleaseId && !document.getElementById('modal-release')?.classList.contains('hidden')) {
+                  renderReviews();
                 }
                 if (!document.getElementById('screen-feed').classList.contains('hidden')) renderFeed();
               }
@@ -2357,24 +2395,23 @@
       if (pendingLikeIds.has(id)) return;
       const isLiking = !likedSet.has(id);
 
-      // Оптимистично обновляем UI
       if (isLiking) likedSet.add(id);
       else likedSet.delete(id);
+      rememberIntent(likeIntentById, id, isLiking);
       applyLikeState(id, isLiking);
 
-      // Отправка в БД Supabase с откатом при ошибке
       pendingLikeIds.add(id);
       const likePromise = isLiking
         ? supabase.from('likes').insert({ release_id: id, user_id: user.userId, username: user.username.replace('@', '') })
-        : supabase.from('likes').delete().match({ release_id: id, user_id: user.userId });
+        : supabase.from('likes').delete().eq('release_id', id).eq('user_id', user.userId).select('release_id');
 
       likePromise.then(({ error }) => {
-        if (error) throw error;
+        if (error && !(isLiking && isDuplicateToggleError(error))) throw error;
       }).catch(err => {
         console.error('Like save/delete error:', err);
-        // Откат оптимистичного изменения
         if (isLiking) likedSet.delete(id);
         else likedSet.add(id);
+        rememberIntent(likeIntentById, id, !isLiking);
         applyLikeState(id, !isLiking);
         showToast('Не удалось обновить лайк');
       }).finally(() => {
@@ -2808,18 +2845,18 @@
         else { reactedSet.delete(reviewId); review.reactionCount = Math.max(0, (review.reactionCount || 0) - 1); }
       };
       apply(reacted);
+      rememberIntent(reactionIntentById, reviewId, reacted);
       renderReviews();
 
       pendingReactionIds.add(reviewId);
       try {
         const reactionPromise = reacted
           ? supabase.from('review_reactions').insert({ review_id: reviewId, user_id: user.userId, username: user.username.replace('@', '') })
-          : supabase.from('review_reactions').delete().match({ review_id: reviewId, user_id: user.userId });
+          : supabase.from('review_reactions').delete().eq('review_id', reviewId).eq('user_id', user.userId).select('review_id');
 
         const { error } = await reactionPromise;
-        if (error) throw error;
+        if (error && !(reacted && isDuplicateToggleError(error))) throw error;
         
-        // Fetch updated reactionCount from database view
         const { data: rev } = await supabase.from('reviews_view').select('reactionCount').eq('id', reviewId).maybeSingle();
         if (rev && typeof rev.reactionCount === 'number') {
           review.reactionCount = rev.reactionCount;
@@ -2827,7 +2864,8 @@
         }
       } catch (e) {
         console.error('Reaction error:', e);
-        apply(!reacted); // откат
+        apply(!reacted);
+        rememberIntent(reactionIntentById, reviewId, !reacted);
         renderReviews();
         showToast('Не удалось сохранить реакцию', 'error');
       } finally {
