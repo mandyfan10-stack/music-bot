@@ -995,7 +995,7 @@
         sheet.classList.add('is-open-locked');
       }
       if (releaseSheetLockTimer) clearTimeout(releaseSheetLockTimer);
-      releaseSheetLockTimer = setTimeout(unlockReleaseSheet, 800);
+      releaseSheetLockTimer = setTimeout(unlockReleaseSheet, 560);
     }
 
     function unlockReleaseSheet() {
@@ -1020,6 +1020,7 @@
     function openModal(id) {
       modalCloseGens[id] = (modalCloseGens[id] || 0) + 1;
       const m = document.getElementById(id); m.classList.remove('hidden');
+      m.style.visibility = '';
       m.setAttribute('aria-hidden', 'false');
       const c = m.querySelector('.modal-container');
       const o = m.querySelector('.modal-overlay');
@@ -2531,6 +2532,7 @@
 
     // Морфинг: обложка нажатой карточки «вырастает» в обложку модалки релиза.
     // Призрак летит из ректа карточки к месту #rel-img, лист едет вверх позади.
+    const COVER_MORPH_MS = 520;
     let coverMorphGhost = null;
     let coverMorphTimer = null;
 
@@ -2547,9 +2549,28 @@
 
     function revealReleaseCover(relImg) {
       if (!relImg) return;
-      relImg.style.transition = 'opacity 0.4s var(--ios-glide)';
+      relImg.style.transition = 'none';
       relImg.style.opacity = '1';
-      setTimeout(() => { relImg.style.transition = ''; }, 420);
+    }
+
+    function handoffCoverMorph(ghost, relImg) {
+      if (!relImg) return;
+      const live = relImg.getBoundingClientRect();
+      if (ghost && live.width >= 4) {
+        ghost.style.transition = 'none';
+        ghost.style.transform = 'none';
+        ghost.style.left = `${live.left}px`;
+        ghost.style.top = `${live.top}px`;
+        ghost.style.width = `${live.width}px`;
+        ghost.style.height = `${live.height}px`;
+      }
+      revealReleaseCover(relImg);
+      requestAnimationFrame(() => {
+        if (coverMorphGhost === ghost) {
+          ghost.remove();
+          coverMorphGhost = null;
+        }
+      });
     }
 
     function morphCoverFromCard(cardEl) {
@@ -2566,15 +2587,25 @@
       // полноразмерная обложка в уже раскрытой шторке.
       relImg.style.transition = 'none';
       relImg.style.opacity = '0';
+      // visibility:hidden оставляет геометрию для замера, но не рисует
+      // шторку в конечной позе на кадр до slide-up.
+      m.style.visibility = 'hidden';
       m.classList.remove('hidden');
       const to = relImg.getBoundingClientRect();
-      if (to.width < 4) return false;
+      if (to.width < 4) {
+        m.style.visibility = '';
+        return false;
+      }
 
       const ghost = document.createElement('img');
       ghost.src = srcImg.currentSrc || srcImg.src || relImg.src;
       ghost.alt = '';
+      ghost.className = 'cover-morph-ghost';
       ghost.setAttribute('aria-hidden', 'true');
-      ghost.style.cssText = `position:fixed; left:${to.left}px; top:${to.top}px; width:${to.width}px; height:${to.height}px; object-fit:cover; border-radius:2rem; z-index:80; pointer-events:none; margin:0; opacity:1;`;
+      ghost.style.left = `${to.left}px`;
+      ghost.style.top = `${to.top}px`;
+      ghost.style.width = `${to.width}px`;
+      ghost.style.height = `${to.height}px`;
       ghost.style.transformOrigin = '0 0';
       const s = from.width / to.width;
       ghost.style.transform = `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${s})`;
@@ -2582,7 +2613,7 @@
       coverMorphGhost = ghost;
       void ghost.offsetWidth;
 
-      ghost.style.transition = 'transform 0.62s var(--ios-glide), opacity 0.4s var(--ios-glide)';
+      ghost.style.transition = `transform ${COVER_MORPH_MS}ms var(--ios-glide)`;
       ghost.style.transform = 'translate(0px, 0px) scale(1)';
 
       let done = false;
@@ -2593,20 +2624,12 @@
           clearTimeout(coverMorphTimer);
           coverMorphTimer = null;
         }
-        revealReleaseCover(relImg);
-        ghost.style.opacity = '0';
-        coverMorphTimer = setTimeout(() => {
-          if (coverMorphGhost === ghost) {
-            ghost.remove();
-            coverMorphGhost = null;
-          }
-          coverMorphTimer = null;
-        }, 400);
+        handoffCoverMorph(ghost, relImg);
       };
       ghost.addEventListener('transitionend', (event) => {
         if (event.propertyName === 'transform') cleanup();
       });
-      coverMorphTimer = setTimeout(cleanup, 800);
+      coverMorphTimer = setTimeout(cleanup, COVER_MORPH_MS + 40);
       return true;
     }
 
