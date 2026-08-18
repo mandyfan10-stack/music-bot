@@ -73,6 +73,7 @@
       notificationsEnabled: true
     };
     let blockedUsers = [], blockedUserIds = new Set();
+    let blockNoticeShown = false;
 
     function tgHaptic(style = 'light') {
       try {
@@ -228,10 +229,13 @@
     });
 
     // Активация карточек-релизов (div role=button) с клавиатуры.
+    // Enter/Space на внутренней кнопке (лайк, удаление) не должны открывать релиз.
     document.addEventListener('keydown', (event) => {
       if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
-      const el = event.target.closest('[data-act="open-release"]');
-      if (!el || ['BUTTON', 'A', 'INPUT', 'TEXTAREA'].includes(el.tagName)) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target || target.closest('button, a, input, textarea, [data-act]:not([data-act="open-release"])')) return;
+      const el = target.closest('[data-act="open-release"]');
+      if (!el) return;
       event.preventDefault();
       openRelease(el.dataset.id, el);
     });
@@ -309,12 +313,17 @@
           document.getElementById('btn-add-release')?.classList.add('hidden');
         }
       }
-      if (user.isBlocked) {
-        showToast('Ваш аккаунт заблокирован. Только чтение.');
-      }
     }
 
     applyUserRole();
+
+    function notifyIfBlocked() {
+      if (user.isBlocked && !blockNoticeShown) {
+        blockNoticeShown = true;
+        showToast('Ваш аккаунт заблокирован. Только чтение.');
+      }
+      if (!user.isBlocked) blockNoticeShown = false;
+    }
 
     // Отражает текущее состояние подписки на push в переключателе «Настроек».
     function applyNotificationsToggle() {
@@ -350,6 +359,8 @@
 
     let releases = [], likedSet = new Set(), releasesById = new Map(), reviews = [], reviewsByRelId = new Map(), avgRatingByRelId = new Map(), genreCounts = {}, activeReleaseId = null, selectedCriteria = { sound: 5, production: 5, originality: 5, meaning: 5, relevance: 5, image: 5 };
     let reactedSet = new Set(); // id рецензий, на которые текущий пользователь отреагировал
+    const pendingLikeIds = new Set();
+    const pendingReactionIds = new Set();
     let comments = [], commentsByReviewId = new Map();
     let expandedComments = new Set(); // id рецензий с раскрытой веткой комментариев
     let commentDrafts = new Map();    // reviewId → черновик комментария (переживает ре-рендер)
@@ -381,9 +392,10 @@
         reviewsByRelId.get(r.relId).push(r);
       });
       reviewsByRelId.forEach((rvs, relId) => {
+        rvs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         let avg = 0;
         if (rvs.length > 0) {
-          avg = rvs.reduce((s, r) => s + (r.rating || 0), 0) / rvs.length;
+          avg = rvs.reduce((s, r) => s + toRatingNumber(r.rating), 0) / rvs.length;
         }
         avgRatingByRelId.set(relId, avg);
       });
@@ -434,16 +446,18 @@
 
 
     function openSafeUrl(urlStr) {
-      if (!urlStr) return;
+      if (!urlStr) return showToast('Ссылка на релиз отсутствует');
       try {
         const url = new URL(urlStr);
         if (url.protocol === 'http:' || url.protocol === 'https:') {
           window.open(url.href, '_blank', 'noopener,noreferrer');
         } else {
           console.warn('Небезопасный URL:', urlStr);
+          showToast('Некорректная ссылка');
         }
       } catch (e) {
         console.warn('Некорректный URL:', urlStr);
+        showToast('Некорректная ссылка');
       }
     }
 
@@ -576,7 +590,7 @@
           isActive ? 'bg-red-500/10 text-red-400' : 'text-white hover:bg-white/5'
         }">
           <span class="text-[13px] font-medium">${escapeHtml(g)}</span>
-          <span class="text-[11px] text-gray-500">${count} релиз${count === 1 ? '' : count > 1 && count < 5 ? 'а' : 'ов'}</span>
+          <span class="text-[11px] text-gray-500">${count} ${pluralReleases(count)}</span>
         </button>`;
       }).join('');
     }
@@ -632,7 +646,7 @@
         badge.classList.remove('hidden');
         document.getElementById('active-genre-name').innerText = activeGenreFilter;
         const count = genreCounts[activeGenreFilter] || 0;
-        document.getElementById('active-genre-count').innerText = `${count} релиз${count === 1 ? '' : count > 1 && count < 5 ? 'а' : 'ов'}`;
+        document.getElementById('active-genre-count').innerText = `${count} ${pluralReleases(count)}`;
         refreshIcons();
       } else {
         badge.classList.add('hidden');
@@ -704,13 +718,12 @@
     ];
     criteriaConfig.forEach(({ key, label }) => {
       const wrap = document.createElement('div');
-      wrap.className = 'flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-3 py-2';
-      wrap.innerHTML = `<span class="text-[11px] text-gray-400 font-medium">${label}</span>`;
+      wrap.className = 'w-full flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2';
+      wrap.innerHTML = `<span class="text-[11px] text-gray-400 font-medium flex-1 min-w-0 truncate">${label}</span>`;
       const valueEl = document.createElement('span');
       valueEl.id = `criterion-${key}`;
-      valueEl.className = 'text-[12px] font-bold text-white min-w-4 text-center';
+      valueEl.className = 'text-[12px] font-bold text-white min-w-4 text-center tabular-nums';
       valueEl.innerText = '5';
-      wrap.appendChild(valueEl);
       const minus = document.createElement('button');
       minus.className = 'rating-btn btn-press !w-7 !h-7 !rounded-full';
       minus.innerText = '−';
@@ -726,6 +739,7 @@
       plus.setAttribute('data-key', key);
       plus.setAttribute('data-delta', '1');
       wrap.appendChild(minus);
+      wrap.appendChild(valueEl);
       wrap.appendChild(plus);
       criteriaContainer.appendChild(wrap);
     });
@@ -825,7 +839,12 @@
         t.classList.replace('pointer-events-auto', 'pointer-events-none');
         toastHideTimer = null;
       }, 2500);
-      if (haptic) tgHapticNotify(haptic);
+      if (haptic) {
+        const mapped = (haptic === 'warn' || haptic === 'info') ? 'warning' : haptic;
+        if (mapped === 'success' || mapped === 'error' || mapped === 'warning') {
+          tgHapticNotify(mapped);
+        }
+      }
     }
 
     const TAB_ORDER = ['home', 'feed', 'likes', 'settings'];
@@ -934,6 +953,7 @@
 
     // Стек открытых модалок — для нативной кнопки «Назад» Telegram.
     let openModalStack = [];
+    const modalCloseGens = {};
     let releaseSheetLocked = false;
     let releaseSheetLockTimer = null;
 
@@ -968,6 +988,7 @@
     }
 
     function openModal(id) {
+      modalCloseGens[id] = (modalCloseGens[id] || 0) + 1;
       const m = document.getElementById(id); m.classList.remove('hidden');
       m.setAttribute('aria-hidden', 'false');
       const c = m.querySelector('.modal-container');
@@ -1013,6 +1034,8 @@
         document.getElementById('manual-title').value = '';
         const manualLinkEl = document.getElementById('manual-link');
         if (manualLinkEl) manualLinkEl.value = '';
+        const coverInput = document.getElementById('manual-cover-input');
+        if (coverInput) coverInput.value = '';
         refreshIcons();
       }
       if (id === 'modal-release') {
@@ -1034,6 +1057,7 @@
     }
 
     function closeModal(id, immediate) {
+      const closeGen = modalCloseGens[id] || 0;
       openModalStack = openModalStack.filter(x => x !== id);
       // Фон возвращается, как только закрыта последняя модалка из стека.
       if (openModalStack.length === 0) document.body.classList.remove('modal-open');
@@ -1044,7 +1068,11 @@
       const o = m.querySelector('.modal-overlay');
       c.classList.remove('slide-up-modal'); c.classList.add('slide-down-modal');
       o.classList.remove('fade-in'); o.classList.add('fade-out');
-      setTimeout(() => finalizeModalClose(id), 460);
+      setTimeout(() => {
+        if ((modalCloseGens[id] || 0) !== closeGen) return;
+        if (openModalStack.includes(id)) return;
+        finalizeModalClose(id);
+      }, 460);
     }
 
     document.addEventListener('keydown', (event) => {
@@ -1154,7 +1182,7 @@
         let avgEl = document.getElementById('profile-avg-rating');
         let genreEl = document.getElementById('profile-top-genre');
         if (userReviews.length) {
-          const sum = userReviews.reduce((s, r) => s + (typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0), 0);
+          const sum = userReviews.reduce((s, r) => s + toRatingNumber(r.rating), 0);
           avgEl.innerText = (sum / userReviews.length).toFixed(1);
           const genreTally = {};
           userReviews.forEach(r => {
@@ -1186,7 +1214,10 @@
         const safeName = (profile.displayName || profile.username || 'XX').replace('@', '').substring(0, 2).toUpperCase() || 'XX';
         document.getElementById('profile-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}&background=1c1c1e&color=fff&size=300`;
 
-        openModal('modal-profile');
+        const profileModal = document.getElementById('modal-profile');
+        if (!profileModal || profileModal.classList.contains('hidden')) {
+          openModal('modal-profile');
+        }
         refreshIcons();
       }
     }
@@ -1246,6 +1277,7 @@
         comments = comments.filter(c => !goneReviewIds.has(c.reviewId));
         updateCommentsMap();
         showToast(`Удалено ${Number(deleted) || 0} рецензий`);
+        refreshCatalogViews();
         openProfileModal(activeProfile);
       } catch(e) { showToast('Ошибка: ' + e.message); }
     }
@@ -1290,6 +1322,26 @@
 
     let sessionExpiredWarned = false;
 
+    function refreshOpenSheets() {
+      if (activeReleaseId && !document.getElementById('modal-release')?.classList.contains('hidden')) {
+        existingReviewForActiveRelease = getExistingReviewForRelease(activeReleaseId);
+        reviewPublishBlocked = !!existingReviewForActiveRelease;
+        renderReviews();
+        updateReviewCharCount();
+      }
+      if (activeProfile && !document.getElementById('modal-profile')?.classList.contains('hidden')) {
+        openProfileModal(activeProfile);
+      }
+    }
+
+    function refreshCatalogViews() {
+      renderReleases();
+      const likesScreen = document.getElementById('screen-likes');
+      const feedScreen = document.getElementById('screen-feed');
+      if (likesScreen && !likesScreen.classList.contains('hidden')) renderLikes();
+      if (feedScreen && !feedScreen.classList.contains('hidden')) renderFeed();
+    }
+
     function applyPublicData(data) {
       releases = data.releases || [];
       releasesById = new Map(releases.map(r => [r.id, r]));
@@ -1302,12 +1354,23 @@
       if (!activeTabId) switchTab('home');
       else if (activeTabId === 'likes') renderLikes();
       else if (activeTabId === 'feed') renderFeed();
+      refreshOpenSheets();
       handleStartParam();
     }
 
     function applyAccountData(data) {
-      likedSet = new Set(data.likes || []);
-      reactedSet = new Set(data.myReactions || []);
+      const serverLikes = new Set(data.likes || []);
+      pendingLikeIds.forEach((id) => {
+        if (likedSet.has(id)) serverLikes.add(id);
+        else serverLikes.delete(id);
+      });
+      likedSet = serverLikes;
+      const serverReactions = new Set(data.myReactions || []);
+      pendingReactionIds.forEach((id) => {
+        if (reactedSet.has(id)) serverReactions.add(id);
+        else serverReactions.delete(id);
+      });
+      reactedSet = serverReactions;
       blockedUsers = data.blockedUsers || [];
       blockedUserIds = new Set((data.blockedUserIds || []).map(String));
       if (data.currentUser) {
@@ -1320,10 +1383,12 @@
         user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
       }
       applyUserRole();
+      notifyIfBlocked();
       applyNotificationsToggle();
       renderReleases();
       if (activeTabId === 'likes') renderLikes();
       else if (activeTabId === 'feed') renderFeed();
+      refreshOpenSheets();
     }
 
     function applyData(data) {
@@ -1364,7 +1429,11 @@
         try {
         const res = await fetch(SUPABASE_AUTH_FUNCTION_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          },
           body: JSON.stringify({ initData: currentInitData })
         });
         if (!res.ok) throw new Error('Auth failed: ' + res.status);
@@ -1417,6 +1486,7 @@
         if (!supabase) {
           console.error("Supabase client is not initialized.");
           setSyncStatus('Нет соединения', 'warn');
+          if (!activeTabId) switchTab('home');
           return;
         }
         setSyncStatus('Загрузка релизов', 'syncing');
@@ -1516,6 +1586,7 @@
             console.error("Ошибка загрузки БД:", e.message || e);
             setSyncStatus(cached ? 'Оффлайн (кэш)' : 'Нет соединения', 'warn');
             if (!cached) showToast("Работаем в оффлайн-режиме (сервер недоступен)");
+            if (!activeTabId) switchTab('home');
         }
     }
 
@@ -1729,7 +1800,7 @@
     // Пауза при скрытой вкладке, возобновление с последнего курсора.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) stopSyncLoop();
-      else startSyncLoop();
+      else fetchDB().finally(() => { if (!document.hidden) startSyncLoop(); });
     });
 
     // --- PULL-TO-REFRESH ---
@@ -1850,7 +1921,11 @@
           c.style.transition = 'transform 0.28s var(--ios-glide)';
           c.style.transform = 'translateY(100%)';
           if (ov) { ov.style.transition = 'opacity 0.28s var(--ios-glide)'; ov.style.opacity = '0'; }
-          setTimeout(() => closeModal(id, true), 280);
+          const swipeGen = modalCloseGens[id] || 0;
+          setTimeout(() => {
+            if ((modalCloseGens[id] || 0) !== swipeGen) return;
+            closeModal(id, true);
+          }, 280);
         } else {
           c.style.transition = 'transform 0.4s var(--ios-glide)';
           c.style.transform = 'translateY(0px)';
@@ -2001,6 +2076,7 @@
       const inputEl = document.getElementById('input-link');
       const link = (inputEl ? inputEl.value : '').trim();
       if (!link) return showToast('Введите ссылку на трек или альбом', 'warn');
+      if (!isSafeHttpUrl(link)) return showToast('Некорректная ссылка. Нужен адрес http или https', 'warn');
 
       const btnSubmit = document.getElementById('btn-submit');
       const btnText = document.getElementById('btn-add-text');
@@ -2114,13 +2190,19 @@
           previewZone.innerHTML = `<i data-lucide="image-plus" class="w-8 h-8 text-gray-400 mb-2"></i><span class="text-[12px] text-gray-400">Загрузить обложку</span>`;
           refreshIcons();
         }
+      } finally {
+        event.target.value = '';
       }
     }
 
     async function callReleaseCoverFunction(payload) {
       const res = await fetch(SUPABASE_RELEASE_COVER_FUNCTION_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${getApiBearerToken()}`
+        },
         body: JSON.stringify({ ...payload, initData: getTgInitData() })
       });
       const data = await res.json().catch(() => ({}));
@@ -2161,6 +2243,9 @@
       }
       if (!releaseLink) {
         return showToast('Укажите ссылку на трек или релиз', 'warn');
+      }
+      if (!isSafeHttpUrl(releaseLink)) {
+        return showToast('Некорректная ссылка. Нужен адрес http или https', 'warn');
       }
 
       const saveBtn = document.getElementById('btn-save-manual');
@@ -2269,6 +2354,7 @@
       e.stopPropagation();
       if (!user.isAuthenticated) return showToast('Войдите через Telegram');
       if (user.isBlocked) return showToast('Ваш аккаунт заблокирован');
+      if (pendingLikeIds.has(id)) return;
       const isLiking = !likedSet.has(id);
 
       // Оптимистично обновляем UI
@@ -2277,6 +2363,7 @@
       applyLikeState(id, isLiking);
 
       // Отправка в БД Supabase с откатом при ошибке
+      pendingLikeIds.add(id);
       const likePromise = isLiking
         ? supabase.from('likes').insert({ release_id: id, user_id: user.userId, username: user.username.replace('@', '') })
         : supabase.from('likes').delete().match({ release_id: id, user_id: user.userId });
@@ -2290,6 +2377,8 @@
         else likedSet.add(id);
         applyLikeState(id, !isLiking);
         showToast('Не удалось обновить лайк');
+      }).finally(() => {
+        pendingLikeIds.delete(id);
       });
     }
 
@@ -2305,8 +2394,8 @@
       seenReleaseIds.add(r.id);
       const enterCls = firstPaint ? 'card-enter ' : '';
       const enterStyle = firstPaint ? ` style="animation-delay: ${Math.min(index, 14) * 32}ms"` : '';
-      const cachedAvg = avgRatingByRelId.get(r.id);
-      const avgRating = cachedAvg ? cachedAvg.toFixed(1) : null;
+      const cachedAvg = toRatingNumber(avgRatingByRelId.get(r.id));
+      const avgRating = cachedAvg > 0 ? cachedAvg.toFixed(1) : null;
       const ratingBadge = avgRating ? `<div class="rating-badge absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[11px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1"><i data-lucide="star" class="w-3 h-3 text-amber-400 fill-amber-400"></i>${avgRating}</div>` : '';
       const isNew = lastSeenTs > 0 && (r.timestamp || 0) > lastSeenTs;
       const newBadge = isNew ? `<div class="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wider shadow-lg">НОВОЕ</div>` : '';
@@ -2391,7 +2480,7 @@
         const rv = it.rv;
         const rel = releasesById.get(rv.relId);
         const relName = rel ? escapeHtml(rel.name) : 'Удалённый релиз';
-        const rating = typeof rv.rating === 'number' ? rv.rating : Number(rv.rating) || 0;
+        const rating = toRatingNumber(rv.rating);
         return `<div data-act="open-release" data-id="${escapeHtml(rv.relId)}" role="button" tabindex="0" class="bg-white/5 border border-white/5 rounded-2xl p-3 cursor-pointer hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-500">
             <div class="flex items-center justify-between gap-2 mb-1">
               <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 min-w-0"><i data-lucide="message-square" class="w-3 h-3 shrink-0"></i><span class="truncate">${escapeHtml(rv.author)} · ${relName}</span></div>
@@ -2573,9 +2662,10 @@
       showToast('Рецензия удалена!', 'success');
       pendingReviewDelete = null;
       pendingReviewTargetReleaseId = null;
-      reviewPublishBlocked = false;
-      existingReviewForActiveRelease = null;
+      existingReviewForActiveRelease = getExistingReviewForRelease(activeReleaseId);
+      reviewPublishBlocked = !!existingReviewForActiveRelease;
       updateReviewCharCount();
+      refreshCatalogViews();
     }
 
     async function executeDeleteRelease() {
@@ -2635,6 +2725,9 @@
       if (t.length > REVIEW_MAX_LENGTH) return showToast(`Максимум ${REVIEW_MAX_LENGTH} символов`);
       if (reviews.some(r => r.relId === activeReleaseId && reviewByUser(r, user.userId, user.username))) return showToast('На этот трек уже есть ваша рецензия');
 
+      reviewPublishBlocked = true;
+      updateReviewCharCount();
+
       const objectiveRating = getCriteriaAverage(selectedCriteria);
       const newRev = {
         id: genId(),
@@ -2672,6 +2765,8 @@
         newRev.id = created.id;
       } catch(e) {
         console.error('Ошибка сохранения рецензии:', e);
+        reviewPublishBlocked = false;
+        updateReviewCharCount();
         showToast('Ошибка сохранения — попробуйте позже', 'error');
         return;
       }
@@ -2684,6 +2779,7 @@
       seenReviewIds.add(newRev.id);
       renderReviews();
       updateReviewCharCount();
+      refreshCatalogViews();
       showToast('Опубликовано!', 'success');
       pulseNewReview(newRev.id);
     }
@@ -2704,6 +2800,7 @@
       if (user.isBlocked) return showToast('Ваш аккаунт заблокирован');
       const review = reviews.find(r => r.id === reviewId);
       if (!review) return;
+      if (pendingReactionIds.has(reviewId)) return;
 
       const reacted = !reactedSet.has(reviewId);
       const apply = (on) => {
@@ -2713,6 +2810,7 @@
       apply(reacted);
       renderReviews();
 
+      pendingReactionIds.add(reviewId);
       try {
         const reactionPromise = reacted
           ? supabase.from('review_reactions').insert({ review_id: reviewId, user_id: user.userId, username: user.username.replace('@', '') })
@@ -2732,6 +2830,8 @@
         apply(!reacted); // откат
         renderReviews();
         showToast('Не удалось сохранить реакцию', 'error');
+      } finally {
+        pendingReactionIds.delete(reviewId);
       }
     }
 
@@ -2864,7 +2964,7 @@
     function renderReviews() {
       const container = document.getElementById('reviews-container'); const relReviews = reviewsByRelId.get(activeReleaseId) || [];
       container.innerHTML = relReviews.map((r, i) => {
-        const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0;
+        const rating = toRatingNumber(r.rating);
         const criteria = r.criteria ? ` · ${escapeHtml(formatCriteria(r.criteria))}` : '';
         const canDelete = reviewByUser(r, user.userId, user.username) || user.isAdmin;
         const reacted = reactedSet.has(r.id);
@@ -2940,7 +3040,7 @@
           const rel = releasesById.get(r.relId);
           const relName = rel ? escapeHtml(rel.name) : 'Удаленный релиз';
           const canDelete = isMe || user.isAdmin;
-          const rating = typeof r.rating === 'number' ? r.rating : Number(r.rating) || 0;
+          const rating = toRatingNumber(r.rating);
           return `<div class="bg-white/5 rounded-2xl p-4 border border-white/5 text-left cursor-pointer hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-500" data-act="open-release" data-id="${escapeHtml(r.relId)}" tabindex="0" role="button" aria-label="Открыть релиз: ${relName}">
             <div class="flex justify-between items-center mb-2 gap-2">
               <span class="text-[13px] font-bold text-gray-300 truncate pr-2">${relName}</span>
@@ -2984,6 +3084,11 @@
         btn.innerHTML = ''; 
       }); 
 
+      if (!btnRef) {
+        refreshIcons();
+        return;
+      }
+
       btnRef.classList.remove('border-white/10');
       btnRef.classList.add('scale-110');
       btnRef.classList.add(isLight ? 'border-black' : 'border-white');
@@ -3013,10 +3118,11 @@
 
       try {
         tg.CloudStorage?.getItem?.('xxii_theme', (err, value) => {
-          if (!err && (value === '#000000' || value === '#f2f2f7')) {
-            localStorage.setItem('xxii_theme', value);
-            applyTheme(value, false);
-          }
+          if (err || (value !== '#000000' && value !== '#f2f2f7')) return;
+          const local = localStorage.getItem('xxii_theme');
+          if (local === '#000000' || local === '#f2f2f7') return;
+          localStorage.setItem('xxii_theme', value);
+          applyTheme(value, false);
         });
       } catch (_) {}
 

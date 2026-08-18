@@ -174,6 +174,7 @@
       display: inline-block;
       transform: scaleY(1.4); 
       text-shadow: 2px 2px 0px #000; 
+      margin-top: 10px;
       margin-bottom: 20px;
     }
 
@@ -366,7 +367,8 @@
     body.light-theme .bg-black\/40 svg:not(.text-red-500) { color: #000; }
     
     body.light-theme .bg-white.text-black { background-color: #000 !important; color: #fff !important; }
-    body.light-theme .bg-white.text-black i { fill: #fff !important; stroke: #fff !important; }
+    body.light-theme .bg-white.text-black i,
+    body.light-theme .bg-white.text-black svg { fill: #fff !important; stroke: #fff !important; }
     body.light-theme .fill-black { fill: #fff !important; }
     
     body.light-theme .rating-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #000; }
@@ -386,7 +388,8 @@
     body.light-theme .rating-badge { background: rgba(0,0,0,0.72) !important; color: #fff !important; }
     body.light-theme .rating-badge .text-amber-400 { color: #f59e0b !important; fill: #f59e0b !important; }
     body.light-theme .media-edit-overlay,
-    body.light-theme .media-edit-overlay i { color: #fff !important; stroke: #fff !important; }
+    body.light-theme .media-edit-overlay i,
+    body.light-theme .media-edit-overlay svg { color: #fff !important; stroke: #fff !important; }
     body.light-theme #criteria-buttons-container .text-gray-400 { color: #52525b !important; }
     body.light-theme #rev-text { background: rgba(255,255,255,0.65) !important; border-color: rgba(0,0,0,0.1) !important; color: #111827 !important; }
     body.light-theme #rev-text::placeholder { color: #6b7280 !important; }
@@ -396,7 +399,22 @@
       overflow-wrap: anywhere;
       min-width: 0;
     }
+    .modal-container {
+      display: flex;
+      flex-direction: column;
+      padding-bottom: max(
+        3rem,
+        calc(env(safe-area-inset-bottom, 0px) + 1.25rem),
+        calc(var(--tg-safe-area-inset-bottom, 0px) + 1.25rem)
+      );
+    }
     .modal-container * { min-width: 0; }
+    .modal-container #rel-img,
+    .modal-container .w-12.h-1\.5,
+    .modal-container .w-16.h-16,
+    .modal-container .w-24.h-24 {
+      flex-shrink: 0;
+    }
 
     /* Фильтры */
     .sort-btn { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: #d1d5db; }
@@ -421,6 +439,11 @@
     body.light-theme #genre-search { color: #111; }
     body.light-theme #genre-dropdown { background: rgba(255,255,255,0.95); }
     body.light-theme #genre-dropdown button { color: #111; }
+    body.light-theme #genre-dropdown button.text-red-400,
+    body.light-theme #genre-dropdown button.text-red-500 {
+      color: var(--accent-red) !important;
+      background: color-mix(in srgb, var(--accent-red) 10%, transparent);
+    }
 
 
     /* Статус синхронизации — в шапке, не поверх логотипа */
@@ -574,7 +597,8 @@
       transform: translate(-50%, 16px);
       opacity: 1;
     }
-    #ptr-indicator.ptr-refreshing i { animation: ptrSpin 0.8s linear infinite; }
+    #ptr-indicator.ptr-refreshing i,
+    #ptr-indicator.ptr-refreshing svg { animation: ptrSpin 0.8s linear infinite; }
     body.light-theme #ptr-indicator { background: rgba(255, 255, 255, 0.95); border-color: rgba(0, 0, 0, 0.1); }
     @keyframes ptrSpin { to { transform: rotate(360deg); } }
 
@@ -600,7 +624,7 @@
       transition: transform 0.5s var(--ios-spring);
     }
     .notif-switch.on { background: var(--accent-red); border-color: var(--accent-red); }
-    .notif-switch.on .notif-switch-knob { transform: translateX(20px); }
+    .notif-switch.on .notif-switch-knob { transform: translateX(22px); }
     body.light-theme .notif-switch { background: rgba(0, 0, 0, 0.12); border-color: rgba(0, 0, 0, 0.08); }
     body.light-theme .notif-switch.on { background: var(--accent-red); border-color: var(--accent-red); }
 
@@ -658,7 +682,8 @@
       #genre-dropdown:not(.hidden),
       .skeleton-card,
       .sync-island.is-syncing .sync-island-glyph::before,
-      #ptr-indicator.ptr-refreshing i {
+      #ptr-indicator.ptr-refreshing i,
+      #ptr-indicator.ptr-refreshing svg {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
       }

@@ -68,6 +68,21 @@ function getShareTarget(serverDeepLink, releaseLink) {
 }
 
 // Чистая фильтрация и сортировка каталога релизов.
+function toRatingNumber(value) {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function isSafeHttpUrl(urlStr) {
+  if (!urlStr) return false;
+  try {
+    const url = new URL(String(urlStr));
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+
 function filterAndSortReleases(releases, options) {
   const opts = options || {};
   const genre = opts.genre || '';
@@ -95,7 +110,15 @@ function filterAndSortReleases(releases, options) {
       filtered.sort((a, b) => avgRating(b.id) - avgRating(a.id));
       break;
     case 'rating-asc':
-      filtered.sort((a, b) => avgRating(a.id) - avgRating(b.id));
+      // Без оценок — в конец, иначе 0.0 оказывается «лучшим» худшим.
+      filtered.sort((a, b) => {
+        const ra = avgRating(a.id);
+        const rb = avgRating(b.id);
+        const aUnrated = !ra;
+        const bUnrated = !rb;
+        if (aUnrated !== bUnrated) return aUnrated ? 1 : -1;
+        return ra - rb;
+      });
       break;
     case 'reviews':
       filtered.sort((a, b) => reviewCount(b.id) - reviewCount(a.id));
@@ -199,6 +222,15 @@ function pluralReviews(n) {
   return 'рецензий';
 }
 
+function pluralReleases(n) {
+  const count = Number(n) || 0;
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'релиз';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'релиза';
+  return 'релизов';
+}
+
 // Replaces a locally created row after the server assigns (or echoes) an id,
 // and drops a Realtime duplicate that already arrived with the server id.
 function adoptCreatedRecord(list, localId, createdId, item) {
@@ -221,6 +253,8 @@ if (typeof module !== 'undefined' && module.exports) {
     getPublicCacheData,
     getTelegramIdFromClaims,
     getShareTarget,
+    isSafeHttpUrl,
+    toRatingNumber,
     filterAndSortReleases,
     isSameReview,
     upsertByMatcher,
@@ -232,6 +266,7 @@ if (typeof module !== 'undefined' && module.exports) {
     decodeJwtPayload,
     isMissingRpcSignature,
     pluralReviews,
+    pluralReleases,
     ...catalogParse
   };
 }

@@ -8,6 +8,8 @@ const {
   getPublicCacheData,
   getTelegramIdFromClaims,
   getShareTarget,
+  isSafeHttpUrl,
+  toRatingNumber,
   normalizeGenre,
   cleanTrackTitle,
   parseArtistAndTitle,
@@ -21,7 +23,8 @@ const {
   formatCriteria,
   decodeJwtPayload,
   isMissingRpcSignature,
-  pluralReviews
+  pluralReviews,
+  pluralReleases
 } = require('../src/utils.js');
 
 test('cleanUsername: should remove leading @ and convert to lowercase', () => {
@@ -162,6 +165,22 @@ test('getShareTarget: falls back to release URL and rejects unsafe schemes', () 
   assert.strictEqual(getShareTarget('data:text/html,x', 'file:///tmp/release'), '');
 });
 
+test('isSafeHttpUrl: accepts only http(s)', () => {
+  assert.strictEqual(isSafeHttpUrl('https://music.yandex.ru/track/1'), true);
+  assert.strictEqual(isSafeHttpUrl('http://example.com'), true);
+  assert.strictEqual(isSafeHttpUrl('javascript:alert(1)'), false);
+  assert.strictEqual(isSafeHttpUrl('not a url'), false);
+  assert.strictEqual(isSafeHttpUrl(''), false);
+});
+
+test('toRatingNumber: coerces numeric strings and rejects garbage', () => {
+  assert.strictEqual(toRatingNumber(7.5), 7.5);
+  assert.strictEqual(toRatingNumber('8.0'), 8);
+  assert.strictEqual(toRatingNumber('7.5'), 7.5);
+  assert.strictEqual(toRatingNumber(undefined), 0);
+  assert.strictEqual(toRatingNumber('nope'), 0);
+});
+
 // --- normalizeGenre ---
 test('normalizeGenre: correctly maps russian and english genres', () => {
   assert.strictEqual(normalizeGenre('rusrap'), 'Рэп');
@@ -269,6 +288,16 @@ test('filterAndSortReleases: rating sort uses the avgRating lookup', () => {
   );
 });
 
+test('filterAndSortReleases: unrated releases go last on rating-asc', () => {
+  const items = SAMPLE.concat([{ id: 'd', name: 'Тишина', artist: 'X', genre: 'Джаз', timestamp: 40 }]);
+  const avg = { a: 4, b: 9, c: 6 };
+  const out = filterAndSortReleases(items, {
+    sortMode: 'rating-asc',
+    avgRating: (id) => avg[id] || 0
+  });
+  assert.deepStrictEqual(out.map(r => r.id), ['a', 'c', 'b', 'd']);
+});
+
 test('filterAndSortReleases: reviews sort uses the reviewCount lookup', () => {
   const counts = { a: 1, b: 5, c: 2 };
   const out = filterAndSortReleases(SAMPLE, {
@@ -360,6 +389,15 @@ test('pluralReviews follows Russian plural rules', () => {
   assert.strictEqual(pluralReviews(2), 'рецензии');
   assert.strictEqual(pluralReviews(5), 'рецензий');
   assert.strictEqual(pluralReviews(21), 'рецензия');
+});
+
+test('pluralReleases follows Russian plural rules', () => {
+  assert.strictEqual(pluralReleases(1), 'релиз');
+  assert.strictEqual(pluralReleases(2), 'релиза');
+  assert.strictEqual(pluralReleases(5), 'релизов');
+  assert.strictEqual(pluralReleases(21), 'релиз');
+  assert.strictEqual(pluralReleases(22), 'релиза');
+  assert.strictEqual(pluralReleases(11), 'релизов');
 });
 
 test('adoptCreatedRecord: drops a Realtime duplicate and keeps one row', () => {

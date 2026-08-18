@@ -131,21 +131,47 @@ export async function scrapeMetadataFromPage(
     let parsedGenre = "";
 
     // 1. Поиск микроразметки JSON-LD (внедряется Яндексом, Spotify, Apple, YouTube)
+    const preferredLdTypes = new Set([
+      "MusicRecording",
+      "MusicAlbum",
+      "MusicGroup",
+      "VideoObject",
+      "AudioObject",
+    ]);
+    const collectLdItems = (value: unknown): Record<string, unknown>[] => {
+      if (!value) return [];
+      if (Array.isArray(value)) return value.flatMap(collectLdItems);
+      if (typeof value !== "object") return [];
+      const record = value as Record<string, unknown>;
+      if (Array.isArray(record["@graph"])) {
+        return record["@graph"].flatMap(collectLdItems);
+      }
+      return [record];
+    };
+    const typeRank = (item: Record<string, unknown>) => {
+      const types = ([] as unknown[]).concat(item["@type"] || "");
+      return types.some((type) => preferredLdTypes.has(String(type))) ? 0 : 1;
+    };
     const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
     for (const script of Array.from(scripts)) {
       try {
         const text = script.textContent || "";
-        const ld = JSON.parse(text);
-        const item = ld["@graph"]?.[0] || ld;
+        const items = collectLdItems(JSON.parse(text)).sort((a, b) =>
+          typeRank(a) - typeRank(b)
+        );
 
-        if (item) {
-          if (item.name && typeof item.name === "string") {
-            parsedName = item.name;
+        for (const item of items) {
+          if (item.name && typeof item.name === "string" && !parsedName) {
+            parsedName = cleanTrackTitle(item.name);
           }
-          if (item.byArtist) {
+          if (item.byArtist && !parsedArtist) {
             if (typeof item.byArtist === "string") parsedArtist = item.byArtist;
-            else if (typeof item.byArtist?.name === "string") {
-              parsedArtist = item.byArtist.name;
+            else if (
+              typeof item.byArtist === "object" && item.byArtist &&
+              "name" in item.byArtist &&
+              typeof (item.byArtist as { name?: string }).name === "string"
+            ) {
+              parsedArtist = (item.byArtist as { name: string }).name;
             } else if (Array.isArray(item.byArtist)) {
               parsedArtist = item.byArtist
                 .map((a: { name?: string }) => a.name || "")
@@ -153,19 +179,20 @@ export async function scrapeMetadataFromPage(
                 .join(", ");
             }
           }
-          if (item.image) {
+          if (item.image && !parsedImg) {
             const rawImg = typeof item.image === "string"
               ? item.image
-              : item.image?.url;
+              : (item.image as { url?: string } | undefined)?.url;
             if (rawImg) parsedImg = rawImg;
           }
-          if (item.genre) {
+          if (item.genre && !parsedGenre) {
             parsedGenre = Array.isArray(item.genre)
               ? item.genre.join(", ")
               : String(item.genre);
           }
           if (parsedName && parsedArtist) break;
         }
+        if (parsedName && parsedArtist) break;
       } catch {
         // Продолжаем поиск
       }
@@ -210,6 +237,14 @@ export async function scrapeMetadataFromPage(
       parsedImg = yandexCoverUrl(parsedImg);
     }
 
+    // Если JSON-LD дал только составное имя без артиста — режем его.
+    if (parsedName && !parsedArtist) {
+      const splitFromName = parseArtistAndTitle(parsedName, currentUrl);
+      if (splitFromName.artist) {
+        parsedArtist = splitFromName.artist;
+        parsedName = splitFromName.name;
+      }
+    }
     // Если JSON-LD не дал готового артиста/названия — разбиваем заголовок
     if (!parsedName || !parsedArtist) {
       const split = parseArtistAndTitle(ogTitle, currentUrl);

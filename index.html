@@ -12,12 +12,12 @@
   <script src="src/lucide.min.js?v=2"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="src/telegram-web-app.js?v=4"></script>
-  <script src="src/catalog-parse.js?v=1"></script>
-  <script src="src/utils.js?v=5"></script>
+  <script src="src/catalog-parse.js?v=2"></script>
+  <script src="src/utils.js?v=6"></script>
 
   <!-- Tailwind собран заранее (npm run build:css) — рантайм-компилятора CDN больше нет -->
   <link rel="stylesheet" href="src/tailwind.css?v=5">
-  <link rel="stylesheet" href="src/styles.css?v=10">
+  <link rel="stylesheet" href="src/styles.css?v=11">
 </head>
 <body class="antialiased h-screen flex flex-col">
 
@@ -73,9 +73,9 @@
     </div>
 
     <div id="screen-home" class="tab-screen px-6 hidden">
-      <div class="flex justify-between items-end mb-4">
-        <h2 class="text-2xl font-semibold tracking-tight text-white">Слушать сейчас</h2>
-        <button id="btn-add-release" data-act="open-add" class="hidden btn-press px-4 py-2 bg-white/10 border border-white/10 text-white text-[12px] font-semibold rounded-full flex items-center gap-2">
+      <div class="flex justify-between items-end mb-4 gap-3 min-w-0 flex-wrap">
+        <h2 class="text-2xl font-semibold tracking-tight text-white min-w-0">Слушать сейчас</h2>
+        <button id="btn-add-release" data-act="open-add" class="hidden btn-press px-4 py-2 bg-white/10 border border-white/10 text-white text-[12px] font-semibold rounded-full flex items-center gap-2 shrink-0">
           <i data-lucide="plus" class="w-3.5 h-3.5 text-red-500"></i> Новый релиз
         </button>
       </div>
@@ -226,7 +226,7 @@
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-overlay" data-act="close-modal" data-modal="modal-release"></div>
     <div class="glass w-full rounded-t-[2.5rem] p-6 pb-12 relative modal-container max-h-[92vh] overflow-y-auto hide-scrollbar flex-col">
       <div class="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 shrink-0"></div>
-      <img id="rel-img" src="" alt="Обложка релиза" class="w-44 h-44 rounded-[2rem] object-cover shadow-2xl mb-5 mx-auto border border-white/5">
+      <img id="rel-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Обложка релиза" class="w-44 h-44 rounded-[2rem] object-cover shadow-2xl mb-5 mx-auto border border-white/5">
       <h2 id="rel-title" class="text-2xl font-bold text-center text-white mb-1">Название</h2>
       <p id="rel-artist" class="text-gray-400 text-[14px] mb-6 text-center">Артист</p>
       
@@ -252,9 +252,9 @@
                <span id="rating-total-sum" class="text-[10px] text-gray-500 tabular-nums">30 / 60</span>
              </div>
            </div>
-           <div class="flex flex-wrap gap-2 justify-center mb-4" id="criteria-buttons-container"></div>
+           <div class="flex flex-col gap-2 mb-4" id="criteria-buttons-container"></div>
            <div class="relative w-full mb-4">
-             <textarea id="rev-text" data-act-input="review-char-count" aria-label="Мнение о саунде" placeholder="Мнение о саунде..." class="w-full h-24 bg-black/20 border border-white/5 rounded-xl outline-none p-3 pb-7 text-[13px] text-white resize-none transition-all focus:border-red-500/30"></textarea>
+             <textarea id="rev-text" data-act-input="review-char-count" maxlength="3000" aria-label="Мнение о саунде" placeholder="Мнение о саунде..." class="w-full h-24 bg-black/20 border border-white/5 rounded-xl outline-none p-3 pb-7 text-[13px] text-white resize-none transition-all focus:border-red-500/30"></textarea>
              <span id="rev-char-count" class="absolute bottom-2 right-3 text-[10px] text-gray-500 font-medium">0 / 3000</span>
            </div>
            <button id="btn-submit-review" data-act="submit-review" class="btn-press w-full py-3 bg-white/10 text-white text-[13px] font-bold rounded-xl border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed">Опубликовать</button>
@@ -320,7 +320,7 @@
       
       <div class="flex flex-col items-center mb-6">
         <div class="w-24 h-24 rounded-[1.5rem] bg-[#1c1c1e] flex items-center justify-center border border-white/10 shadow-2xl mb-4 overflow-hidden shrink-0">
-          <img id="profile-avatar" src="" alt="Аватар пользователя" class="w-full h-full object-cover">
+          <img id="profile-avatar" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Аватар пользователя" class="w-full h-full object-cover">
         </div>
         <h2 id="profile-name" class="text-2xl font-bold text-white mb-1">Имя</h2>
         <div class="px-3 py-1 rounded-lg text-[11px] font-black uppercase tracking-widest mb-6 transition-colors" id="profile-role">Роль</div>
@@ -374,6 +374,6 @@
     </div>
   </div>
 
-  <script src="src/app.js?v=15" defer></script>
+  <script src="src/app.js?v=16" defer></script>
 </body>
 </html>

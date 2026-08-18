@@ -48,6 +48,12 @@
       "url": "https://open.spotify.com/track/123",
       "artist": "SALUKI",
       "name": "EUPHORIA"
+    },
+    {
+      "title": "Stand by Me by Ben E. King",
+      "url": "https://open.spotify.com/track/stand-by-me",
+      "artist": "Ben E. King",
+      "name": "Stand by Me"
     }
   ],
   "yandexUrls": [
@@ -59,6 +65,24 @@
     {
       "url": "https://music.yandex.ru/album/43309876",
       "album_id": "43309876"
+    },
+    {
+      "url": "https://music.yandex.ru/iframe/#track/112638848/25394013",
+      "track_id": "112638848",
+      "album_id": "25394013"
+    },
+    {
+      "url": "https://music.yandex.ru/iframe/#album/43309876",
+      "album_id": "43309876"
+    },
+    {
+      "url": "https://music.yandex.ru/album/25394013?track=112638848",
+      "track_id": "112638848",
+      "album_id": "25394013"
+    },
+    {
+      "url": "https://market.yandex.ru/album/1",
+      "null": true
     },
     {
       "url": "https://example.com/album/1",

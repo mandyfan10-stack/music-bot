@@ -139,13 +139,47 @@ const server = http.createServer((req, res) => {
   // API эндпоинт для локального тестирования парсинга
   if (url.pathname === '/api/parse-link' && req.method === 'POST') {
     let body = '';
-    req.on('data', chunk => { body += chunk; });
+    let tooLarge = false;
+    req.on('data', chunk => {
+      if (tooLarge) return;
+      body += chunk;
+      if (body.length > 8192) {
+        tooLarge = true;
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Payload too large' }));
+        req.destroy();
+      }
+    });
     req.on('end', async () => {
+      if (tooLarge) return;
       try {
         const { link } = JSON.parse(body || '{}');
-        if (!link) {
+        if (!link || typeof link !== 'string') {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ error: 'Missing link' }));
+        }
+        let parsed;
+        try { parsed = new URL(link); } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Invalid link' }));
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Unsupported URL scheme' }));
+        }
+        const host = parsed.hostname.toLowerCase();
+        const ipv4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+        const isPrivate = host === 'localhost' || host.endsWith('.localhost') ||
+          host === '0.0.0.0' || host === '::1' || host === '[::1]' ||
+          (ipv4 && (
+            Number(ipv4[1]) === 10 || Number(ipv4[1]) === 127 || Number(ipv4[1]) === 0 ||
+            (Number(ipv4[1]) === 169 && Number(ipv4[2]) === 254) ||
+            (Number(ipv4[1]) === 172 && Number(ipv4[2]) >= 16 && Number(ipv4[2]) <= 31) ||
+            (Number(ipv4[1]) === 192 && Number(ipv4[2]) === 168)
+          ));
+        if (isPrivate) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Private hosts are not allowed' }));
         }
         const data = await handleParseLink(link);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -158,9 +192,25 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  let reqPath = decodeURIComponent(url.pathname);
+  let reqPath;
+  try {
+    reqPath = decodeURIComponent(url.pathname);
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Bad Request');
+  }
+  if (reqPath.includes('\0')) {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Bad Request');
+  }
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
-  const filePath = path.join(__dirname, reqPath);
+  const root = path.resolve(__dirname);
+  const filePath = path.resolve(root, '.' + reqPath);
+  const relative = path.relative(root, filePath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('Forbidden');
+  }
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
@@ -176,6 +226,6 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`XXII SOUND local server is running at http://localhost:${PORT}`);
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`XXII SOUND local server is running at http://127.0.0.1:${PORT}`);
 });

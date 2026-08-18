@@ -93,9 +93,9 @@ Deno.test("tampered Telegram initData is rejected", async () => {
   );
 });
 
-Deno.test("unsafe Telegram IDs are rejected even in parser mode", () => {
+Deno.test("unsafe Telegram IDs are rejected even in parser mode", async () => {
   const values = new URLSearchParams({ user: JSON.stringify({ id: -1 }) });
-  assertRejects(
+  await assertRejects(
     async () => parseTelegramUser(values.toString()),
     TelegramAuthError,
     "user ID",

@@ -109,35 +109,34 @@ function cleanTrackTitle(raw) {
   return title.trim();
 }
 
+function collectYandexPathIds(parts, result) {
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === 'track' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
+      result.track_id = parts[i + 1];
+      // iframe hash: #track/<trackId>/<albumId>
+      if (i + 2 < parts.length && /^\d+$/.test(parts[i + 2]) && !result.album_id) {
+        result.album_id = parts[i + 2];
+      }
+    }
+    if (parts[i] === 'album' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
+      result.album_id = parts[i + 1];
+    }
+  }
+}
+
 function parseYandexMusicUrl(urlStr) {
   try {
     const url = new URL(urlStr);
     const host = url.hostname.toLowerCase();
-    const isYandex = host === 'music.yandex.ru' ||
-      host === 'music.yandex.com' ||
-      host === 'music.yandex.by' ||
-      host === 'music.yandex.kz' ||
-      host === 'music.yandex.uz' ||
-      host.endsWith('.yandex.ru') ||
-      host.endsWith('.yandex.com') ||
-      host.endsWith('.yandex.by') ||
-      host.endsWith('.yandex.kz') ||
-      host.endsWith('.yandex.uz');
+    const isYandex = /(?:^|\.)music\.yandex\.(ru|com|by|kz|uz)$/i.test(host);
     if (!isYandex) return null;
 
     const result = {};
     const trackParam = url.searchParams.get('track');
     if (trackParam && /^\d+$/.test(trackParam)) result.track_id = trackParam;
 
-    const parts = url.pathname.split('/').filter(Boolean);
-    for (let i = 0; i < parts.length; i++) {
-      if (parts[i] === 'track' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
-        result.track_id = parts[i + 1];
-      }
-      if (parts[i] === 'album' && i + 1 < parts.length && /^\d+$/.test(parts[i + 1])) {
-        result.album_id = parts[i + 1];
-      }
-    }
+    collectYandexPathIds(url.pathname.split('/').filter(Boolean), result);
+    collectYandexPathIds(url.hash.replace(/^#/, '').split('/').filter(Boolean), result);
     return Object.keys(result).length > 0 ? result : null;
   } catch {
     return null;
@@ -184,7 +183,7 @@ function parseArtistAndTitle(rawTitle, urlStr) {
     return { artist: cleanText(yandexAlbumMatch[2]), name: cleanText(yandexAlbumMatch[1]), genre: '' };
   }
 
-  const byMatch = title.match(/^(.+?)\s+by\s+(.+)$/i);
+  const byMatch = title.match(/^(.+)\s+by\s+(.+)$/i);
   if (byMatch) {
     return { artist: cleanText(byMatch[2]), name: cleanText(byMatch[1]), genre: '' };
   }
