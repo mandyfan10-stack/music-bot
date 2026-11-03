@@ -11,6 +11,19 @@ const {
 } = require('./src/catalog-parse.js');
 
 const PORT = process.env.PORT || 3000;
+// Раздаём только то, что публикует GitHub Pages (index.html и src/),
+// а не весь корень репозитория (.env, .git, supabase/ и т.п.).
+const PUBLIC_FILES = new Set(['index.html']);
+const PUBLIC_DIRS = ['src'];
+
+function isPublicStaticPath(relative) {
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return false;
+  const parts = relative.split(path.sep);
+  if (parts.some((part) => part.startsWith('.'))) return false;
+  if (parts.length === 1) return PUBLIC_FILES.has(parts[0]);
+  return PUBLIC_DIRS.includes(parts[0]);
+}
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -207,7 +220,7 @@ const server = http.createServer((req, res) => {
   const root = path.resolve(__dirname);
   const filePath = path.resolve(root, '.' + reqPath);
   const relative = path.relative(root, filePath);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+  if (!isPublicStaticPath(relative)) {
     res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end('Forbidden');
   }
@@ -226,6 +239,10 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`XXII SOUND local server is running at http://127.0.0.1:${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log(`XXII SOUND local server is running at http://127.0.0.1:${PORT}`);
+  });
+}
+
+module.exports = { server, isPublicStaticPath };
