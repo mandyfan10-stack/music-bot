@@ -92,6 +92,11 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   передаёт его Data API через опцию `accessToken` клиента Supabase и
   `Authorization: Bearer` в Edge Functions. `X-Telegram-Init-Data`
   дополнительно шлётся только в `parse-link`. RLS опирается на claims JWT.
+  После выдачи новой сессии `auth` отзывает прежние сессии пользователя
+  (`revokeOtherSessions`, `_shared/session_revoke.ts`, scope `others`) уже
+  после ответа (`EdgeRuntime.waitUntil`): иначе каждый вход оставлял в
+  `auth.sessions` бессрочную сессию с неиспользуемым refresh-токеном. Edge
+  Functions CI не деплоит — выкладываются вручную.
 - **Telegram SDK**: официальный скрипт грузится асинхронно, поэтому `tg` в
   `app.js` — Proxy к текущему `window.Telegram.WebApp` (сначала заглушка,
   потом реальный SDK). Подписки на SDK (BackButton, `themeChanged`,

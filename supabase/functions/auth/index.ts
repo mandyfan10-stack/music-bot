@@ -4,6 +4,10 @@ import {
   TelegramAuthError,
   verifyTelegramInitData,
 } from "../_shared/telegram_auth.ts";
+import {
+  revokeOtherSessions,
+  runAfterResponse,
+} from "../_shared/session_revoke.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -160,6 +164,12 @@ serve(async (req) => {
       console.error("Subscriber registration failed:", subscriberError);
       return jsonResponse({ error: "Could not validate user session" }, 500);
     }
+
+    // One live session per user: drop the sessions earlier /auth calls left
+    // behind. Runs after the response when the edge runtime allows it.
+    await runAfterResponse(
+      revokeOtherSessions(supabase.auth.admin, accessToken),
+    );
 
     return jsonResponse({
       token: accessToken,
