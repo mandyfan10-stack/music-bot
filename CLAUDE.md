@@ -9,8 +9,8 @@ FastAPI/MongoDB-проект архивирован и не участвует �
 
 - Ванильный JavaScript (ES6+), **без фреймворка; деплой без сборки**.
 - Tailwind CSS — собран заранее в `src/tailwind.css` (артефакт закоммичен в
-  репозиторий, рантайм-CDN убран). Supabase JS и Lucide Icons сохранены
-  локально; с внешнего домена загружается только Telegram WebApp SDK — и то
+  репозиторий, рантайм-CDN убран). Supabase JS сохранён локально, иконки
+  Lucide — только используемые, в сгенерированном `src/icons.js`; с внешнего домена загружается только Telegram WebApp SDK — и то
   асинхронно, через загрузчик `src/telegram-web-app.js` (см. «Telegram SDK»).
 - Backend — PostgreSQL/RLS, RPC, Realtime и Edge Functions в `supabase/`.
 
@@ -46,6 +46,12 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   `refetch-review`, `refetch-comment`, `own-like`, `own-reaction`,
   `blocked`); `app.js` выполняет их в `runRealtimeAction()`. Новая таблица
   Realtime = запись в `REALTIME_TABLES` + ветка в `describeRealtimeChange`.
+- `src/icons.js` — СГЕНЕРИРОВАН `scripts/build-icons.js` (`npm run build:icons`)
+  из devDependency `lucide`: только иконки, которые встречаются в коде
+  (`data-lucide="…"`, литералы в `data-lucide="${…}"`, `icon: '…'`,
+  `iconName`), и совместимый `lucide.createIcons()`, который не
+  пересоздаёт уже нарисованные SVG. Новая иконка → `npm run build:icons` и
+  коммит `src/icons.js`; `tests/icons.test.js` падает, если файл устарел.
 - `src/catalog-parse.js` — общие чистые функции парсера (браузер + Node).
   TypeScript-копия — `supabase/functions/_shared/catalog_parse.ts`.
 - `src/utils.js` — экранирование, кэш, фильтры, JWT claims, бейджи;
@@ -178,6 +184,9 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
   `deno test --frozen --allow-read=tests/fixtures supabase/functions/_shared/*_test.ts`
 - База/RLS: `supabase db start && supabase test db`
 - Пересобрать Tailwind после изменения классов: `npm install && npm run build:css`
+- Пересобрать иконки после новой `data-lucide`: `npm run build:icons`
+- Новая npm-зависимость → добавить её и в `workspace.packageJson.dependencies`
+  в `deno.lock` (иначе `deno check --frozen` в CI падает)
 - Локальный запуск: `node server.js` → `http://127.0.0.1:3000`
 - Сброс кэша Telegram WebView автоматический: при деплое
   `node scripts/stamp-assets.js _site` заменяет `?v=…` у каждого локального

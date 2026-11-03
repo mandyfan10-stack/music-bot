@@ -167,7 +167,8 @@ test('boot path hides welcome early, announces Telegram ready, and defers heavy 
   assert.match(html, /rel="preconnect"[^>]+ftpofwybzvhvyukrshcm\.supabase\.co/);
   assert.match(html, /src="src\/boot\.js/);
   assert.match(html, /src="src\/supabase\.min\.js[^"]*" defer/);
-  assert.match(html, /src="src\/lucide\.min\.js[^"]*" defer/);
+  assert.match(html, /src="src\/icons\.js[^"]*" defer/);
+  assert.doesNotMatch(html, /lucide\.min\.js/);
   assert.match(html, /src="src\/app\.js[^"]*" defer/);
   assert.doesNotMatch(html, /@import url\('https:\/\/fonts\.googleapis\.com/);
   assert.match(boot, /is-returning/);

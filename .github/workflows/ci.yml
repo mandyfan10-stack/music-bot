@@ -30,6 +30,8 @@ jobs:
       - run: node --check src/telegram-web-app.js
       - run: node --check server.js
       - run: node --check scripts/stamp-assets.js
+      - run: node --check scripts/build-icons.js
+      - run: node --check src/icons.js
       - run: npm run build:css
       - run: git diff --exit-code -- src/tailwind.css
 

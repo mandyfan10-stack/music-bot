@@ -19,7 +19,7 @@ const acorn = require('acorn');
 const walk = require('acorn-walk');
 
 const root = path.resolve(__dirname, '..');
-const FILES = ['src/app.js', 'src/utils.js', 'src/data-store.js', 'src/auth-session.js', 'src/realtime-sync.js'];
+const FILES = ['src/app.js', 'src/utils.js', 'src/icons.js', 'src/data-store.js', 'src/auth-session.js', 'src/realtime-sync.js'];
 
 const SAFE_INTERPOLATIONS = new Map([
   // Числа и счётчики.
