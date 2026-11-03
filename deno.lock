@@ -82,6 +82,8 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:acorn-walk@8.3.4",
+        "npm:acorn@8.14.0",
         "npm:tailwindcss@3.4.19"
       ]
     }
