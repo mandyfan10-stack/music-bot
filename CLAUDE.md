@@ -36,6 +36,16 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   (`mergeServerToggleSet`), Realtime-toggle (`applyRealtimeToggle`), дельты
   каталога (`applyCatalogDelta`), индексы (`groupReviewsByRelease`,
   `groupCommentsByReview`, `countGenres`). Подключается после `utils.js`.
+- `src/auth-session.js` — сессия входа без сети: проверка JWT
+  (`isUsableAccessToken`, `isValidAuthResponse`), запись и разбор
+  `xxii_auth_v1` (`buildStoredSession`, `parseStoredSession` — стирает
+  истёкшую, повреждённую или чужую сессию), `roleLabel`. Вызов Edge Function
+  `auth` остаётся в `authenticateWithSupabase()` в `app.js`.
+- `src/realtime-sync.js` — `describeRealtimeChange(table, payload, userId)`
+  превращает событие postgres_changes в список действий (`delta`,
+  `refetch-review`, `refetch-comment`, `own-like`, `own-reaction`,
+  `blocked`); `app.js` выполняет их в `runRealtimeAction()`. Новая таблица
+  Realtime = запись в `REALTIME_TABLES` + ветка в `describeRealtimeChange`.
 - `src/catalog-parse.js` — общие чистые функции парсера (браузер + Node).
   TypeScript-копия — `supabase/functions/_shared/catalog_parse.ts`.
 - `src/utils.js` — экранирование, кэш, фильтры, JWT claims, бейджи;
@@ -44,6 +54,8 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   `index.html` и `src/` (как GitHub Pages) и повторяет `parse-link`.
 - `tests/` (Node `test`): `utils.test.js` — утилиты и фильтрация;
   `data-store.test.js` — сценарии гонок оптимистичных toggle и Realtime;
+  `auth-session.test.js` — истёкший/чужой/повреждённый токен, смена аккаунта;
+  `realtime-sync.test.js` — разбор событий Realtime по таблицам;
   `catalog-parse.test.js` — парсер по общим фикстурам;
   `server.test.js` — белый список статики; `html-escaping.test.js` —
   AST-проверка экранирования в HTML-шаблонах и `innerHTML`;
@@ -151,7 +163,8 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
 
 - Тесты (утилиты, фильтрация и статические контракты): `npm test`
 - Синтаксис (как в CI): `node --check` для `src/app.js`, `src/utils.js`,
-  `src/catalog-parse.js`, `src/data-store.js`, `src/boot.js`,
+  `src/catalog-parse.js`, `src/data-store.js`, `src/auth-session.js`,
+  `src/realtime-sync.js`, `scripts/stamp-assets.js`, `src/boot.js`,
   `src/telegram-web-app.js` и `server.js`
 - Аудит зависимостей: `npm audit --audit-level=high`
 - Tailwind в синхроне (CI): `npm run build:css && git diff --exit-code -- src/tailwind.css`

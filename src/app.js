@@ -316,7 +316,7 @@
       if (welcomeNameEl) welcomeNameEl.innerText = user.username;
       const headerRoleEl = document.getElementById('user-role');
       if (headerRoleEl) {
-        headerRoleEl.innerText = user.isAdmin ? 'Создатель' : 'Пользователь';
+        headerRoleEl.innerText = roleLabel(user.isAdmin);
         if (user.isAdmin) {
           headerRoleEl.classList.remove('text-gray-500');
           headerRoleEl.classList.add('text-red-500', 'font-bold');
@@ -1150,7 +1150,7 @@
         const isProfileAdmin = isMe
           ? user.isAdmin
           : userReviews.some(r => r.authorIsAdmin);
-        let role = isProfileAdmin ? 'Создатель' : 'Пользователь';
+        let role = roleLabel(isProfileAdmin);
 
         const pRole = document.getElementById('profile-role');
         pRole.innerText = role;
@@ -1378,7 +1378,7 @@
         user.isBlocked = !!data.currentUser.isBlocked;
         user.isAuthenticated = !!data.currentUser.isAuthenticated;
         user.notificationsEnabled = data.currentUser.notificationsEnabled !== false;
-        user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
+        user.role = roleLabel(user.isAdmin);
       }
       applyUserRole();
       notifyIfBlocked();
@@ -1397,30 +1397,13 @@
 
 
     function hasUsableAccessToken(expectedUserId = user.userId) {
-      const token = getSupabaseAccessToken();
-      const claims = decodeJwtPayload(token);
-      if (!token || !claims) return false;
-      if (claims.role !== 'authenticated') return false;
-      if (expectedUserId != null
-          && getTelegramIdFromClaims(claims) !== String(expectedUserId)) return false;
-      return Number(claims.exp || 0) * 1000 > Date.now() + 30_000;
+      return isUsableAccessToken(getSupabaseAccessToken(), expectedUserId);
     }
-
-    const AUTH_STORE_KEY = 'xxii_auth_v1';
 
     function persistAuthSession(token, profile) {
       try {
-        const claims = decodeJwtPayload(token);
-        const tokenUserId = getTelegramIdFromClaims(claims);
-        if (!token || !claims || claims.role !== 'authenticated' || !tokenUserId) return;
-        localStorage.setItem(AUTH_STORE_KEY, JSON.stringify({
-          token,
-          userId: profile?.userId != null ? profile.userId : tokenUserId,
-          username: profile?.username || '',
-          isAdmin: !!profile?.isAdmin,
-          isBlocked: !!profile?.isBlocked,
-          savedAt: Date.now()
-        }));
+        const stored = buildStoredSession(token, profile);
+        if (stored) localStorage.setItem(AUTH_STORE_KEY, JSON.stringify(stored));
       } catch (_) {}
     }
 
@@ -1429,36 +1412,19 @@
     }
 
     function restoreAuthSession() {
-      try {
-        const raw = JSON.parse(localStorage.getItem(AUTH_STORE_KEY) || 'null');
-        if (!raw || !raw.token) return false;
-        const claims = decodeJwtPayload(raw.token);
-        const tokenUserId = getTelegramIdFromClaims(claims);
-        if (!claims || claims.role !== 'authenticated' || !tokenUserId
-            || Number(claims.exp || 0) * 1000 <= Date.now() + 30_000) {
-          clearAuthSession();
-          return false;
-        }
-        if (raw.userId != null && String(raw.userId) !== tokenUserId) {
-          clearAuthSession();
-          return false;
-        }
-        const tgId = getTgUser()?.id;
-        if (tgId != null && String(tgId) !== tokenUserId) {
-          clearAuthSession();
-          return false;
-        }
-        supabaseAccessToken = raw.token;
-        user.userId = raw.userId != null ? raw.userId : (Number(tokenUserId) || tokenUserId);
-        if (raw.username) user.username = raw.username;
-        user.isAdmin = !!raw.isAdmin;
-        user.isBlocked = !!raw.isBlocked;
-        user.isAuthenticated = true;
-        user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
-        return true;
-      } catch (_) {
-        return false;
-      }
+      let stored = null;
+      try { stored = localStorage.getItem(AUTH_STORE_KEY); } catch (_) { return false; }
+      const { session, clear } = parseStoredSession(stored, getTgUser()?.id);
+      if (clear) clearAuthSession();
+      if (!session) return false;
+      supabaseAccessToken = session.token;
+      user.userId = session.userId;
+      if (session.username) user.username = session.username;
+      user.isAdmin = session.isAdmin;
+      user.isBlocked = session.isBlocked;
+      user.isAuthenticated = true;
+      user.role = roleLabel(user.isAdmin);
+      return true;
     }
 
     restoreAuthSession();
@@ -1508,11 +1474,7 @@
         if (!res.ok) throw new Error('Auth failed: ' + res.status);
         const data = await res.json();
 
-        const claims = decodeJwtPayload(data.token);
-        if (!data.token || !claims
-            || claims.role !== 'authenticated'
-            || getTelegramIdFromClaims(claims) !== String(data.user?.userId)
-            || Number(claims.exp || 0) * 1000 <= Date.now() + 30_000) {
+        if (!isValidAuthResponse(data)) {
           throw new Error('Auth returned an invalid user token');
         }
         await setSupabaseAccessToken(data.token);
@@ -1522,7 +1484,7 @@
         user.isAdmin = Boolean(data.user.isAdmin);
         user.isBlocked = Boolean(data.user.isBlocked);
         user.isAuthenticated = true;
-        user.role = user.isAdmin ? 'Создатель' : 'Пользователь';
+        user.role = roleLabel(user.isAdmin);
         applyUserRole();
         applyNotificationsToggle();
         return true;
@@ -1704,120 +1666,92 @@
 
     let supabaseChannel = null;
 
+    async function refetchViewRow(view, id) {
+      const { data } = await supabase.from(view).select('*').eq('id', id).maybeSingle();
+      return data;
+    }
+
+    function isScreenVisible(id) {
+      const el = document.getElementById(id);
+      return !!el && !el.classList.contains('hidden');
+    }
+
+    // Выполняет действия, которые describeRealtimeChange() извлёк из события.
+    async function runRealtimeAction(action) {
+      switch (action.kind) {
+        case 'delta':
+          applySyncDelta(action.delta);
+          return;
+        case 'refetch-review': {
+          const rev = await refetchViewRow('reviews_view', action.id);
+          if (rev) applySyncDelta({ reviews: [rev] });
+          return;
+        }
+        case 'refetch-comment': {
+          const comm = await refetchViewRow('comments_view', action.id);
+          if (comm) applySyncDelta({ comments: [comm] });
+          return;
+        }
+        case 'own-like':
+          likedSet = applyRealtimeToggle(likedSet, action.eventType, action.id, pendingLikeIds, likeIntentById);
+          renderReleases();
+          if (isScreenVisible('screen-likes')) renderLikes();
+          return;
+        case 'own-reaction':
+          reactedSet = applyRealtimeToggle(reactedSet, action.eventType, action.id, pendingReactionIds, reactionIntentById);
+          if (activeReleaseId && isScreenVisible('modal-release')) renderReviews();
+          if (isScreenVisible('screen-feed')) renderFeed();
+          return;
+        case 'blocked':
+          if (action.on) {
+            if (!blockedUsers.includes(action.username)) blockedUsers.push(action.username);
+            blockedUserIds.add(action.userId);
+          } else {
+            blockedUsers = blockedUsers.filter(u => u !== action.username);
+            blockedUserIds.delete(action.userId);
+          }
+          if (action.isMe) {
+            user.isBlocked = action.on;
+            showToast(action.on ? "Ваш аккаунт заблокирован администратором" : "Ваш аккаунт разблокирован");
+            applyUserRole();
+          }
+          return;
+      }
+    }
+
+    // Действия одного события выполняются по порядку: дозапрос рецензии
+    // после реакции должен закончиться раньше, чем перерисуется лента.
+    async function handleRealtimeChange(table, payload) {
+      const actions = describeRealtimeChange(table, payload, user.userId);
+      for (const action of actions) {
+        try {
+          await runRealtimeAction(action);
+        } catch (error) {
+          console.warn(`Realtime ${table} action failed:`, error);
+        }
+      }
+    }
+
     function startSyncLoop() {
       if (!supabase) return;
       if (supabaseChannel) return;
       setSyncStatus('Синхронизация...', 'syncing');
 
-      supabaseChannel = supabase
-        .channel('public-db-changes')
-        .on(
+      let channel = supabase.channel('public-db-changes');
+      REALTIME_TABLES.forEach((table) => {
+        channel = channel.on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'releases' },
-          (payload) => {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              applySyncDelta({ releases: [payload.new] });
-            } else if (payload.eventType === 'DELETE') {
-              applySyncDelta({ deletedReleaseIds: [payload.old.id] });
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'reviews' },
-          async (payload) => {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const { data: rev } = await supabase.from('reviews_view').select('*').eq('id', payload.new.id).maybeSingle();
-              if (rev) {
-                applySyncDelta({ reviews: [rev] });
-              }
-            } else if (payload.eventType === 'DELETE') {
-              applySyncDelta({ deletedReviewIds: [payload.old.id] });
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'review_comments' },
-          async (payload) => {
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const { data: comm } = await supabase.from('comments_view').select('*').eq('id', payload.new.id).maybeSingle();
-              if (comm) {
-                applySyncDelta({ comments: [comm] });
-              }
-            } else if (payload.eventType === 'DELETE') {
-              applySyncDelta({ deletedCommentIds: [payload.old.id] });
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'likes' },
-          (payload) => {
-            if (user.userId) {
-              const uId = Number(payload.new?.user_id || payload.old?.user_id);
-              if (uId === Number(user.userId)) {
-                const relId = payload.new?.release_id || payload.old?.release_id;
-                likedSet = applyRealtimeToggle(likedSet, payload.eventType, relId, pendingLikeIds, likeIntentById);
-                renderReleases();
-                if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
-              }
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'review_reactions' },
-          async (payload) => {
-            const revId = payload.new?.review_id || payload.old?.review_id;
-            if (revId) {
-              const { data: rev } = await supabase.from('reviews_view').select('*').eq('id', revId).maybeSingle();
-              if (rev) {
-                applySyncDelta({ reviews: [rev] });
-              }
-            }
-            if (user.userId) {
-              const uId = Number(payload.new?.user_id || payload.old?.user_id);
-              if (uId === Number(user.userId)) {
-                reactedSet = applyRealtimeToggle(reactedSet, payload.eventType, revId, pendingReactionIds, reactionIntentById);
-                if (activeReleaseId && !document.getElementById('modal-release')?.classList.contains('hidden')) {
-                  renderReviews();
-                }
-                if (!document.getElementById('screen-feed').classList.contains('hidden')) renderFeed();
-              }
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'blocked_users' },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              if (!blockedUsers.includes(payload.new.username)) blockedUsers.push(payload.new.username);
-              blockedUserIds.add(String(payload.new.user_id));
-              if (String(payload.new.user_id) === String(user.userId)) {
-                user.isBlocked = true;
-                showToast("Ваш аккаунт заблокирован администратором");
-                applyUserRole();
-              }
-            } else if (payload.eventType === 'DELETE') {
-              blockedUsers = blockedUsers.filter(u => u !== payload.old.username);
-              blockedUserIds.delete(String(payload.old.user_id));
-              if (String(payload.old.user_id) === String(user.userId)) {
-                user.isBlocked = false;
-                showToast("Ваш аккаунт разблокирован");
-                applyUserRole();
-              }
-            }
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            setSyncStatus('Всё актуально', 'ok');
-          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-            setSyncStatus('Нет соединения', 'warn');
-          }
-        });
+          { event: '*', schema: 'public', table },
+          (payload) => { handleRealtimeChange(table, payload); }
+        );
+      });
+      supabaseChannel = channel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setSyncStatus('Всё актуально', 'ok');
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setSyncStatus('Нет соединения', 'warn');
+        }
+      });
     }
 
     function stopSyncLoop() {

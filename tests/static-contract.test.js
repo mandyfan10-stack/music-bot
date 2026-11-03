@@ -129,8 +129,9 @@ test('auth registers notification subscribers with the issued user JWT', () => {
 test('Telegram application JWT bypasses GoTrue session APIs', () => {
   const app = read('src/app.js');
   const utils = read('src/utils.js');
+  const session = read('src/auth-session.js');
   assert.match(app, /accessToken:\s*async \(\) => getApiBearerToken\(\)/);
-  assert.match(app, /getTelegramIdFromClaims\(claims\)/);
+  assert.match(session, /getTelegramIdFromClaims\(claims\)/);
   assert.match(utils, /claims\?\.app_metadata\?\.telegram_user_id/);
   assert.doesNotMatch(app, /supabase\??\.auth\.|\.auth\.setSession|\.auth\.getSession/);
 });
@@ -150,7 +151,9 @@ test('first catalog paint does not wait for comments_view', () => {
 
 test('Telegram JWT is restored from localStorage before /auth', () => {
   const app = read('src/app.js');
-  assert.match(app, /xxii_auth_v1/);
+  const session = read('src/auth-session.js');
+  assert.match(session, /AUTH_STORE_KEY = 'xxii_auth_v1'/);
+  assert.match(app, /parseStoredSession\(/);
   assert.match(app, /function restoreAuthSession/);
   assert.match(app, /function persistAuthSession/);
   assert.match(app, /restoreAuthSession\(\)/);
@@ -254,7 +257,13 @@ test('data layer loads before app.js and app.js uses it', () => {
   const html = read('index.html');
   const app = read('src/app.js');
   assert.ok(html.indexOf('src/utils.js') < html.indexOf('src/data-store.js'));
-  assert.ok(html.indexOf('src/data-store.js') < html.indexOf('src/app.js'));
+  for (const mod of ['src/data-store.js', 'src/auth-session.js', 'src/realtime-sync.js']) {
+    assert.ok(html.indexOf('src/utils.js') < html.indexOf(mod), mod);
+    assert.ok(html.indexOf(mod) < html.indexOf('src/app.js'), mod);
+  }
+  assert.match(app, /describeRealtimeChange\(/);
+  assert.match(app, /isValidAuthResponse\(/);
+  assert.doesNotMatch(app, /\.channel\([^)]*\)\s*\.on\(/);
   assert.match(app, /applyCatalogDelta\(/);
   assert.match(app, /applyRealtimeToggle\(/);
   assert.match(app, /mergeServerToggleSet\(/);
