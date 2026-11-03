@@ -8,6 +8,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const UNSTAMPED_PREFIXES = ['src/fonts/'];
 const ASSET_REF = /(\s(?:src|href)=")(src\/[^"?#]+)(?:\?[^"#]*)?(")/g;
 
 function contentHash(filePath) {
@@ -17,6 +18,9 @@ function contentHash(filePath) {
 function stampHtml(html, siteDir) {
   const missing = [];
   const stamped = html.replace(ASSET_REF, (match, prefix, assetPath, suffix) => {
+    // Шрифты уже версионированы в имени файла, а preload должен совпадать с
+    // url() из fonts.css байт в байт — иначе браузер скачает шрифт дважды.
+    if (UNSTAMPED_PREFIXES.some((prefix_) => assetPath.startsWith(prefix_))) return match;
     const filePath = path.join(siteDir, assetPath);
     if (!fs.existsSync(filePath)) {
       missing.push(assetPath);

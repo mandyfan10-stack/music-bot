@@ -6,13 +6,11 @@
   <meta name="theme-color" content="#000000">
   <meta name="color-scheme" content="dark light">
   <title>XXII SOUND</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://ftpofwybzvhvyukrshcm.supabase.co wss://ftpofwybzvhvyukrshcm.supabase.co https://itunes.apple.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://ftpofwybzvhvyukrshcm.supabase.co wss://ftpofwybzvhvyukrshcm.supabase.co https://itunes.apple.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <link rel="preconnect" href="https://ftpofwybzvhvyukrshcm.supabase.co" crossorigin>
   <link rel="dns-prefetch" href="https://ftpofwybzvhvyukrshcm.supabase.co">
   <link rel="preconnect" href="https://telegram.org">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Официальный Telegram SDK подгружается асинхронно из telegram-web-app.js,
        чтобы медленный telegram.org не блокировал первый экран. -->
   <script src="src/telegram-web-app.js?v=6"></script>
@@ -27,7 +25,10 @@
   <script src="src/app.js?v=20" defer></script>
 
   <!-- Tailwind собран заранее (npm run build:css) — рантайм-компилятора CDN больше нет -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,900;1,900&family=Poiret+One&display=swap">
+  <!-- Шрифты лежат локально (src/fonts.css), без запроса к Google Fonts. -->
+  <link rel="preload" href="src/fonts/inter-v20-467acc7aa7.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="src/fonts/inter-v20-a28b7e3190.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="src/fonts.css">
   <link rel="stylesheet" href="src/tailwind.css?v=5">
   <link rel="stylesheet" href="src/styles.css?v=13">
 </head>

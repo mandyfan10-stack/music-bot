@@ -48,7 +48,16 @@ test('the real index.html stamps every local asset', () => {
   const { html: stamped, missing } = stampHtml(html, root);
   assert.deepStrictEqual(missing, []);
   assert.doesNotMatch(stamped, /\s(?:src|href)="src\/[^"]*\?v=\d{1,4}"/);
-  const local = [...html.matchAll(/\s(?:src|href)="(src\/[^"?]+)/g)].length;
+  const local = [...html.matchAll(/\s(?:src|href)="(src\/(?!fonts\/)[^"?]+)/g)].length;
   assert.ok(local >= 9);
   assert.strictEqual((stamped.match(/\?v=[0-9a-f]{12}"/g) || []).length, local);
+});
+
+test('font preloads keep their exact URL so they match url() in fonts.css', () => {
+  const dir = makeSite({ 'src/fonts/inter-v20-abc.woff2': 'f', 'src/fonts.css': 'x' });
+  const { html } = stampHtml(
+    '<link rel="preload" href="src/fonts/inter-v20-abc.woff2" as="font"><link href="src/fonts.css">', dir
+  );
+  assert.match(html, /href="src\/fonts\/inter-v20-abc\.woff2"/);
+  assert.match(html, /href="src\/fonts\.css\?v=[0-9a-f]{12}"/);
 });

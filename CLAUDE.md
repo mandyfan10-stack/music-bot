@@ -10,7 +10,8 @@ FastAPI/MongoDB-проект архивирован и не участвует �
 - Ванильный JavaScript (ES6+), **без фреймворка; деплой без сборки**.
 - Tailwind CSS — собран заранее в `src/tailwind.css` (артефакт закоммичен в
   репозиторий, рантайм-CDN убран). Supabase JS сохранён локально, иконки
-  Lucide — только используемые, в сгенерированном `src/icons.js`; с внешнего домена загружается только Telegram WebApp SDK — и то
+  Lucide — только используемые, в сгенерированном `src/icons.js`; шрифты
+  (Inter, Playfair Display, Poiret One, OFL) — локально в `src/fonts/`; с внешнего домена загружается только Telegram WebApp SDK — и то
   асинхронно, через загрузчик `src/telegram-web-app.js` (см. «Telegram SDK»).
 - Backend — PostgreSQL/RLS, RPC, Realtime и Edge Functions в `supabase/`.
 
@@ -46,6 +47,13 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   `refetch-review`, `refetch-comment`, `own-like`, `own-reaction`,
   `blocked`); `app.js` выполняет их в `runRealtimeAction()`. Новая таблица
   Realtime = запись в `REALTIME_TABLES` + ветка в `describeRealtimeChange`.
+- `src/fonts.css` + `src/fonts/*.woff2` — СГЕНЕРИРОВАНЫ
+  `scripts/vendor-fonts.js` (`npm run vendor:fonts`, нужен интернет): тот же
+  CSS и те же файлы, что отдаёт Google Fonts, с `unicode-range` и
+  `font-display: swap`. Имена файлов версионированы (`inter-v20-<hash>`),
+  поэтому `stamp-assets` их не трогает: preload в `index.html` должен
+  совпадать с `url()` из `fonts.css` байт в байт. Новое начертание → поправить
+  `GOOGLE_CSS_URL` и перезапустить скрипт.
 - `src/icons.js` — СГЕНЕРИРОВАН `scripts/build-icons.js` (`npm run build:icons`)
   из devDependency `lucide`: только иконки, которые встречаются в коде
   (`data-lucide="…"`, литералы в `data-lucide="${…}"`, `icon: '…'`,
@@ -63,7 +71,8 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   `auth-session.test.js` — истёкший/чужой/повреждённый токен, смена аккаунта;
   `realtime-sync.test.js` — разбор событий Realtime по таблицам;
   `catalog-parse.test.js` — парсер по общим фикстурам;
-  `server.test.js` — белый список статики; `html-escaping.test.js` —
+  `server.test.js` — белый список статики; `fonts.test.js` — шрифты локальны
+  и все на месте; `html-escaping.test.js` —
   AST-проверка экранирования в HTML-шаблонах и `innerHTML`;
   `stamp-assets.test.js` — хэши ассетов при деплое; `static-contract.test.js` —
   статические контракты (CSP, порядок скриптов, отсутствие старых путей).

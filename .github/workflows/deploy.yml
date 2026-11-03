@@ -58,6 +58,7 @@ jobs:
           node --check server.js
           node --check scripts/stamp-assets.js
           node --check scripts/build-icons.js
+          node --check scripts/vendor-fonts.js
           node --check src/icons.js
           npm run build:css
           git diff --exit-code -- src/tailwind.css

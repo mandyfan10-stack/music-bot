@@ -6,7 +6,8 @@
   "scripts": {
     "build:css": "tailwindcss -c tailwind.config.js -i src/tailwind.input.css -o src/tailwind.css --minify",
     "test": "node --test tests/*.test.js",
-    "build:icons": "node scripts/build-icons.js"
+    "build:icons": "node scripts/build-icons.js",
+    "vendor:fonts": "node scripts/vendor-fonts.js"
   },
   "devDependencies": {
     "acorn": "8.14.0",
