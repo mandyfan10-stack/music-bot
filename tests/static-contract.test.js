@@ -258,7 +258,7 @@ test('data layer loads before app.js and app.js uses it', () => {
   const html = read('index.html');
   const app = read('src/app.js');
   assert.ok(html.indexOf('src/utils.js') < html.indexOf('src/data-store.js'));
-  for (const mod of ['src/data-store.js', 'src/auth-session.js', 'src/realtime-sync.js']) {
+  for (const mod of ['src/data-store.js', 'src/auth-session.js', 'src/realtime-sync.js', 'src/review-drafts.js']) {
     assert.ok(html.indexOf('src/utils.js') < html.indexOf(mod), mod);
     assert.ok(html.indexOf(mod) < html.indexOf('src/app.js'), mod);
   }
@@ -269,4 +269,12 @@ test('data layer loads before app.js and app.js uses it', () => {
   assert.match(app, /applyRealtimeToggle\(/);
   assert.match(app, /mergeServerToggleSet\(/);
   assert.doesNotMatch(app, /function applyIntent/);
+});
+
+test('review drafts are restored on open, saved on input and cleared on publish', () => {
+  const app = read('src/app.js');
+  assert.match(app, /resetReviewInputs\(\); restoreReviewDraft\(id\);/);
+  assert.match(app, /'review-char-count'\) \{ saveReviewDraft\(\);/);
+  assert.match(app, /function setCriterion[\s\S]{0,400}saveReviewDraft\(\)/);
+  assert.match(app, /clearReviewDraft\(reviewDraftStorage\(\), user\.userId, newRev\.relId\)/);
 });

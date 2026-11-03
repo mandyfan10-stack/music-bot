@@ -53,6 +53,7 @@ jobs:
           node --check src/data-store.js
           node --check src/auth-session.js
           node --check src/realtime-sync.js
+          node --check src/review-drafts.js
           node --check src/boot.js
           node --check src/telegram-web-app.js
           node --check server.js

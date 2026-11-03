@@ -47,6 +47,12 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   `refetch-review`, `refetch-comment`, `own-like`, `own-reaction`,
   `blocked`); `app.js` выполняет их в `runRealtimeAction()`. Новая таблица
   Realtime = запись в `REALTIME_TABLES` + ветка в `describeRealtimeChange`.
+- `src/review-drafts.js` — черновики рецензий в `localStorage`
+  (`xxii_review_draft_v1:<userId>:<releaseId>`, TTL 30 дней): текст и
+  критерии сохраняются на каждое изменение (`saveReviewDraft` в `app.js`),
+  восстанавливаются в `openRelease` после `resetReviewInputs()`
+  (`restoreReviewDraft`) и стираются после публикации. Счётчик под полем
+  показывает «Черновик сохранён».
 - `src/fonts.css` + `src/fonts/*.woff2` — СГЕНЕРИРОВАНЫ
   `scripts/vendor-fonts.js` (`npm run vendor:fonts`, нужен интернет): тот же
   CSS и те же файлы, что отдаёт Google Fonts, с `unicode-range` и
@@ -70,6 +76,7 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   `data-store.test.js` — сценарии гонок оптимистичных toggle и Realtime;
   `auth-session.test.js` — истёкший/чужой/повреждённый токен, смена аккаунта;
   `realtime-sync.test.js` — разбор событий Realtime по таблицам;
+  `review-drafts.test.js` — черновики по релизу/аккаунту, TTL, сбои хранилища;
   `catalog-parse.test.js` — парсер по общим фикстурам;
   `server.test.js` — белый список статики; `fonts.test.js` — шрифты локальны
   и все на месте; `html-escaping.test.js` —
@@ -184,7 +191,7 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
 - Тесты (утилиты, фильтрация и статические контракты): `npm test`
 - Синтаксис (как в CI): `node --check` для `src/app.js`, `src/utils.js`,
   `src/catalog-parse.js`, `src/data-store.js`, `src/auth-session.js`,
-  `src/realtime-sync.js`, `scripts/stamp-assets.js`, `src/boot.js`,
+  `src/realtime-sync.js`, `src/review-drafts.js`, `scripts/stamp-assets.js`, `src/boot.js`,
   `src/telegram-web-app.js` и `server.js`
 - Аудит зависимостей: `npm audit --audit-level=high`
 - Tailwind в синхроне (CI): `npm run build:css && git diff --exit-code -- src/tailwind.css`

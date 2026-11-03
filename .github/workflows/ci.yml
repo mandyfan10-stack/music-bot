@@ -26,6 +26,7 @@ jobs:
       - run: node --check src/data-store.js
       - run: node --check src/auth-session.js
       - run: node --check src/realtime-sync.js
+      - run: node --check src/review-drafts.js
       - run: node --check src/boot.js
       - run: node --check src/telegram-web-app.js
       - run: node --check server.js

@@ -228,7 +228,7 @@
       const el = event.target.closest('[data-act-input]');
       if (!el) return;
       if (el.dataset.actInput === 'search') onSearchInput();
-      else if (el.dataset.actInput === 'review-char-count') updateReviewCharCount();
+      else if (el.dataset.actInput === 'review-char-count') { saveReviewDraft(); updateReviewCharCount(); }
       else if (el.dataset.actInput === 'comment-draft') commentDrafts.set(el.dataset.id, el.value);
     });
 
@@ -742,6 +742,8 @@
       selectedCriteria = { ...selectedCriteria, [key]: next };
       document.getElementById(`criterion-${key}`).innerText = next;
       updateRatingTotal();
+      saveReviewDraft();
+      updateReviewCharCount();
     }
 
     function updateRatingTotal() {
@@ -769,8 +771,49 @@
       updateRatingTotal();
       const text = document.getElementById('rev-text');
       if (text) text.value = '';
+      reviewDraftSaved = false;
       updateReviewCharCount();
     }
+
+    // --- ЧЕРНОВИКИ РЕЦЕНЗИЙ (src/review-drafts.js) ---
+    // Текст и оценки сохраняются при каждом изменении: закрытая свайпом
+    // шторка, другой релиз или перезапуск приложения их не теряют.
+    let reviewDraftSaved = false;
+
+    function reviewDraftStorage() {
+      try { return window.localStorage; } catch (_) { return null; }
+    }
+
+    function saveReviewDraft() {
+      if (!activeReleaseId || reviewPublishBlocked || user.userId == null) return;
+      const text = document.getElementById('rev-text')?.value || '';
+      const draft = { text, criteria: selectedCriteria };
+      writeReviewDraft(reviewDraftStorage(), user.userId, activeReleaseId, draft);
+      reviewDraftSaved = !isEmptyReviewDraft(draft);
+    }
+
+    function restoreReviewDraft(releaseId) {
+      reviewDraftSaved = false;
+      if (user.userId == null) return;
+      if (reviewPublishBlocked) {
+        clearReviewDraft(reviewDraftStorage(), user.userId, releaseId);
+        return;
+      }
+      const draft = readReviewDraft(reviewDraftStorage(), user.userId, releaseId);
+      if (!draft) return;
+      selectedCriteria = { ...draft.criteria };
+      criteriaConfig.forEach(({ key }) => {
+        const el = document.getElementById(`criterion-${key}`);
+        if (el) el.innerText = String(selectedCriteria[key]);
+      });
+      updateRatingTotal();
+      const text = document.getElementById('rev-text');
+      if (text) text.value = draft.text;
+      reviewDraftSaved = true;
+      updateReviewCharCount();
+    }
+
+    pruneReviewDrafts(reviewDraftStorage());
 
     function updateReviewCharCount() {
       const textarea = document.getElementById('rev-text');
@@ -780,7 +823,7 @@
 
       const rawLen = textarea.value.length;
       const len = textarea.value.trim().length;
-      counter.innerText = `${rawLen} / ${REVIEW_MAX_LENGTH}`;
+      counter.innerText = `${reviewDraftSaved && !reviewPublishBlocked ? 'Черновик сохранён · ' : ''}${rawLen} / ${REVIEW_MAX_LENGTH}`;
 
       const isInvalidLength = len > 0 && (len < REVIEW_MIN_LENGTH || len > REVIEW_MAX_LENGTH);
       if (isInvalidLength) {
@@ -2588,7 +2631,7 @@
         delBtn.classList.remove('flex');
       }
 
-      resetReviewInputs(); renderReviews();
+      resetReviewInputs(); restoreReviewDraft(id); renderReviews();
       lockReleaseSheet();
       const morphed = morphCoverFromCard(sourceEl);
       openModal('modal-release');
@@ -2760,6 +2803,8 @@
 
       existingReviewForActiveRelease = newRev;
       reviewPublishBlocked = true;
+      clearReviewDraft(reviewDraftStorage(), user.userId, newRev.relId);
+      reviewDraftSaved = false;
       document.getElementById('rev-text').value = '';
       seenReviewIds.add(newRev.id);
       renderReviews();
