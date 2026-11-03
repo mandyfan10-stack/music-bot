@@ -184,8 +184,10 @@ test('review and comment creates send a client id and merge Realtime races', () 
   const migration = read('supabase/migrations/20260817120000_accept_client_entity_ids.sql');
   assert.match(app, /rpcCreateWithOptionalId\('create_review'/);
   assert.match(app, /rpcCreateWithOptionalId\('create_comment'/);
+  const store = read('src/data-store.js');
   assert.match(app, /adoptCreatedRecord\(reviews/);
-  assert.match(app, /upsertByMatcher\(reviews, rv, isSameReview\)/);
+  assert.match(app, /applyCatalogDelta\(/);
+  assert.match(store, /upsertByMatcher\(reviews, rv, dataStoreUtils\.isSameReview\)/);
   assert.match(migration, /p_id TEXT DEFAULT NULL/);
 });
 
@@ -235,4 +237,26 @@ test('database migration removes hosted development bypass RPCs', () => {
   const migration = read('supabase/migrations/20260816074509_protect_private_reactions_and_counts.sql');
   assert.match(migration, /DROP FUNCTION IF EXISTS public\.dev_create_release/i);
   assert.match(migration, /DROP FUNCTION IF EXISTS public\.dev_delete_release/i);
+});
+
+test('Telegram SDK never blocks the first paint', () => {
+  const html = read('index.html');
+  const loader = read('src/telegram-web-app.js');
+  const app = read('src/app.js');
+  assert.doesNotMatch(html, /<script[^>]+src="https:\/\/telegram\.org[^"]*"(?![^>]*\basync\b)[^>]*>/);
+  assert.match(loader, /script\.async = true/);
+  assert.match(loader, /https:\/\/telegram\.org\/js\/telegram-web-app\.js/);
+  assert.match(app, /function bindTelegramSdk/);
+  assert.match(app, /addEventListener\([^)]*telegram-sdk-ready/);
+});
+
+test('data layer loads before app.js and app.js uses it', () => {
+  const html = read('index.html');
+  const app = read('src/app.js');
+  assert.ok(html.indexOf('src/utils.js') < html.indexOf('src/data-store.js'));
+  assert.ok(html.indexOf('src/data-store.js') < html.indexOf('src/app.js'));
+  assert.match(app, /applyCatalogDelta\(/);
+  assert.match(app, /applyRealtimeToggle\(/);
+  assert.match(app, /mergeServerToggleSet\(/);
+  assert.doesNotMatch(app, /function applyIntent/);
 });

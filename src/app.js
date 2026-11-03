@@ -1,18 +1,32 @@
 (function() {
-    const tg = window.Telegram?.WebApp || {
+    // Официальный Telegram SDK грузится асинхронно (src/telegram-web-app.js):
+    // до его загрузки window.Telegram.WebApp — заглушка с initData из hash.
+    // `tg` всегда обращается к актуальному объекту, поэтому после загрузки
+    // SDK haptics, шеринг и CloudStorage начинают работать без перезапуска.
+    const TG_STUB = {
       initData: '',
       initDataUnsafe: {},
       expand() {},
       HapticFeedback: { impactOccurred() {}, notificationOccurred() {} }
     };
+    function currentTelegramWebApp() {
+      return window.Telegram?.WebApp || TG_STUB;
+    }
+    const tg = new Proxy({}, {
+      get(_, key) {
+        const target = currentTelegramWebApp();
+        const value = target[key];
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+      set(_, key, value) {
+        currentTelegramWebApp()[key] = value;
+        return true;
+      },
+      has(_, key) {
+        return key in currentTelegramWebApp();
+      }
+    });
     tg.expand?.();
-
-    // Нативная кнопка «Назад» закрывает верхнюю открытую модалку.
-    try {
-      tg.BackButton?.onClick?.(() => {
-        if (openModalStack.length > 0) closeModal(openModalStack[openModalStack.length - 1]);
-      });
-    } catch (_) {}
 
     const SUPABASE_URL = "https://ftpofwybzvhvyukrshcm.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0cG9md3lienZodnl1a3JzaGNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5OTQ3NzEsImV4cCI6MjA5OTU3MDc3MX0.Ha6pDI9U8D_Dg6gQgggJ7UXduXHHlcHcK1Imi3dcwok";
@@ -45,10 +59,10 @@
 
     // Динамические геттеры Telegram WebApp данных
     function getTgInitData() {
-      return tg.initData || window.Telegram?.WebApp?.initData || '';
+      return tg.initData || '';
     }
     function getTgUser() {
-      return tg.initDataUnsafe?.user || window.Telegram?.WebApp?.initDataUnsafe?.user;
+      return tg.initDataUnsafe?.user;
     }
 
     // Telegram user используется только для раннего отображения имени.
@@ -363,83 +377,32 @@
     const pendingReactionIds = new Set();
     // Последнее локальное намерение перекрывает поздний Realtime и догоняющий
     // fetchDB: иначе DELETE 204 + запоздалый INSERT/снимок возвращают лайк.
-    const LIKE_INTENT_MS = 8000;
     const likeIntentById = new Map();
     const reactionIntentById = new Map();
-
-    function rememberIntent(map, id, on) {
-      map.set(String(id), { on: !!on, until: Date.now() + LIKE_INTENT_MS });
-    }
-
-    function applyIntent(map, ids) {
-      const next = ids instanceof Set ? new Set(ids) : new Set(Array.isArray(ids) ? ids : []);
-      const now = Date.now();
-      map.forEach((intent, id) => {
-        if (!intent || now > intent.until) {
-          map.delete(id);
-          return;
-        }
-        if (intent.on) next.add(id);
-        else next.delete(id);
-      });
-      return next;
-    }
-
-    function isDuplicateToggleError(error) {
-      const code = String(error && error.code || '');
-      const status = Number(error && error.status);
-      const message = String(error && error.message || '');
-      return code === '23505' || status === 409 || /duplicate key|already exists/i.test(message);
-    }
     let comments = [], commentsByReviewId = new Map();
     let expandedComments = new Set(); // id рецензий с раскрытой веткой комментариев
     let commentDrafts = new Map();    // reviewId → черновик комментария (переживает ре-рендер)
     const COMMENT_MAX_LENGTH = 1000;
 
     // Метка последнего визита — для бейджа «новое» (читаем старое значение, пишем текущее).
+    let lastSeenToSync = '';
     const lastSeenTs = parseInt(localStorage.getItem('xxii_last_seen') || '0', 10);
     (function markVisit() {
       const now = String(Date.now());
       try { localStorage.setItem('xxii_last_seen', now); } catch (_) {}
-      try { tg.CloudStorage?.setItem?.('xxii_last_seen', now); } catch (_) {}
+      lastSeenToSync = now;
     })();
 
     function updateGenreCounts() {
-      genreCounts = {};
-      releases.forEach(r => {
-        const g = r.genre || 'Другое';
-        genreCounts[g] = (genreCounts[g] || 0) + 1;
-      });
+      genreCounts = countGenres(releases);
     }
 
     function updateReviewsMap() {
-      reviewsByRelId.clear();
-      avgRatingByRelId.clear();
-      reviews.forEach(r => {
-        if (!reviewsByRelId.has(r.relId)) {
-          reviewsByRelId.set(r.relId, []);
-        }
-        reviewsByRelId.get(r.relId).push(r);
-      });
-      reviewsByRelId.forEach((rvs, relId) => {
-        rvs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        let avg = 0;
-        if (rvs.length > 0) {
-          avg = rvs.reduce((s, r) => s + toRatingNumber(r.rating), 0) / rvs.length;
-        }
-        avgRatingByRelId.set(relId, avg);
-      });
+      ({ byRelId: reviewsByRelId, avgByRelId: avgRatingByRelId } = groupReviewsByRelease(reviews));
     }
 
-    // Группировка комментариев по рецензии; в каждой группе — по времени (старые сверху).
     function updateCommentsMap() {
-      commentsByReviewId.clear();
-      comments.forEach(c => {
-        if (!c || !c.reviewId) return;
-        if (!commentsByReviewId.has(c.reviewId)) commentsByReviewId.set(c.reviewId, []);
-        commentsByReviewId.get(c.reviewId).push(c);
-      });
-      commentsByReviewId.forEach(list => list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)));
+      commentsByReviewId = groupCommentsByReview(comments);
     }
     let pendingReviewDelete = null;
     let pendingReviewTargetReleaseId = null;
@@ -550,7 +513,7 @@
     let startParamHandled = false;
     function handleStartParam() {
       if (startParamHandled) return;
-      const param = tg.initDataUnsafe?.start_param || window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+      const param = tg.initDataUnsafe?.start_param;
       if (!param) { startParamHandled = true; return; }
       if (releasesById.has(param)) {
         startParamHandled = true;
@@ -1404,18 +1367,8 @@
     }
 
     function applyAccountData(data) {
-      const serverLikes = new Set(data.likes || []);
-      pendingLikeIds.forEach((id) => {
-        if (likedSet.has(id)) serverLikes.add(id);
-        else serverLikes.delete(id);
-      });
-      likedSet = applyIntent(likeIntentById, serverLikes);
-      const serverReactions = new Set(data.myReactions || []);
-      pendingReactionIds.forEach((id) => {
-        if (reactedSet.has(id)) serverReactions.add(id);
-        else serverReactions.delete(id);
-      });
-      reactedSet = applyIntent(reactionIntentById, serverReactions);
+      likedSet = mergeServerToggleSet(data.likes, likedSet, pendingLikeIds, likeIntentById);
+      reactedSet = mergeServerToggleSet(data.myReactions, reactedSet, pendingReactionIds, reactionIntentById);
       blockedUsers = data.blockedUsers || [];
       blockedUserIds = new Set((data.blockedUserIds || []).map(String));
       if (data.currentUser) {
@@ -1725,62 +1678,10 @@
 
     // Применяет инкрементальную дельту от Realtime/сервера к локальному состоянию.
     function applySyncDelta(data) {
-      let changed = false;
-
-      (data.releases || []).forEach(r => {
-        if (!r || !r.id) return;
-        const idx = releases.findIndex(x => x.id === r.id);
-        if (idx >= 0) releases[idx] = r;
-        else releases.unshift(r);
-        releasesById.set(r.id, r);
-        changed = true;
-      });
-
-      (data.deletedReleaseIds || []).forEach(id => {
-        if (!releasesById.has(id)) return;
-        releasesById.delete(id);
-        releases = releases.filter(x => x.id !== id);
-        likedSet.delete(id);
-        if (activeReleaseId === id) closeModal('modal-release');
-        changed = true;
-      });
-
-      (data.reviews || []).forEach(rv => {
-        if (!rv || !rv.id) return;
-        reviews = upsertByMatcher(reviews, rv, isSameReview);
-        changed = true;
-      });
-
-      (data.deletedReviewIds || []).forEach(id => {
-        const before = reviews.length;
-        reviews = reviews.filter(x => x.id !== id);
-        if (reviews.length !== before) changed = true;
-      });
-
-      let commentsChanged = false;
-
-      (data.comments || []).forEach(c => {
-        if (!c || !c.id) return;
-        const idx = comments.findIndex(x => x.id === c.id);
-        if (idx >= 0) comments[idx] = c;
-        else comments.push(c);
-        commentsChanged = true;
-      });
-
-      (data.deletedCommentIds || []).forEach(id => {
-        const before = comments.length;
-        comments = comments.filter(x => x.id !== id);
-        if (comments.length !== before) commentsChanged = true;
-      });
-
-      // Удалённые рецензии/релизы уносят свои комментарии (каскад).
-      const goneReviewIds = new Set(data.deletedReviewIds || []);
-      const goneReleaseIds = new Set(data.deletedReleaseIds || []);
-      if (goneReviewIds.size || goneReleaseIds.size) {
-        const before = comments.length;
-        comments = comments.filter(c => !goneReviewIds.has(c.reviewId) && !goneReleaseIds.has(c.relId));
-        if (comments.length !== before) commentsChanged = true;
-      }
+      const next = applyCatalogDelta({ releases, releasesById, reviews, comments, likedSet }, data);
+      const { changed, commentsChanged } = next;
+      ({ releases, releasesById, reviews, comments, likedSet } = next);
+      if (activeReleaseId && next.removedReleaseIds.includes(activeReleaseId)) closeModal('modal-release');
 
       if (commentsChanged) updateCommentsMap();
 
@@ -1857,13 +1758,7 @@
               const uId = Number(payload.new?.user_id || payload.old?.user_id);
               if (uId === Number(user.userId)) {
                 const relId = payload.new?.release_id || payload.old?.release_id;
-                if (relId && (pendingLikeIds.has(relId) || likeIntentById.has(String(relId)))) {
-                  likedSet = applyIntent(likeIntentById, likedSet);
-                } else if (payload.eventType === 'INSERT' && relId) {
-                  likedSet.add(relId);
-                } else if (payload.eventType === 'DELETE' && relId) {
-                  likedSet.delete(relId);
-                }
+                likedSet = applyRealtimeToggle(likedSet, payload.eventType, relId, pendingLikeIds, likeIntentById);
                 renderReleases();
                 if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
               }
@@ -1884,13 +1779,7 @@
             if (user.userId) {
               const uId = Number(payload.new?.user_id || payload.old?.user_id);
               if (uId === Number(user.userId)) {
-                if (revId && (pendingReactionIds.has(revId) || reactionIntentById.has(String(revId)))) {
-                  reactedSet = applyIntent(reactionIntentById, reactedSet);
-                } else if (payload.eventType === 'INSERT' && revId) {
-                  reactedSet.add(revId);
-                } else if (payload.eventType === 'DELETE' && revId) {
-                  reactedSet.delete(revId);
-                }
+                reactedSet = applyRealtimeToggle(reactedSet, payload.eventType, revId, pendingReactionIds, reactionIntentById);
                 if (activeReleaseId && !document.getElementById('modal-release')?.classList.contains('hidden')) {
                   renderReviews();
                 }
@@ -3279,8 +3168,39 @@
         applyTheme(tg.colorScheme === 'light' ? '#f2f2f7' : '#000000', false);
       }
 
+    })();
+
+    // Подписки на объект Telegram WebApp. Вызывается сразу (заглушка или уже
+    // загруженный SDK) и повторно, когда асинхронный SDK заменит заглушку.
+    const boundTelegramApps = new WeakSet();
+    function bindTelegramSdk() {
+      const app = currentTelegramWebApp();
+      if (boundTelegramApps.has(app)) return;
+      boundTelegramApps.add(app);
+      const isRealSdk = !app.__xxiiFallback && app !== TG_STUB;
+
+      // Нативная кнопка «Назад» закрывает верхнюю открытую модалку.
       try {
-        tg.CloudStorage?.getItem?.('xxii_theme', (err, value) => {
+        app.BackButton?.onClick?.(() => {
+          if (openModalStack.length > 0) closeModal(openModalStack[openModalStack.length - 1]);
+        });
+      } catch (_) {}
+      syncBackButton();
+
+      if (lastSeenToSync) {
+        try { app.CloudStorage?.setItem?.('xxii_last_seen', lastSeenToSync); } catch (_) {}
+      }
+
+      // Цвета шапки/фона и авто-тема: заглушка не знает реальную тему клиента.
+      if (isRealSdk) {
+        const saved = localStorage.getItem('xxii_theme');
+        applyTheme(saved === '#000000' || saved === '#f2f2f7'
+          ? saved
+          : (tg.colorScheme === 'light' ? '#f2f2f7' : '#000000'), false);
+      }
+
+      try {
+        app.CloudStorage?.getItem?.('xxii_theme', (err, value) => {
           if (err || (value !== '#000000' && value !== '#f2f2f7')) return;
           const local = localStorage.getItem('xxii_theme');
           if (local === '#000000' || local === '#f2f2f7') return;
@@ -3291,13 +3211,15 @@
 
       // Пока пользователь не выбрал тему вручную — следуем теме клиента Telegram.
       try {
-        tg.onEvent?.('themeChanged', () => {
+        app.onEvent?.('themeChanged', () => {
           if (!localStorage.getItem('xxii_theme')) {
             applyTheme(tg.colorScheme === 'light' ? '#f2f2f7' : '#000000', false);
           }
         });
       } catch (_) {}
-    })();
+    }
+    bindTelegramSdk();
+    window.addEventListener(window.__xxiiTelegramSdk?.readyEvent || 'xxii:telegram-sdk-ready', bindTelegramSdk);
 
     // Скелетон-заглушки на экране загрузки, пока не пришли данные.
     function renderSkeletonGrid() {
