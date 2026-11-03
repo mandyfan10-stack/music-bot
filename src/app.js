@@ -2430,7 +2430,7 @@
       const newBadge = isNew ? `<div class="absolute top-2 right-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-wider shadow-lg">НОВОЕ</div>` : '';
       return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" tabindex="0" role="button" aria-label="Открыть релиз ${escapeHtml(r.name)} от ${escapeHtml(r.artist)}" class="${enterCls}card-press flex flex-col gap-2 w-full min-w-0 relative outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-[1.5rem]"${enterStyle}>
           <div class="w-full aspect-square rounded-[1.5rem] overflow-hidden relative shadow-lg bg-[#1c1c1e] border border-white/[0.05]">
-            <img src="${escapeHtml(r.img) || fb}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" loading="${index < 6 ? 'eager' : 'lazy'}"${index < 2 ? ' fetchpriority="high"' : ''} decoding="async" class="w-full h-full object-cover">
+            <img src="${escapeHtml(r.img || fb)}" alt="Обложка релиза" data-fallback="${escapeHtml(fb)}" loading="${index < 6 ? 'eager' : 'lazy'}"${index < 2 ? ' fetchpriority="high"' : ''} decoding="async" class="w-full h-full object-cover">
             ${ratingBadge}
             ${newBadge}
           <button data-act="toggle-like" data-id="${escapeHtml(r.id)}" data-like-id="${escapeHtml(r.id)}" aria-label="Нравится" class="absolute bottom-2 right-2 p-2 bg-black/40 rounded-full backdrop-blur-md transition-transform btn-press">
@@ -2498,7 +2498,7 @@
           const r = it.rel;
           const fb = getFallbackImg(r.name);
           return `<div data-act="open-release" data-id="${escapeHtml(r.id)}" role="button" tabindex="0" class="bg-white/5 border border-white/5 rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-500">
-            <img src="${escapeHtml(r.img) || fb}" data-fallback="${escapeHtml(fb)}" alt="" loading="lazy" decoding="async" class="w-12 h-12 rounded-xl object-cover shrink-0">
+            <img src="${escapeHtml(r.img || fb)}" data-fallback="${escapeHtml(fb)}" alt="" loading="lazy" decoding="async" class="w-12 h-12 rounded-xl object-cover shrink-0">
             <div class="min-w-0 flex-1">
               <div class="text-[10px] font-bold text-red-500 uppercase tracking-wider flex items-center gap-1"><i data-lucide="disc-3" class="w-3 h-3"></i>Новый релиз</div>
               <div class="text-[13px] font-bold text-white truncate">${escapeHtml(r.name)}</div>

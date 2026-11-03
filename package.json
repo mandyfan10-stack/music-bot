@@ -8,6 +8,8 @@
     "test": "node --test tests/*.test.js"
   },
   "devDependencies": {
+    "acorn": "8.14.0",
+    "acorn-walk": "8.3.4",
     "tailwindcss": "3.4.19"
   }
 }
