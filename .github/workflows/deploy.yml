@@ -54,6 +54,7 @@ jobs:
           node --check src/boot.js
           node --check src/telegram-web-app.js
           node --check server.js
+          node --check scripts/stamp-assets.js
           npm run build:css
           git diff --exit-code -- src/tailwind.css
 
@@ -63,6 +64,11 @@ jobs:
           mkdir -p _site
           cp index.html _site/index.html
           cp -R src _site/src
+
+      - name: Stamp asset versions
+        # ?v= у локальных скриптов и стилей = хэш содержимого файла,
+        # чтобы Telegram WebView не держал старую версию из кэша.
+        run: node scripts/stamp-assets.js _site
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

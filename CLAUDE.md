@@ -45,7 +45,9 @@ FastAPI/MongoDB-проект архивирован и не участвует �
 - `tests/` (Node `test`): `utils.test.js` — утилиты и фильтрация;
   `data-store.test.js` — сценарии гонок оптимистичных toggle и Realtime;
   `catalog-parse.test.js` — парсер по общим фикстурам;
-  `server.test.js` — белый список статики; `static-contract.test.js` —
+  `server.test.js` — белый список статики; `html-escaping.test.js` —
+  AST-проверка экранирования в HTML-шаблонах и `innerHTML`;
+  `stamp-assets.test.js` — хэши ассетов при деплое; `static-contract.test.js` —
   статические контракты (CSP, порядок скриптов, отсутствие старых путей).
 
 ## Архитектура
@@ -123,7 +125,12 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
 
 - **Всегда экранировать** данные в шаблонах `innerHTML`: `escapeHtml` (текст и
   значения `data-*`; коэрсит non-string, пропускает `0`/`false`),
-  `escapeCssString` (CSS-селекторы). Утилиты — в `src/utils.js`.
+  `escapeCssString` (CSS-селекторы). Утилиты — в `src/utils.js`. Это
+  проверяет `tests/html-escaping.test.js`: каждая `${…}` в HTML-шаблоне
+  `app.js`/`utils.js` должна быть `escapeHtml(...)`, литералом, числом или
+  вложенным шаблоном, а `innerHTML` — получать только шаблоны или
+  `.map(шаблон).join()`. Исключения — только в `SAFE_INTERPOLATIONS` с
+  объяснением, почему там нет пользовательских данных.
 - **Роль пользователя определяет только сервер**: `isAdmin`/`isBlocked` из
   ответа функции `auth`, а права на запись проверяют RLS и RPC. Флаги в
   `localStorage` нужны только для раннего UI — никогда не доверять клиенту.
@@ -154,13 +161,17 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
 - База/RLS: `supabase db start && supabase test db`
 - Пересобрать Tailwind после изменения классов: `npm install && npm run build:css`
 - Локальный запуск: `node server.js` → `http://127.0.0.1:3000`
-- После изменения файлов в `src/` поднять `?v=N` у соответствующего тега в
-  `index.html` (сброс кэша Telegram WebView).
+- Сброс кэша Telegram WebView автоматический: при деплое
+  `node scripts/stamp-assets.js _site` заменяет `?v=…` у каждого локального
+  `src/…` в `index.html` на хэш содержимого. Ручные `?v=N` в репозитории
+  поднимать не нужно; новый скрипт/стиль просто подключается из `src/`.
 - Полная проверка UI требует среды Telegram Mini App.
 
 ## Известные риски
 
-- Широкий `innerHTML` в рендер-функциях — держать экранирование строгим.
+- Широкий `innerHTML` в рендер-функциях — держать экранирование строгим
+  (страхует `html-escaping.test.js`, но он не видит HTML, собранный
+  конкатенацией строк через `+`).
 - `'unsafe-inline'` остаётся в `style-src` CSP — нужно для inline-атрибутов
   `style` в шаблонах.
 - Telegram SDK остаётся внешней зависимостью без SRI: официальный URL обновляет
