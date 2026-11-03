@@ -10,7 +10,8 @@ FastAPI/MongoDB-проект архивирован и не участвует �
 - Ванильный JavaScript (ES6+), **без фреймворка; деплой без сборки**.
 - Tailwind CSS — собран заранее в `src/tailwind.css` (артефакт закоммичен в
   репозиторий, рантайм-CDN убран). Supabase JS и Lucide Icons сохранены
-  локально; с внешнего домена загружается только Telegram WebApp SDK.
+  локально; с внешнего домена загружается только Telegram WebApp SDK — и то
+  асинхронно, через загрузчик `src/telegram-web-app.js` (см. «Telegram SDK»).
 - Backend — PostgreSQL/RLS, RPC, Realtime и Edge Functions в `supabase/`.
 
 ## Структура
@@ -21,13 +22,31 @@ FastAPI/MongoDB-проект архивирован и не участвует �
 - `package.json` — devDependency `tailwindcss` и скрипт `build:css` (для
   регенерации; на деплой не влияет).
 - `src/styles.css` — кастомные стили поверх Tailwind (подключается `<link>`).
-- `src/app.js` — IIFE приложения (`<script src defer>`). Чистые хелперы
-  вынесены в `utils.js`; жанр/название/Yandex URL — в `catalog-parse.js`.
+- `src/telegram-web-app.js` — загрузчик Telegram SDK: ставит заглушку
+  `window.Telegram.WebApp` (initData, версия и тема из URL hash) и асинхронно
+  подгружает официальный SDK; по загрузке шлёт событие
+  `xxii:telegram-sdk-ready`.
+- `src/boot.js` — ранний старт: `ready()`/`expand()`, скрытие welcome у
+  вернувшихся, тема до загрузки тяжёлых скриптов.
+- `src/app.js` — IIFE приложения (`<script src defer>`): DOM, рендер, сеть.
+  Чистые хелперы вынесены в `utils.js`; жанр/название/Yandex URL — в
+  `catalog-parse.js`; сведение состояния — в `data-store.js`.
+- `src/data-store.js` — слой данных без DOM и сети: намерения toggle-операций
+  (`rememberIntent`/`applyIntent`), слияние снимка лайков/реакций
+  (`mergeServerToggleSet`), Realtime-toggle (`applyRealtimeToggle`), дельты
+  каталога (`applyCatalogDelta`), индексы (`groupReviewsByRelease`,
+  `groupCommentsByReview`, `countGenres`). Подключается после `utils.js`.
 - `src/catalog-parse.js` — общие чистые функции парсера (браузер + Node).
   TypeScript-копия — `supabase/functions/_shared/catalog_parse.ts`.
 - `src/utils.js` — экранирование, кэш, фильтры, JWT claims, бейджи;
   переиспользуется тестами через `module.exports`.
-- `tests/utils.test.js` — тесты утилит и логики фильтрации (Node `test`).
+- `server.js` — локальный dev-сервер (только `127.0.0.1`): раздаёт лишь
+  `index.html` и `src/` (как GitHub Pages) и повторяет `parse-link`.
+- `tests/` (Node `test`): `utils.test.js` — утилиты и фильтрация;
+  `data-store.test.js` — сценарии гонок оптимистичных toggle и Realtime;
+  `catalog-parse.test.js` — парсер по общим фикстурам;
+  `server.test.js` — белый список статики; `static-contract.test.js` —
+  статические контракты (CSP, порядок скриптов, отсутствие старых путей).
 
 ## Архитектура
 
@@ -41,14 +60,30 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   `applyPublicData()` — не через `applyData()`, чтобы не обнулить лайки и
   роль. Затем читает таблицы и security-invoker views через Supabase Data API.
   Лайки, реакции, блокировки и профиль не кэшируются. Инкрементальные
-  изменения приходят через Supabase Realtime и применяются `applySyncDelta()`.
+  изменения приходят через Supabase Realtime и применяются `applySyncDelta()`
+  (тонкая обёртка над `applyCatalogDelta()` из `data-store.js` + рендер).
+  Новую логику слияния состояния добавлять в `data-store.js` с тестом, а не в
+  IIFE.
 - **Состояние** — глобальные переменные: `releases`, `releasesById` (Map),
   `reviews`, `reviewsByRelId` (Map), `avgRatingByRelId` (Map), `comments`,
   `commentsByReviewId` (Map), `likedSet`, `reactedSet`, `genreCounts`, `user`.
   Фреймворка нет — обновление через `renderReleases()` / `renderReviews()` /
   `renderFeed()` и `innerHTML`.
-- **Telegram SDK**: авторизация через `tg.initData` (заголовок
-  `X-Telegram-Init-Data`, см. `authHeaders()`); haptics (`tgHaptic`,
+- **Авторизация**: `authenticateWithSupabase()` отправляет `tg.initData` в
+  Edge Function `auth`. Она проверяет подпись бота и `auth_date`
+  (`INIT_DATA_MAX_AGE`, по умолчанию 24 ч), читает роль из `admins` /
+  `blocked_users` и выпускает обычную сессию Supabase Auth (через
+  `generateLink` magic link, `app_metadata.telegram_user_id`). Клиент хранит
+  JWT в `localStorage` (`xxii_auth_v1`, восстанавливает до `/auth`) и
+  передаёт его Data API через опцию `accessToken` клиента Supabase и
+  `Authorization: Bearer` в Edge Functions. `X-Telegram-Init-Data`
+  дополнительно шлётся только в `parse-link`. RLS опирается на claims JWT.
+- **Telegram SDK**: официальный скрипт грузится асинхронно, поэтому `tg` в
+  `app.js` — Proxy к текущему `window.Telegram.WebApp` (сначала заглушка,
+  потом реальный SDK). Подписки на SDK (BackButton, `themeChanged`,
+  CloudStorage, цвета шапки) делает `bindTelegramSdk()` — он вызывается при
+  старте и повторно по `xxii:telegram-sdk-ready`; новые подписки добавлять
+  туда. Возможности: haptics (`tgHaptic`,
   `tgHapticNotify`); тема; `CloudStorage`; deep-link `start_param`
   (`handleStartParam` открывает релиз по `?startapp=<id>`); шеринг через
   `tg.shareMessage` (`shareRelease`).
@@ -89,8 +124,9 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
 - **Всегда экранировать** данные в шаблонах `innerHTML`: `escapeHtml` (текст и
   значения `data-*`; коэрсит non-string, пропускает `0`/`false`),
   `escapeCssString` (CSS-селекторы). Утилиты — в `src/utils.js`.
-- **Роль пользователя определяет только сервер** (`currentUser` из `/api/data`),
-  никогда не доверять клиенту.
+- **Роль пользователя определяет только сервер**: `isAdmin`/`isBlocked` из
+  ответа функции `auth`, а права на запись проверяют RLS и RPC. Флаги в
+  `localStorage` нужны только для раннего UI — никогда не доверять клиенту.
 - Сетевые мутации двух видов: **toggle-операции оптимистичные с откатом**
   (`toggleLikeAPI`, `toggleReviewReaction`, `toggleNotifications`,
   `submitComment`, `deleteComment`); **создание/удаление рецензий и релизов
@@ -107,13 +143,19 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
 ## Команды
 
 - Тесты (утилиты, фильтрация и статические контракты): `npm test`
-- Синтаксис: `node --check src/app.js`, `node --check src/utils.js`,
-  `node --check src/catalog-parse.js` и `node --check server.js`
+- Синтаксис (как в CI): `node --check` для `src/app.js`, `src/utils.js`,
+  `src/catalog-parse.js`, `src/data-store.js`, `src/boot.js`,
+  `src/telegram-web-app.js` и `server.js`
+- Аудит зависимостей: `npm audit --audit-level=high`
+- Tailwind в синхроне (CI): `npm run build:css && git diff --exit-code -- src/tailwind.css`
 - Edge Functions: `deno fmt --check supabase/functions`,
   `deno check --frozen supabase/functions/*/index.ts` и
   `deno test --frozen --allow-read=tests/fixtures supabase/functions/_shared/*_test.ts`
 - База/RLS: `supabase db start && supabase test db`
 - Пересобрать Tailwind после изменения классов: `npm install && npm run build:css`
+- Локальный запуск: `node server.js` → `http://127.0.0.1:3000`
+- После изменения файлов в `src/` поднять `?v=N` у соответствующего тега в
+  `index.html` (сброс кэша Telegram WebView).
 - Полная проверка UI требует среды Telegram Mini App.
 
 ## Известные риски
@@ -122,7 +164,13 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
 - `'unsafe-inline'` остаётся в `style-src` CSP — нужно для inline-атрибутов
   `style` в шаблонах.
 - Telegram SDK остаётся внешней зависимостью без SRI: официальный URL обновляет
-  Telegram. Остальные runtime-библиотеки находятся в `src/`.
+  Telegram. Остальные runtime-библиотеки находятся в `src/`. Пока SDK не
+  загрузился (или telegram.org недоступен), работает заглушка: initData есть,
+  но haptics, CloudStorage и `shareMessage` недоступны.
+- JWT сессии лежит в `localStorage` — XSS через `innerHTML` равен угону
+  сессии, поэтому экранирование критично.
+- Edge Functions отвечают с `Access-Control-Allow-Origin: *`; защита — Bearer
+  JWT и проверка initData, а не CORS.
 - `supabase/schema.sql` — только указатель; применяемая схема определяется
   упорядоченными файлами `supabase/migrations/`.
 - `identity_contract` применён на проде 2026-08-17: PK `admins` /
