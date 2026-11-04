@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(51);
 
 select is(
   (select public from storage.buckets where id = 'release-covers'),
@@ -202,6 +202,80 @@ select is(
   'reaction-count maintenance preserves review ownership'
 );
 
+-- Редактирование рецензии автором и защита серверных полей.
+select lives_ok(
+  $$select public.update_review(
+    (select id from public.reviews where release_id = 'release-1'),
+    repeat('An edited review. ', 3),
+    '{"sound":6,"production":6,"originality":6,"meaning":6,"relevance":6,"image":6}'::jsonb
+  )$$,
+  'the author can edit their review through the RPC'
+);
+select is(
+  (select text from public.reviews where release_id = 'release-1'),
+  repeat('An edited review. ', 3),
+  'the edited text is stored'
+);
+select is(
+  (select rating from public.reviews where release_id = 'release-1'),
+  6.0::numeric,
+  'editing recalculates the rating from the new criteria'
+);
+select ok(
+  (select "editedAt" is not null from public.reviews_view where "relId" = 'release-1'),
+  'the public view marks the review as edited'
+);
+select is(
+  (select reaction_count from public.reviews where release_id = 'release-1'),
+  1,
+  'editing keeps the reaction count'
+);
+select is(
+  (select author_id from public.reviews where release_id = 'release-1'),
+  200::bigint,
+  'editing keeps the author'
+);
+select throws_ok(
+  $$select public.update_review(
+    'client-review-id-202',
+    repeat('Hijacked review. ', 3),
+    '{"sound":1,"production":1,"originality":1,"meaning":1,"relevance":1,"image":1}'::jsonb
+  )$$,
+  'P0002',
+  'Review not found or not editable',
+  'a user cannot edit someone else''s review'
+);
+select throws_ok(
+  $$select public.update_review(
+    (select id from public.reviews where release_id = 'release-1'),
+    'too short',
+    '{"sound":6,"production":6,"originality":6,"meaning":6,"relevance":6,"image":6}'::jsonb
+  )$$,
+  '23514',
+  NULL,
+  'an edit still has to meet the minimum review length'
+);
+select throws_ok(
+  $$update public.reviews set reaction_count = 999 where author_id = 200$$,
+  '42501',
+  NULL,
+  'a client cannot inflate its own reaction count'
+);
+select throws_ok(
+  $$update public.reviews set release_id = 'release-2' where author_id = 200$$,
+  '42501',
+  NULL,
+  'a client cannot move a review to another release'
+);
+select throws_ok(
+  $$insert into public.reviews (release_id, text, base_rating, criteria, reaction_count)
+    values ('release-2', repeat('Forged count. ', 3), 5,
+      '{"sound":5,"production":5,"originality":5,"meaning":5,"relevance":5,"image":5}'::jsonb, 999)$$,
+  '42501',
+  NULL,
+  'a client cannot insert a review with a forged reaction count'
+);
+
 reset role;
 insert into public.blocked_users (user_id, username) values (200, 'alice');
 set local role authenticated;
@@ -309,6 +383,13 @@ select throws_ok(
   '42501',
   'permission denied for function create_comment',
   'anon cannot execute write RPCs'
+);
+
+select throws_ok(
+  $$select public.update_review('missing-review', 'anonymous', '{}'::jsonb)$$,
+  '42501',
+  'permission denied for function update_review',
+  'anon cannot edit reviews'
 );
 
 select * from finish();

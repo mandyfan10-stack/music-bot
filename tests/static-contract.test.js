@@ -278,3 +278,15 @@ test('review drafts are restored on open, saved on input and cleared on publish'
   assert.match(app, /function setCriterion[\s\S]{0,400}saveReviewDraft\(\)/);
   assert.match(app, /clearReviewDraft\(reviewDraftStorage\(\), user\.userId, newRev\.relId\)/);
 });
+
+test('review editing goes through update_review and server-owned columns are locked', () => {
+  const app = read('src/app.js');
+  const migration = read('supabase/migrations/20261104090000_review_editing.sql');
+  assert.match(app, /supabase\.rpc\('update_review'/);
+  assert.match(app, /hasOwnProperty\.call\(review, 'editedAt'\)/);
+  assert.match(migration, /REVOKE INSERT, UPDATE ON public\.reviews FROM authenticated;/);
+  assert.match(migration, /GRANT UPDATE \(text, criteria, base_rating\) ON public\.reviews TO authenticated;/);
+  assert.match(migration, /NEW\.reaction_count := OLD\.reaction_count;/);
+  assert.match(migration, /NEW\.reaction_count := 0;/);
+  assert.doesNotMatch(app, /from\('reviews'\)\.update\(/);
+});

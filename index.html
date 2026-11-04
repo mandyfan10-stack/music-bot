@@ -251,7 +251,7 @@
       </div>
 
       <div class="w-full">
-        <h3 class="text-lg font-bold text-white mb-4">Написать рецензию</h3>
+        <h3 id="review-form-title" class="text-lg font-bold text-white mb-4">Написать рецензию</h3>
         <div class="bg-white/5 border border-white/10 rounded-[1.5rem] p-5">
            <div id="rating-total" class="rating-total mb-4">
              <div class="flex items-center justify-between mb-2 px-1">
@@ -272,6 +272,7 @@
              <span id="rev-char-count" class="absolute bottom-2 right-3 text-[10px] text-gray-500 font-medium">0 / 3000</span>
            </div>
            <button id="btn-submit-review" data-act="submit-review" class="btn-press w-full py-3 bg-white/10 text-white text-[13px] font-bold rounded-xl border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed">Опубликовать</button>
+           <button id="btn-cancel-edit-review" data-act="cancel-edit-review" class="hidden btn-press w-full mt-2 py-2 text-[12px] font-medium text-gray-400 hover:text-white">Отменить редактирование</button>
         </div>
         <div id="criteria-chart" class="hidden mt-8"></div>
         <div id="reviews-container" class="mt-8 space-y-3"></div>

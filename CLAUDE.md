@@ -139,6 +139,11 @@ FastAPI/MongoDB-проект архивирован и не участвует �
 - Каталог: `getFilteredReleases()` (жанр + поиск + сортировка),
   `renderReleaseCard()`, `renderReleases()`, `openRelease()`.
 - Рецензии/оценки: `addReview()`, `renderReviews()`, `renderCriteriaChart()`.
+  Правка своей рецензии: `startEditReview()` переводит форму в режим
+  «Редактировать рецензию», `saveReviewEdit()` вызывает RPC `update_review`
+  (pessimistic), `cancelEditReview()`. Кнопка видна только если в строке из
+  `reviews_view` есть `editedAt` (миграция `20261104090000_review_editing`
+  применена); правка помечается «изменено».
 - Комментарии: `submitComment()`, `deleteComment()`, `toggleComments()`,
   `renderCommentsSection()` (черновики переживают ре-рендер — `commentDrafts`).
 - Реакции/лайки: `toggleLikeAPI()`, `toggleReviewReaction()`.
@@ -178,7 +183,12 @@ Inline-обработчиков в HTML (`onclick=` и т.п.) **нет**, по�
   `submitComment`, `deleteComment`); **создание/удаление рецензий и релизов
   pessimistic** — ждут ответа сервера, затем меняют локальное состояние
   (`addReview`, `saveManualRelease`, `executeDeleteReview`,
-  `executeDeleteRelease`). `create_review` / `create_comment` принимают
+  `executeDeleteRelease`, `saveReviewEdit`). У `authenticated` на
+  `public.reviews` только колоночные права: INSERT тех полей, что пишет
+  `create_review`, UPDATE — `text, criteria, base_rating`; триггер
+  `set_review_server_fields` сам ставит автора, время, рейтинг, `edited_at` и
+  не даёт клиенту менять `reaction_count`, `release_id`, `id`.
+  `create_review` / `create_comment` принимают
   клиентский `p_id`; клиент всё равно сливает гонку с Realtime через
   `adoptCreatedRecord` и `isSameReview` (рецензия — по id или
   `(relId, authorId)`). Подтверждения удаления — шторка

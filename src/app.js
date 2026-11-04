@@ -202,6 +202,8 @@
       'save-manual-release': () => saveManualRelease(),
       'share-release': () => shareRelease(),
       'submit-review': () => addReview(),
+      'edit-review': (el) => startEditReview(el.dataset.id),
+      'cancel-edit-review': () => cancelEditReview(),
       'execute-delete-release': () => executeDeleteRelease(),
       'execute-delete-review': () => executeDeleteReview(),
       'toggle-block-user': () => toggleBlockUser(),
@@ -785,7 +787,7 @@
     }
 
     function saveReviewDraft() {
-      if (!activeReleaseId || reviewPublishBlocked || user.userId == null) return;
+      if (!activeReleaseId || reviewPublishBlocked || editingReviewId || user.userId == null) return;
       const text = document.getElementById('rev-text')?.value || '';
       const draft = { text, criteria: selectedCriteria };
       writeReviewDraft(reviewDraftStorage(), user.userId, activeReleaseId, draft);
@@ -815,6 +817,116 @@
 
     pruneReviewDrafts(reviewDraftStorage());
 
+    // --- РЕДАКТИРОВАНИЕ СВОЕЙ РЕЦЕНЗИИ (RPC update_review) ---
+    // Форма над списком переключается в режим правки: текст и критерии
+    // подставляются из рецензии, кнопка становится «Сохранить изменения».
+    let editingReviewId = null;
+    let reviewEditSaving = false;
+
+    // Кнопка появляется, только если сервер уже отдаёт editedAt, то есть
+    // миграция с update_review применена.
+    function canEditReview(review) {
+      return !!review && !user.isBlocked && user.isAuthenticated
+        && Object.prototype.hasOwnProperty.call(review, 'editedAt')
+        && reviewByUser(review, user.userId, user.username);
+    }
+
+    function setReviewFormMode(editing) {
+      const title = document.getElementById('review-form-title');
+      const cancelBtn = document.getElementById('btn-cancel-edit-review');
+      if (title) title.textContent = editing ? 'Редактировать рецензию' : 'Написать рецензию';
+      if (cancelBtn) cancelBtn.classList.toggle('hidden', !editing);
+    }
+
+    function exitEditMode() {
+      editingReviewId = null;
+      reviewEditSaving = false;
+      setReviewFormMode(false);
+    }
+
+    function startEditReview(reviewId) {
+      const review = reviews.find(r => r.id === reviewId);
+      if (!canEditReview(review)) return;
+      editingReviewId = reviewId;
+      reviewEditSaving = false;
+      const criteria = review.criteria || {};
+      selectedCriteria = {};
+      criteriaConfig.forEach(({ key }) => {
+        const value = Number(criteria[key]);
+        selectedCriteria[key] = Number.isInteger(value) && value >= 1 && value <= 10 ? value : 5;
+        const el = document.getElementById(`criterion-${key}`);
+        if (el) el.innerText = String(selectedCriteria[key]);
+      });
+      updateRatingTotal();
+      const text = document.getElementById('rev-text');
+      if (text) text.value = review.text || '';
+      reviewDraftSaved = false;
+      setReviewFormMode(true);
+      updateReviewCharCount();
+      tgHaptic('light');
+      document.getElementById('review-form-title')?.scrollIntoView({
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        block: 'start'
+      });
+    }
+
+    function cancelEditReview() {
+      exitEditMode();
+      resetReviewInputs();
+      updateReviewCharCount();
+    }
+
+    async function saveReviewEdit() {
+      const reviewId = editingReviewId;
+      const review = reviews.find(r => r.id === reviewId);
+      if (!canEditReview(review)) { cancelEditReview(); return; }
+      const t = document.getElementById('rev-text').value.trim();
+      if (!t) return showToast('Напишите текст');
+      if (t.length < REVIEW_MIN_LENGTH) return showToast(`Минимум ${REVIEW_MIN_LENGTH} символов`);
+      if (t.length > REVIEW_MAX_LENGTH) return showToast(`Максимум ${REVIEW_MAX_LENGTH} символов`);
+
+      reviewEditSaving = true;
+      updateReviewCharCount();
+      let row;
+      try {
+        await ensureValidAuthSession();
+        const { data, error } = await supabase.rpc('update_review', {
+          p_id: reviewId,
+          p_text: t,
+          p_criteria: { ...selectedCriteria }
+        }).single();
+        if (error) throw error;
+        row = data;
+      } catch (e) {
+        console.error('Ошибка сохранения правки:', e);
+        reviewEditSaving = false;
+        updateReviewCharCount();
+        showToast('Не удалось сохранить — попробуйте позже', 'error');
+        return;
+      }
+      if (editingReviewId !== reviewId) return;
+
+      reviews = reviews.map(r => r.id === reviewId ? {
+        ...r,
+        text: row.text,
+        criteria: row.criteria,
+        rating: Number(row.rating),
+        objectiveRating: Number(row.objective_rating),
+        baseRating: row.base_rating,
+        editedAt: row.edited_at == null ? null : Number(row.edited_at)
+      } : r);
+      updateReviewsMap();
+      exitEditMode();
+      resetReviewInputs();
+      existingReviewForActiveRelease = getExistingReviewForRelease(activeReleaseId);
+      reviewPublishBlocked = !!existingReviewForActiveRelease;
+      renderReviews();
+      updateReviewCharCount();
+      refreshCatalogViews();
+      showToast('Изменения сохранены', 'success');
+      pulseNewReview(reviewId);
+    }
+
     function updateReviewCharCount() {
       const textarea = document.getElementById('rev-text');
       const counter = document.getElementById('rev-char-count');
@@ -834,7 +946,10 @@
         counter.classList.add('text-gray-500');
       }
 
-      if (reviewPublishBlocked) {
+      if (editingReviewId) {
+        submitBtn.disabled = reviewEditSaving || isInvalidLength || len === 0;
+        submitBtn.innerText = reviewEditSaving ? 'Сохраняем…' : 'Сохранить изменения';
+      } else if (reviewPublishBlocked) {
         submitBtn.disabled = true;
         submitBtn.innerText = 'Рецензия уже опубликована';
       } else if (isInvalidLength || len === 0) {
@@ -1698,6 +1813,7 @@
         if (!document.getElementById('screen-likes').classList.contains('hidden')) renderLikes();
         if (!document.getElementById('screen-feed').classList.contains('hidden')) renderFeed();
       }
+      if (editingReviewId && !reviews.some(r => r.id === editingReviewId)) cancelEditReview();
       if ((changed || commentsChanged) && activeReleaseId
           && !document.getElementById('modal-release').classList.contains('hidden')) {
         existingReviewForActiveRelease = getExistingReviewForRelease(activeReleaseId);
@@ -2631,7 +2747,7 @@
         delBtn.classList.remove('flex');
       }
 
-      resetReviewInputs(); restoreReviewDraft(id); renderReviews();
+      exitEditMode(); resetReviewInputs(); restoreReviewDraft(id); renderReviews();
       lockReleaseSheet();
       const morphed = morphCoverFromCard(sourceEl);
       openModal('modal-release');
@@ -2746,6 +2862,7 @@
     async function addReview() {
       if (user.isBlocked) return showToast('Ваш аккаунт заблокирован');
       if (!user.isAuthenticated) return showToast('Войдите через Telegram');
+      if (editingReviewId) return saveReviewEdit();
       if (reviewPublishBlocked) return showToast('На этот трек уже есть ваша рецензия');
       const t = document.getElementById('rev-text').value.trim();
       if (!t) return showToast('Напишите текст');
@@ -2789,6 +2906,9 @@
         newRev.rating = Number(created.rating);
         newRev.objectiveRating = Number(created.objective_rating);
         newRev.timestamp = Number(created.timestamp);
+        if (Object.prototype.hasOwnProperty.call(created, 'edited_at')) {
+          newRev.editedAt = created.edited_at == null ? null : Number(created.edited_at);
+        }
         reviews = adoptCreatedRecord(reviews, newRev.id, created.id, newRev);
         newRev.id = created.id;
       } catch(e) {
@@ -2998,6 +3118,7 @@
         const rating = toRatingNumber(r.rating);
         const criteria = r.criteria ? ` · ${escapeHtml(formatCriteria(r.criteria))}` : '';
         const canDelete = reviewByUser(r, user.userId, user.username) || user.isAdmin;
+        const editBtn = canEditReview(r) ? `<button data-act="edit-review" data-id="${escapeHtml(r.id)}" aria-label="Редактировать рецензию" class="btn-press w-7 h-7 rounded-full bg-white/5 border border-white/10 text-gray-400 hover:text-white flex items-center justify-center"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>` : '';
         const reacted = reactedSet.has(r.id);
         const reactionCount = typeof r.reactionCount === 'number' ? r.reactionCount : 0;
         const reactBtn = `<button data-act="toggle-reaction" data-id="${escapeHtml(r.id)}" aria-label="Полезная рецензия" class="btn-press shrink-0 flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${reacted ? 'bg-red-500/15 border border-red-500/25 text-red-400' : 'bg-white/5 border border-white/10 text-gray-400'}"><i data-lucide="thumbs-up" class="w-3 h-3"></i><span class="text-[10px] font-bold">${reactionCount}</span></button>`;
@@ -3006,9 +3127,9 @@
         const enterCls = firstPaint ? 'review-enter ' : '';
         const enterStyle = firstPaint ? ` style="animation-delay: ${Math.min(i, 8) * 28}ms"` : '';
         return `<div data-review-id="${escapeHtml(r.id)}" class="${enterCls}bg-white/5 rounded-2xl p-4 border border-white/5"${enterStyle}>
-          <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" data-act="open-profile" data-user="${escapeHtml(r.author)}" data-author-id="${escapeHtml(r.authorId == null ? '' : r.authorId)}" data-username="${escapeHtml(r.authorUsername || '')}">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${canDelete ? `<button data-act="open-confirm-review-delete" data-id="${escapeHtml(r.id)}" data-rel="${escapeHtml(r.relId)}" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
+          <div class="flex justify-between items-center mb-2 gap-2"><button class="text-[13px] font-bold text-white cursor-pointer hover:text-red-500 transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded-sm" data-act="open-profile" data-user="${escapeHtml(r.author)}" data-author-id="${escapeHtml(r.authorId == null ? '' : r.authorId)}" data-username="${escapeHtml(r.authorUsername || '')}">${escapeHtml(r.author)}</button><div class="flex items-center gap-2"><div class="text-white bg-red-600 px-2.5 py-0.5 rounded-lg font-black text-[11px]">${escapeHtml(rating)}</div>${editBtn}${canDelete ? `<button data-act="open-confirm-review-delete" data-id="${escapeHtml(r.id)}" data-rel="${escapeHtml(r.relId)}" aria-label="Удалить отзыв" class="btn-press w-7 h-7 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center"><i data-lucide=\"trash-2\" class=\"w-3.5 h-3.5\"></i></button>` : ''}</div></div>
           <p class="text-[13px] text-gray-300 leading-relaxed mb-2">${escapeHtml(r.text)}</p>
-          <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${criteria}</span>${reactBtn}</div>
+          <div class="flex items-center justify-between gap-2"><span class="text-[10px] text-gray-500 font-medium">${escapeHtml(r.date)}${r.editedAt ? ' · изменено' : ''}${criteria}</span>${reactBtn}</div>
           ${renderCommentsSection(r.id)}</div>`;
       }).join('') || `<div class="text-center py-4 text-[12px] text-gray-500">Отзывов пока нет</div>`;
       bindEnterAnimations(container);

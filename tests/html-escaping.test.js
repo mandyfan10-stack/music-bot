@@ -46,6 +46,7 @@ const SAFE_INTERPOLATIONS = new Map([
   ['inputBox', 'шаблон с экранированием'],
   ['criteria', 'escapeHtml(formatCriteria(...)) или пусто'],
   ['reactBtn', 'шаблон с экранированием'],
+  ['editBtn', 'шаблон кнопки, id через escapeHtml'],
   ['renderCommentsSection(r.id)', 'возвращает шаблоны с экранированием'],
   ['pluralReleases(count)', 'словоформа из литералов'],
   ['pluralReviews(relReviews.length)', 'словоформа из литералов']
