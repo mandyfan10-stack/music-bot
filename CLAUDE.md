@@ -153,7 +153,15 @@ FastAPI/MongoDB-проект архивирован и не участвует �
   ручной ввод) и `saveManualRelease()`.
 - Шеринг: `shareRelease()` запрашивает у `share-message` prepared message или
   канонический deep-link для старых Telegram-клиентов.
-- Push: `toggleNotifications()`.
+- Push: `toggleNotifications()` (общий выключатель для всех уведомлений бота).
+  Новый релиз → всем подписчикам. Реакция «полезно» или комментарий к
+  рецензии → её автору: триггеры `tr_review_reactions_insert_notification` /
+  `tr_review_comments_insert_notification` шлют строку в `send-notifications`,
+  логика — `_shared/review_activity.ts`. Свои действия не уведомляют; кто
+  поставил реакцию, не раскрывается; по рецензии не чаще раза в 30 минут на
+  вид (`claim_review_activity_notification`, таблица
+  `review_activity_notifications`), повторная реакция того же человека —
+  никогда (`review_reaction_notified`).
 - Жесты: `setupPullToRefresh()`, `setupSheetDrag()` (свайп-закрытие модалок),
   `morphCoverFromCard()` (FLIP-морф обложки карточки в модалку).
 

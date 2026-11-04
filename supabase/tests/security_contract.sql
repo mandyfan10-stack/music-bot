@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(51);
+select plan(61);
 
 select is(
   (select public from storage.buckets where id = 'release-covers'),
@@ -274,6 +274,64 @@ select throws_ok(
   '42501',
   NULL,
   'a client cannot insert a review with a forged reaction count'
+);
+
+-- Уведомления автору рецензии: триггеры, антиспам и права.
+reset role;
+select has_trigger(
+  'public', 'review_reactions', 'tr_review_reactions_insert_notification',
+  'new reactions are forwarded to the notification webhook'
+);
+select has_trigger(
+  'public', 'review_comments', 'tr_review_comments_insert_notification',
+  'new comments are forwarded to the notification webhook'
+);
+select is(
+  (select decision from public.claim_review_activity_notification(
+    (select id from public.reviews where release_id = 'release-1'), 'reaction', 7, 1800)),
+  'send',
+  'the first reaction on a review is notified'
+);
+select is(
+  (select decision from public.claim_review_activity_notification(
+    (select id from public.reviews where release_id = 'release-1'), 'reaction', 8, 1800)),
+  'cooldown',
+  'another reaction within the cooldown is held back'
+);
+select is(
+  (select decision from public.claim_review_activity_notification(
+    (select id from public.reviews where release_id = 'release-1'), 'reaction', 7, 1800)),
+  'duplicate',
+  'the same person reacting again is never re-notified'
+);
+select is(
+  (select decision from public.claim_review_activity_notification(
+    (select id from public.reviews where release_id = 'release-1'), 'comment', null, 1800)),
+  'send',
+  'comments have their own cooldown, separate from reactions'
+);
+select ok(
+  (select previous_sent_at is not null from public.claim_review_activity_notification(
+    (select id from public.reviews where release_id = 'release-1'), 'comment', null, 1800)),
+  'a held-back claim reports when the last notification went out'
+);
+select throws_ok(
+  $$select * from public.claim_review_activity_notification('x', 'like', null, 1800)$$,
+  'P0001',
+  'Unknown review activity kind: like',
+  'unknown activity kinds are rejected'
+);
+select ok(
+  has_function_privilege('service_role', 'public.claim_review_activity_notification(text,text,bigint,integer)', 'execute')
+  and not has_function_privilege('authenticated', 'public.claim_review_activity_notification(text,text,bigint,integer)', 'execute')
+  and not has_function_privilege('anon', 'public.claim_review_activity_notification(text,text,bigint,integer)', 'execute'),
+  'only the server can claim review notifications'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.review_activity_notifications', 'select')
+  and not has_table_privilege('authenticated', 'public.review_reaction_notified', 'select')
+  and not has_table_privilege('anon', 'public.review_reaction_notified', 'select'),
+  'clients cannot read who triggered review notifications'
 );
 
 reset role;
